@@ -276,6 +276,12 @@ export default function SalesInvoicesPage() {
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
             <div className="mt-4 flex justify-end">

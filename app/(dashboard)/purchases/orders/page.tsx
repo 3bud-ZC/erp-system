@@ -252,7 +252,7 @@ export default function PurchaseOrdersPage() {
                     </tr>
                   ))}
                 </tbody>
-              </EnhancedTable>
+              </table>
             </div>
 
             <div className="mt-4 flex justify-end">

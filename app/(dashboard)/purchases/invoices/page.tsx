@@ -214,7 +214,7 @@ export default function PurchaseInvoicesPage() {
             </div>
 
             <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <EnhancedTable>
+              <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-4 py-2 text-right text-sm font-medium text-gray-700">المنتج</th>
@@ -281,7 +281,7 @@ export default function PurchaseInvoicesPage() {
                     </tr>
                   ))}
                 </tbody>
-              </EnhancedTable>
+              </table>
             </div>
 
             <div className="mt-4 flex justify-end">
