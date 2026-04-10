@@ -20,6 +20,10 @@
     "export": "next build && next export",
     "serve": "next build && next start"
   },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
   "dependencies": {
     "@hookform/resolvers": "^3.3.4",
     "@prisma/client": "^5.14.0",

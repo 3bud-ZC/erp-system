@@ -1,0 +1,42 @@
+services:
+  # Web Service
+  - type: web
+    name: erp-system-arabic
+    env: node
+    plan: starter
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: erp-system-db
+          property: connectionString
+      - key: NEXTAUTH_URL
+        value: https://erp-system-arabic.onrender.com
+      - key: NEXTAUTH_SECRET
+        generateValue: true
+        sync: false
+
+  # PostgreSQL Database
+  - type: pserv
+    name: erp-system-db
+    plan: starter
+    env: docker
+    databaseName: erp_system
+    user: erp_user
+    healthCheckPath: /
+    envVars:
+      - key: POSTGRES_DB
+        value: erp_system
+      - key: POSTGRES_USER
+        value: erp_user
+      - key: POSTGRES_PASSWORD
+        generateValue: true
+        sync: false
+
+# Auto-deploy configuration
+version: "1"
+autoDeploy: true
