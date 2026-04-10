@@ -49,17 +49,17 @@ export default function DashboardPage() {
   ];
 
   const formattedSalesInvoices = data.recentSalesInvoices.map((invoice: any) => ({
-    ...invoice,
+    invoiceNumber: invoice.invoiceNumber || '-',
     customer: typeof invoice.customer?.nameAr === 'string' ? invoice.customer.nameAr : '-',
-    date: new Date(invoice.date).toLocaleDateString('ar-EG'),
-    total: `${invoice.total.toFixed(2)} EGP`,
+    date: invoice.date ? new Date(invoice.date).toLocaleDateString('ar-EG') : '-',
+    total: typeof invoice.total === 'number' ? `${invoice.total.toFixed(2)} EGP` : '-',
   }));
 
   const formattedPurchaseInvoices = data.recentPurchaseInvoices.map((invoice: any) => ({
-    ...invoice,
+    invoiceNumber: invoice.invoiceNumber || '-',
     supplier: typeof invoice.supplier?.nameAr === 'string' ? invoice.supplier.nameAr : '-',
-    date: new Date(invoice.date).toLocaleDateString('ar-EG'),
-    total: `${invoice.total.toFixed(2)} EGP`,
+    date: invoice.date ? new Date(invoice.date).toLocaleDateString('ar-EG') : '-',
+    total: typeof invoice.total === 'number' ? `${invoice.total.toFixed(2)} EGP` : '-',
   }));
 
   return (
