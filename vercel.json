@@ -1,9 +1,9 @@
 {
   "version": 2,
   "env": {
-    "DATABASE_URL": "@database_url",
-    "NEXTAUTH_URL": "@nextauth_url",
-    "NEXTAUTH_SECRET": "@nextauth_secret"
+    "DATABASE_URL": "file:./dev.db",
+    "NEXTAUTH_URL": "https://erp-system-arabic.vercel.app",
+    "NEXTAUTH_SECRET": "9688b5daf6a7f28f969486c4a1f00ac7c9068f365dcc2f92ac19aab70aa692b7"
   },
   "build": {
     "env": {
