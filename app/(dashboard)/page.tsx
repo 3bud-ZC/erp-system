@@ -6,56 +6,62 @@ import { DollarSign, ShoppingCart, TrendingUp, Package, ArrowUp, ArrowDown } fro
 import { prisma } from '@/lib/db';
 
 async function getDashboardData() {
-  const [
-    totalSales,
-    totalPurchases,
-    totalExpenses,
-    lowStockProducts,
-    recentSalesInvoices,
-    recentPurchaseInvoices,
-  ] = await Promise.all([
-    prisma.salesInvoice.aggregate({
-      _sum: { total: true },
-    }),
-    prisma.purchaseInvoice.aggregate({
-      _sum: { total: true },
-    }),
-    prisma.expense.aggregate({
-      _sum: { amount: true },
-    }),
-    prisma.product.count({
-      where: {
-        stock: {
-          lte: prisma.product.fields.minStock,
+  try {
+    const [
+      totalSales,
+      totalPurchases,
+      totalExpenses,
+      lowStockProducts,
+      recentSalesInvoices,
+      recentPurchaseInvoices,
+    ] = await Promise.all([
+      prisma.salesInvoice.aggregate({
+        _sum: { total: true },
+      }),
+      prisma.purchaseInvoice.aggregate({
+        _sum: { total: true },
+      }),
+      prisma.expense.aggregate({
+        _sum: { amount: true },
+      }),
+      prisma.product.count({
+        where: {
+          stock: {
+            lte: prisma.product.fields.minStock,
+          },
         },
-      },
-    }),
-    prisma.salesInvoice.findMany({
-      take: 5,
-      orderBy: { createdAt: 'desc' },
-      include: { customer: true },
-    }),
-    prisma.purchaseInvoice.findMany({
-      take: 5,
-      orderBy: { createdAt: 'desc' },
-      include: { supplier: true },
-    }),
-  ]);
+      }),
+      prisma.salesInvoice.findMany({
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+        include: { customer: true },
+      }),
+      prisma.purchaseInvoice.findMany({
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+        include: { supplier: true },
+      }),
+    ]);
 
-  const revenue = totalSales._sum.total || 0;
-  const purchases = totalPurchases._sum.total || 0;
-  const expenses = totalExpenses._sum.amount || 0;
-  const profit = revenue - purchases - expenses;
-
-  return {
-    revenue,
-    purchases,
-    expenses,
-    profit,
-    lowStockProducts,
-    recentSalesInvoices,
-    recentPurchaseInvoices,
-  };
+    return {
+      totalSales: totalSales._sum.total || 0,
+      totalPurchases: totalPurchases._sum.total || 0,
+      totalExpenses: totalExpenses._sum.amount || 0,
+      lowStockProducts,
+      recentSalesInvoices,
+      recentPurchaseInvoices,
+    };
+  } catch (error) {
+    console.log('Database not initialized, returning default data');
+    return {
+      totalSales: 0,
+      totalPurchases: 0,
+      totalExpenses: 0,
+      lowStockProducts: 0,
+      recentSalesInvoices: [],
+      recentPurchaseInvoices: [],
+    };
+  }
 }
 
 export default async function DashboardPage() {
@@ -108,7 +114,7 @@ export default async function DashboardPage() {
         <div className="hidden lg:block animate-slideUp">
           <EnhancedCard
             title="إجمالي المبيعات"
-            value={`${data.revenue.toFixed(2)} EGP`}
+            value={`${data.totalSales.toFixed(2)} EGP`}
             icon={<TrendingUp className="w-6 h-6" />}
             color="green"
             trend={{ value: "12.5%", isPositive: true }}
@@ -117,7 +123,7 @@ export default async function DashboardPage() {
         <div className="hidden lg:block animate-slideUp" style={{ animationDelay: '0.1s' }}>
           <EnhancedCard
             title="إجمالي المشتريات"
-            value={`${data.purchases.toFixed(2)} EGP`}
+            value={`${data.totalPurchases.toFixed(2)} EGP`}
             icon={<ShoppingCart className="w-6 h-6" />}
             color="blue"
             trend={{ value: "8.2%", isPositive: true }}
@@ -126,7 +132,7 @@ export default async function DashboardPage() {
         <div className="hidden lg:block animate-slideUp" style={{ animationDelay: '0.2s' }}>
           <EnhancedCard
             title="إجمالي المصروفات"
-            value={`${data.expenses.toFixed(2)} EGP`}
+            value={`${data.totalExpenses.toFixed(2)} EGP`}
             icon={<DollarSign className="w-6 h-6" />}
             color="red"
             trend={{ value: "3.1%", isPositive: false }}
@@ -146,7 +152,7 @@ export default async function DashboardPage() {
         <div className="lg:hidden">
           <MobileCard
             title="إجمالي المبيعات"
-            value={`${data.revenue.toFixed(2)} EGP`}
+            value={`${data.totalSales.toFixed(2)} EGP`}
             icon={<TrendingUp className="w-5 h-5" />}
             color="green"
             trend={{ value: "12.5%", isPositive: true }}
@@ -156,7 +162,7 @@ export default async function DashboardPage() {
         <div className="lg:hidden">
           <MobileCard
             title="إجمالي المشتريات"
-            value={`${data.purchases.toFixed(2)} EGP`}
+            value={`${data.totalPurchases.toFixed(2)} EGP`}
             icon={<ShoppingCart className="w-5 h-5" />}
             color="blue"
             trend={{ value: "8.2%", isPositive: true }}
@@ -166,7 +172,7 @@ export default async function DashboardPage() {
         <div className="lg:hidden">
           <MobileCard
             title="المصروفات"
-            value={`${data.expenses.toFixed(2)} EGP`}
+            value={`${data.totalExpenses.toFixed(2)} EGP`}
             icon={<DollarSign className="w-5 h-5" />}
             color="red"
             trend={{ value: "3.1%", isPositive: false }}
@@ -176,7 +182,7 @@ export default async function DashboardPage() {
         <div className="lg:hidden">
           <MobileCard
             title="صافي الربح"
-            value={`${data.profit.toFixed(2)} EGP`}
+            value={`${(data.totalSales - data.totalExpenses).toFixed(2)} EGP`}
             icon={<DollarSign className="w-5 h-5" />}
             color="purple"
             trend={{ value: "15.3%", isPositive: true }}
