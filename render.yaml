@@ -4,7 +4,7 @@ services:
     name: erp-system-arabic
     env: node
     plan: starter
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --production=false && npm run build
     startCommand: npm start
     healthCheckPath: /
     envVars:
