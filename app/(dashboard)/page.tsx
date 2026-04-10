@@ -1,74 +1,38 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import EnhancedCard from '@/components/EnhancedCard';
 import MobileCard from '@/components/MobileCard';
 import EnhancedTable from '@/components/EnhancedTable';
 import MobileTable from '@/components/MobileTable';
 import { DollarSign, ShoppingCart, TrendingUp, Package, ArrowUp, ArrowDown } from 'lucide-react';
-import { prisma } from '@/lib/db';
 
-async function getDashboardData() {
-  try {
-    const [
-      totalSales,
-      totalPurchases,
-      totalExpenses,
-      lowStockProducts,
-      recentSalesInvoices,
-      recentPurchaseInvoices,
-    ] = await Promise.all([
-      prisma.salesInvoice.aggregate({
-        _sum: { total: true },
-      }),
-      prisma.purchaseInvoice.aggregate({
-        _sum: { total: true },
-      }),
-      prisma.expense.aggregate({
-        _sum: { amount: true },
-      }),
-      prisma.product.count({
-        where: {
-          stock: {
-            lte: prisma.product.fields.minStock,
-          },
-        },
-      }),
-      prisma.salesInvoice.findMany({
-        take: 5,
-        orderBy: { createdAt: 'desc' },
-        include: { customer: true },
-      }),
-      prisma.purchaseInvoice.findMany({
-        take: 5,
-        orderBy: { createdAt: 'desc' },
-        include: { supplier: true },
-      }),
-    ]);
+export default function DashboardPage() {
+  const [data, setData] = useState({
+    totalSales: 0,
+    totalPurchases: 0,
+    totalExpenses: 0,
+    lowStockProducts: 0,
+    recentSalesInvoices: [],
+    recentPurchaseInvoices: [],
+  });
+  const [loading, setLoading] = useState(true);
 
-    return {
-      totalSales: totalSales._sum.total || 0,
-      totalPurchases: totalPurchases._sum.total || 0,
-      totalExpenses: totalExpenses._sum.amount || 0,
-      lowStockProducts,
-      recentSalesInvoices,
-      recentPurchaseInvoices,
-    };
-  } catch (error) {
-    console.log('Database not initialized, returning default data');
-    return {
-      totalSales: 0,
-      totalPurchases: 0,
-      totalExpenses: 0,
-      lowStockProducts: 0,
-      recentSalesInvoices: [],
-      recentPurchaseInvoices: [],
-    };
-  }
-}
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const response = await fetch('/api/dashboard');
+        const dashboardData = await response.json();
+        setData(dashboardData);
+      } catch (error) {
+        console.log('Error fetching dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-
-export default async function DashboardPage() {
-  const data = await getDashboardData();
+    fetchData();
+  }, []);
 
   const salesColumns = [
     { key: 'invoiceNumber', label: 'رقم الفاتورة' },
