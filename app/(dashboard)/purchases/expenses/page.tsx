@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Table from '@/components/Table';
-import Modal from '@/components/Modal';
+import EnhancedTable from '@/components/EnhancedTable';
+import EnhancedModal from '@/components/EnhancedModal';
 import { Plus } from 'lucide-react';
 import Link from 'next/link';
 
@@ -110,14 +110,14 @@ export default function ExpensesPage() {
         </div>
       </div>
 
-      <Table
+      <EnhancedTable
         columns={columns}
         data={expenses}
         onEdit={handleEdit}
         onDelete={handleDelete}
       />
 
-      <Modal
+      <EnhancedModal
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
@@ -213,7 +213,7 @@ export default function ExpensesPage() {
             </button>
           </div>
         </form>
-      </Modal>
+      </EnhancedModal>
     </div>
   );
 }

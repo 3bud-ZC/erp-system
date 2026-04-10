@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Table from '@/components/Table';
-import Modal from '@/components/Modal';
+import EnhancedTable from '@/components/EnhancedTable';
+import EnhancedModal from '@/components/EnhancedModal';
 import { Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -120,9 +120,9 @@ export default function PurchaseOrdersPage() {
         </div>
       </div>
 
-      <Table columns={columns} data={orders} />
+      <EnhancedTable columns={columns} data={orders} />
 
-      <Modal
+      <EnhancedModal
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
@@ -252,7 +252,7 @@ export default function PurchaseOrdersPage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </EnhancedTable>
             </div>
 
             <div className="mt-4 flex justify-end">
@@ -289,7 +289,7 @@ export default function PurchaseOrdersPage() {
             </button>
           </div>
         </form>
-      </Modal>
+      </EnhancedModal>
     </div>
   );
 }

@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Table from '@/components/Table';
-import Modal from '@/components/Modal';
+import EnhancedTable from '@/components/EnhancedTable';
+import EnhancedModal from '@/components/EnhancedModal';
 import { Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -149,9 +149,9 @@ export default function SalesInvoicesPage() {
         </div>
       </div>
 
-      <Table columns={columns} data={invoices} onDelete={handleDelete} />
+      <EnhancedTable columns={columns} data={invoices} onDelete={handleDelete} />
 
-      <Modal
+      <EnhancedModal
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
@@ -276,12 +276,6 @@ export default function SalesInvoicesPage() {
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
 
             <div className="mt-4 flex justify-end">
@@ -318,7 +312,7 @@ export default function SalesInvoicesPage() {
             </button>
           </div>
         </form>
-      </Modal>
+      </EnhancedModal>
     </div>
   );
 }
