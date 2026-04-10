@@ -1,0 +1,220 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Supplier {
+  id            String          @id @default(cuid())
+  code          String          @unique
+  nameAr        String
+  nameEn        String?
+  phone         String?
+  email         String?
+  address       String?
+  taxNumber     String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  purchaseOrders PurchaseOrder[]
+  purchaseInvoices PurchaseInvoice[]
+}
+
+model Customer {
+  id            String          @id @default(cuid())
+  code          String          @unique
+  nameAr        String
+  nameEn        String?
+  phone         String?
+  email         String?
+  address       String?
+  taxNumber     String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  salesOrders   SalesOrder[]
+  salesInvoices SalesInvoice[]
+}
+
+model Product {
+  id            String          @id @default(cuid())
+  code          String          @unique
+  nameAr        String
+  nameEn        String?
+  type          String
+  unit          String
+  price         Float
+  cost          Float           @default(0)
+  stock         Float           @default(0)
+  minStock      Float           @default(0)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  purchaseOrderItems PurchaseOrderItem[]
+  purchaseInvoiceItems PurchaseInvoiceItem[]
+  salesOrderItems SalesOrderItem[]
+  salesInvoiceItems SalesInvoiceItem[]
+  productionOrders ProductionOrder[]
+  productionOrderItems ProductionOrderItem[]
+  bomItems      BOMItem[]       @relation("BOMProduct")
+  bomMaterials  BOMItem[]       @relation("BOMMaterial")
+}
+
+model PurchaseOrder {
+  id            String          @id @default(cuid())
+  orderNumber   String          @unique
+  supplierId    String
+  supplier      Supplier        @relation(fields: [supplierId], references: [id])
+  date          DateTime
+  status        String          @default("pending")
+  notes         String?
+  total         Float           @default(0)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  items         PurchaseOrderItem[]
+}
+
+model PurchaseOrderItem {
+  id              String        @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  quantity        Float
+  price           Float
+  total           Float
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model PurchaseInvoice {
+  id            String          @id @default(cuid())
+  invoiceNumber String          @unique
+  supplierId    String
+  supplier      Supplier        @relation(fields: [supplierId], references: [id])
+  date          DateTime
+  status        String          @default("pending")
+  notes         String?
+  total         Float           @default(0)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  items         PurchaseInvoiceItem[]
+}
+
+model PurchaseInvoiceItem {
+  id                String          @id @default(cuid())
+  purchaseInvoiceId String
+  purchaseInvoice   PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
+  productId         String
+  product           Product         @relation(fields: [productId], references: [id])
+  quantity          Float
+  price             Float
+  total             Float
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+}
+
+model SalesOrder {
+  id            String          @id @default(cuid())
+  orderNumber   String          @unique
+  customerId    String
+  customer      Customer        @relation(fields: [customerId], references: [id])
+  date          DateTime
+  status        String          @default("pending")
+  notes         String?
+  total         Float           @default(0)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  items         SalesOrderItem[]
+}
+
+model SalesOrderItem {
+  id            String      @id @default(cuid())
+  salesOrderId  String
+  salesOrder    SalesOrder  @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  productId     String
+  product       Product     @relation(fields: [productId], references: [id])
+  quantity      Float
+  price         Float
+  total         Float
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model SalesInvoice {
+  id            String          @id @default(cuid())
+  invoiceNumber String          @unique
+  customerId    String
+  customer      Customer        @relation(fields: [customerId], references: [id])
+  date          DateTime
+  status        String          @default("pending")
+  notes         String?
+  total         Float           @default(0)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  items         SalesInvoiceItem[]
+}
+
+model SalesInvoiceItem {
+  id              String        @id @default(cuid())
+  salesInvoiceId  String
+  salesInvoice    SalesInvoice  @relation(fields: [salesInvoiceId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  quantity        Float
+  price           Float
+  total           Float
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model Expense {
+  id            String    @id @default(cuid())
+  expenseNumber String    @unique
+  category      String
+  description   String
+  amount        Float
+  date          DateTime
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model ProductionOrder {
+  id            String          @id @default(cuid())
+  orderNumber   String          @unique
+  productId     String
+  product       Product         @relation(fields: [productId], references: [id])
+  quantity      Float
+  date          DateTime
+  status        String          @default("pending")
+  notes         String?
+  totalCost     Float           @default(0)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  items         ProductionOrderItem[]
+}
+
+model ProductionOrderItem {
+  id                String          @id @default(cuid())
+  productionOrderId String
+  productionOrder   ProductionOrder @relation(fields: [productionOrderId], references: [id], onDelete: Cascade)
+  productId         String
+  product           Product         @relation(fields: [productId], references: [id])
+  quantity          Float
+  cost              Float
+  total             Float
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+}
+
+model BOMItem {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation("BOMProduct", fields: [productId], references: [id], onDelete: Cascade)
+  materialId  String
+  material    Product  @relation("BOMMaterial", fields: [materialId], references: [id])
+  quantity    Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
