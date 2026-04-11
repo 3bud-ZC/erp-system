@@ -32,6 +32,88 @@ async function getFinancialData(startDate: Date, endDate: Date) {
   };
 }
 
+// Helper: Get monthly data for charts (last 6 months)
+async function getMonthlyChartData() {
+  const months: string[] = [];
+  const sales: number[] = [];
+  const purchases: number[] = [];
+
+  const now = new Date();
+  
+  for (let i = 5; i >= 0; i--) {
+    const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
+    
+    const monthName = monthStart.toLocaleDateString('ar-EG', { month: 'short' });
+    months.push(monthName);
+
+    const data = await getFinancialData(monthStart, monthEnd);
+    sales.push(data.sales);
+    purchases.push(data.purchases);
+  }
+
+  return { labels: months, sales, purchases };
+}
+
+// Helper: Get inventory breakdown by type
+async function getInventoryBreakdown() {
+  const products = await prisma.product.findMany();
+  
+  const rawMaterials = products.filter(p => p.type === 'raw').length;
+  const finishedGoods = products.filter(p => p.type === 'finished').length;
+  const packaging = products.filter(p => p.type === 'packaging').length;
+
+  return { rawMaterials, finishedGoods, packaging };
+}
+
+// Helper: Generate recent activities
+async function getRecentActivities() {
+  const activities: any[] = [];
+
+  // Recent sales invoices
+  const salesInvoices = await prisma.salesInvoice.findMany({
+    take: 3,
+    orderBy: { createdAt: 'desc' },
+    include: { customer: true },
+  });
+
+  salesInvoices.forEach(invoice => {
+    activities.push({
+      id: `sale-${invoice.id}`,
+      type: 'sale',
+      title: `فاتورة بيع #${invoice.invoiceNumber || invoice.id.slice(-6)}`,
+      description: invoice.customer?.nameAr || 'عميل غير معروف',
+      amount: invoice.total,
+      date: new Date(invoice.createdAt).toLocaleDateString('ar-EG'),
+      status: invoice.status === 'completed' ? 'completed' : 'pending',
+    });
+  });
+
+  // Recent purchase invoices
+  const purchaseInvoices = await prisma.purchaseInvoice.findMany({
+    take: 3,
+    orderBy: { createdAt: 'desc' },
+    include: { supplier: true },
+  });
+
+  purchaseInvoices.forEach(invoice => {
+    activities.push({
+      id: `purchase-${invoice.id}`,
+      type: 'purchase',
+      title: `فاتورة شراء #${invoice.invoiceNumber || invoice.id.slice(-6)}`,
+      description: invoice.supplier?.nameAr || 'مورد غير معروف',
+      amount: invoice.total,
+      date: new Date(invoice.createdAt).toLocaleDateString('ar-EG'),
+      status: invoice.status === 'completed' ? 'completed' : 'pending',
+    });
+  });
+
+  // Sort by date descending and limit to 5
+  return activities
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 5);
+}
+
 export async function GET() {
   try {
     // Get current month data
@@ -72,19 +154,6 @@ export async function GET() {
         minStock: p.minStock,
       }));
 
-    // Fetch recent invoices
-    const recentSalesInvoices = await prisma.salesInvoice.findMany({
-      take: 5,
-      orderBy: { createdAt: 'desc' },
-      include: { customer: true },
-    });
-
-    const recentPurchaseInvoices = await prisma.purchaseInvoice.findMany({
-      take: 5,
-      orderBy: { createdAt: 'desc' },
-      include: { supplier: true },
-    });
-
     // Calculate P&L (wrapped in try-catch since accounting models are new)
     let pnl = { grossProfit: 0, netProfit: 0 };
     try {
@@ -94,9 +163,33 @@ export async function GET() {
       console.log('Accounting system not initialized');
     }
 
-    // Get total inventory value
+    // Get total inventory value and count
     const inventory = await prisma.product.findMany();
     const totalInventoryValue = inventory.reduce((sum, p) => sum + p.stock * p.cost, 0);
+    const totalProducts = inventory.length;
+
+    // Get chart data
+    const chartData = await getMonthlyChartData();
+
+    // Get inventory breakdown
+    const inventoryData = await getInventoryBreakdown();
+
+    // Get recent activities
+    const recentActivities = await getRecentActivities();
+
+    // Build alerts
+    const alerts: any[] = [];
+    
+    if (lowStockFilteredCount > 0) {
+      alerts.push({
+        id: 'low-stock',
+        type: 'stock',
+        title: 'مخزون منخفض',
+        description: `${lowStockFilteredCount} منتج أقل من الحد الأدنى للمخزون`,
+        severity: 'high',
+        date: 'الآن',
+      });
+    }
 
     return NextResponse.json({
       // Current month totals
@@ -119,10 +212,15 @@ export async function GET() {
       lowStockProducts: lowStockFilteredCount,
       lowStockDetails,
       totalInventoryValue,
+      totalProducts,
 
-      // Recent transactions
-      recentSalesInvoices,
-      recentPurchaseInvoices,
+      // Chart data
+      chartData,
+      inventoryData,
+
+      // Activities and alerts
+      recentActivities,
+      alerts,
     });
   } catch (error) {
     console.error('Error fetching dashboard data:', error);
