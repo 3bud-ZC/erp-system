@@ -1,52 +1,221 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import EnhancedTable from '@/components/EnhancedTable';
-import EnhancedModal from '@/components/EnhancedModal';
-import { Plus, AlertTriangle, DollarSign } from 'lucide-react';
 import Link from 'next/link';
+import {
+  Plus,
+  Search,
+  Filter,
+  Download,
+  ArrowUpDown,
+  Edit,
+  Trash2,
+  RefreshCw,
+  DollarSign,
+  Calendar,
+  FileText,
+  Save,
+  Copy,
+  Trash,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  CreditCard,
+  AlertTriangle,
+} from 'lucide-react';
+import { formatCurrency } from '@/lib/format';
+
+// Toolbar Button Component
+function ToolbarButton({ label, shortcut, icon: Icon, color, onClick }: any) {
+  const colorClasses: Record<string, string> = {
+    blue: 'bg-blue-500 hover:bg-blue-600',
+    green: 'bg-emerald-500 hover:bg-emerald-600',
+    red: 'bg-red-500 hover:bg-red-600',
+    gray: 'bg-gray-500 hover:bg-gray-600',
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      className={`${colorClasses[color]} text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm font-medium`}
+    >
+      {Icon && <Icon className="w-4 h-4" />}
+      <span>{label}</span>
+      {shortcut && <span className="text-xs opacity-75">{shortcut}</span>}
+    </button>
+  );
+}
+
+// Navigation Button
+function NavButton({ icon: Icon, onClick, disabled }: any) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-3 py-2 rounded-lg transition-colors"
+    >
+      <Icon className="w-4 h-4" />
+    </button>
+  );
+}
+
+// Stats Card Component
+function StatCard({ title, value, subtitle, icon: Icon, color }: any) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-5">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-gray-500 text-sm font-medium">{title}</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+          {subtitle && <p className="text-gray-400 text-xs mt-1">{subtitle}</p>}
+        </div>
+        <div className={`w-10 h-10 ${color} rounded-lg flex items-center justify-center`}>
+          <Icon className="w-5 h-5 text-white" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface Expense {
+  id: string;
+  expenseNumber: string;
+  supplierId?: string;
+  supplier?: { nameAr: string };
+  date: string;
+  branch: string;
+  taxNumber: string;
+  invoiceNumber: string;
+  amount: number;
+  tax: number;
+  total: number;
+  status: string;
+  notes: string;
+  costCenter?: string;
+  accountNumber?: string;
+}
+
+interface Supplier {
+  id: string;
+  nameAr: string;
+}
 
 export default function ExpensesPage() {
-  const [expenses, setExpenses] = useState([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingExpense, setEditingExpense] = useState<any>(null);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'completed' | 'cancelled'>('all');
+
+  // Form states
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
+
   const [formData, setFormData] = useState({
     expenseNumber: '',
-    category: '',
-    description: '',
-    amount: 0,
+    supplierId: '',
     date: new Date().toISOString().split('T')[0],
+    branch: '',
+    taxNumber: '',
+    invoiceNumber: '',
+    amount: 0,
+    tax: 0,
+    total: 0,
+    status: 'pending',
     notes: '',
+    costCenter: '',
+    accountNumber: '',
   });
 
+  const [items, setItems] = useState([
+    { accountNumber: '', accountName: '', description: '', amount: 0, tax: 0, total: 0 },
+  ]);
+
   useEffect(() => {
-    fetchExpenses();
+    fetchData();
   }, []);
 
-  const fetchExpenses = async () => {
+  const fetchData = async () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch('/api/expenses');
-      if (!res.ok) throw new Error('فشل في تحميل المصروفات');
-      const data = await res.json();
-      setExpenses(data || []);
+      const [expensesRes, suppliersRes] = await Promise.all([
+        fetch('/api/expenses'),
+        fetch('/api/suppliers'),
+      ]);
+
+      if (!expensesRes.ok || !suppliersRes.ok) {
+        throw new Error('فشل في تحميل البيانات');
+      }
+
+      setExpenses(await expensesRes.json());
+      setSuppliers(await suppliersRes.json());
     } catch (err) {
-      console.error('Error fetching expenses:', err);
-      setError(err instanceof Error ? err.message : 'خطأ في تحميل المصروفات');
-      setExpenses([]);
+      console.error('Error fetching data:', err);
+      setError(err instanceof Error ? err.message : 'خطأ في تحميل البيانات');
     } finally {
       setLoading(false);
     }
   };
 
+  const filteredExpenses = expenses.filter((exp) => {
+    const matchesSearch =
+      exp.expenseNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      exp.supplier?.nameAr?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      exp.invoiceNumber?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = filterStatus === 'all' || exp.status === filterStatus;
+    return matchesSearch && matchesStatus;
+  });
+
+  const totalAmount = expenses.reduce((sum, exp) => sum + exp.total, 0);
+  const totalTax = expenses.reduce((sum, exp) => sum + (exp.tax || 0), 0);
+
+  const handleAddItem = () => {
+    setItems([...items, { accountNumber: '', accountName: '', description: '', amount: 0, tax: 0, total: 0 }]);
+  };
+
+  const handleRemoveItem = (index: number) => {
+    setItems(items.filter((_, i) => i !== index));
+  };
+
+  const handleItemChange = (index: number, field: string, value: any) => {
+    const newItems = [...items];
+    newItems[index] = { ...newItems[index], [field]: value };
+
+    if (field === 'amount' || field === 'tax') {
+      const amount = newItems[index].amount || 0;
+      const tax = newItems[index].tax || 0;
+      newItems[index].total = amount + tax;
+    }
+
+    setItems(newItems);
+    
+    // Update total
+    const newTotal = newItems.reduce((sum, item) => sum + item.total, 0);
+    setFormData((prev) => ({ ...prev, total: newTotal }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     try {
+      const total = items.reduce((sum, item) => sum + item.total, 0);
+      const tax = items.reduce((sum, item) => sum + item.tax, 0);
+      const amount = items.reduce((sum, item) => sum + item.amount, 0);
+
+      const data = {
+        ...formData,
+        date: new Date(formData.date),
+        total,
+        tax,
+        amount,
+      };
+
       const method = editingExpense ? 'PUT' : 'POST';
-      const body = editingExpense ? { id: editingExpense.id, ...formData } : formData;
+      const body = editingExpense ? { id: editingExpense.id, ...data } : data;
 
       const res = await fetch('/api/expenses', {
         method,
@@ -54,57 +223,156 @@ export default function ExpensesPage() {
         body: JSON.stringify(body),
       });
 
-      if (!res.ok) throw new Error('فشل في حفظ المصروفات');
+      if (!res.ok) throw new Error('فشل في حفظ المصروف');
 
-      setIsModalOpen(false);
-      setEditingExpense(null);
       resetForm();
-      fetchExpenses();
+      setIsFormOpen(false);
+      setEditingExpense(null);
+      fetchData();
     } catch (err) {
-      console.error('Error saving expense:', err);
-      alert(err instanceof Error ? err.message : 'خطأ في حفظ المصروفات');
+      console.error('Error submitting expense:', err);
+      alert(err instanceof Error ? err.message : 'خطأ في حفظ المصروف');
     }
   };
 
   const resetForm = () => {
     setFormData({
       expenseNumber: '',
-      category: '',
-      description: '',
-      amount: 0,
+      supplierId: '',
       date: new Date().toISOString().split('T')[0],
+      branch: '',
+      taxNumber: '',
+      invoiceNumber: '',
+      amount: 0,
+      tax: 0,
+      total: 0,
+      status: 'pending',
       notes: '',
+      costCenter: '',
+      accountNumber: '',
     });
+    setItems([{ accountNumber: '', accountName: '', description: '', amount: 0, tax: 0, total: 0 }]);
   };
 
-  const handleEdit = (expense: any) => {
+  const handleNew = () => {
+    resetForm();
+    setEditingExpense(null);
+    setIsFormOpen(true);
+  };
+
+  const handleEdit = (expense: Expense) => {
     setEditingExpense(expense);
-    setFormData(expense);
-    setIsModalOpen(true);
+    setFormData({
+      expenseNumber: expense.expenseNumber || '',
+      supplierId: expense.supplierId || '',
+      date: new Date(expense.date).toISOString().split('T')[0],
+      branch: expense.branch || '',
+      taxNumber: expense.taxNumber || '',
+      invoiceNumber: expense.invoiceNumber || '',
+      amount: expense.amount || 0,
+      tax: expense.tax || 0,
+      total: expense.total || 0,
+      status: expense.status || 'pending',
+      notes: expense.notes || '',
+      costCenter: expense.costCenter || '',
+      accountNumber: expense.accountNumber || '',
+    });
+    setIsFormOpen(true);
   };
 
-  const handleDelete = async (expense: any) => {
+  const handleDelete = async (expense: Expense) => {
     if (confirm('هل أنت متأكد من حذف هذا المصروف؟')) {
       await fetch(`/api/expenses?id=${expense.id}`, { method: 'DELETE' });
-      fetchExpenses();
+      fetchData();
     }
   };
 
-  const columns = [
-    { key: 'expenseNumber', label: 'رقم المصروف' },
-    { key: 'category', label: 'الفئة' },
-    { key: 'description', label: 'الوصف' },
-    { key: 'amount', label: 'المبلغ' },
-    { key: 'date', label: 'التاريخ' },
-  ];
+  const handleSave = () => {
+    const form = document.getElementById('expense-form') as HTMLFormElement;
+    if (form) form.requestSubmit();
+  };
+
+  const handleCopy = () => {
+    if (editingExpense) {
+      setFormData({ ...formData, expenseNumber: '' });
+      setEditingExpense(null);
+    }
+  };
+
+  const handleDeleteCurrent = () => {
+    if (editingExpense && confirm('هل أنت متأكد من حذف هذا المصروف؟')) {
+      handleDelete(editingExpense);
+      setIsFormOpen(false);
+    }
+  };
+
+  const handleNavigate = (direction: 'first' | 'prev' | 'next' | 'last') => {
+    if (filteredExpenses.length === 0) return;
+    
+    let newIndex = currentIndex;
+    switch (direction) {
+      case 'first':
+        newIndex = 0;
+        break;
+      case 'prev':
+        newIndex = Math.max(0, currentIndex - 1);
+        break;
+      case 'next':
+        newIndex = Math.min(filteredExpenses.length - 1, currentIndex + 1);
+        break;
+      case 'last':
+        newIndex = filteredExpenses.length - 1;
+        break;
+    }
+    
+    setCurrentIndex(newIndex);
+    handleEdit(filteredExpenses[newIndex]);
+  };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isFormOpen) return;
+      
+      if (e.key === 'F7') {
+        e.preventDefault();
+        handleSave();
+      } else if (e.key === 'F8') {
+        e.preventDefault();
+        handleCopy();
+      } else if (e.key === 'F9') {
+        e.preventDefault();
+        handleDeleteCurrent();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFormOpen, editingExpense, formData]);
+
+  const getStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
+      pending: 'bg-yellow-100 text-yellow-700',
+      completed: 'bg-green-100 text-green-700',
+      cancelled: 'bg-red-100 text-red-700',
+    };
+    return colors[status] || 'bg-gray-100 text-gray-700';
+  };
+
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      pending: 'معلقة',
+      completed: 'مكتملة',
+      cancelled: 'ملغية',
+    };
+    return labels[status] || status;
+  };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="animate-spin mb-4">
-            <DollarSign className="w-8 h-8 text-blue-600 mx-auto" />
-          </div>
+          <RefreshCw className="w-8 h-8 text-blue-600 mx-auto animate-spin mb-4" />
           <p className="text-gray-600">جاري تحميل المصروفات...</p>
         </div>
       </div>
@@ -113,15 +381,16 @@ export default function ExpensesPage() {
 
   if (error) {
     return (
-      <div className="p-6 text-center">
-        <div className="bg-red-50 border border-red-300 rounded-lg p-6 max-w-md mx-auto">
-          <AlertTriangle className="w-12 h-12 text-red-600 mx-auto mb-2" />
-          <p className="text-red-800 font-medium mb-4">{error}</p>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center bg-red-50 border border-red-200 rounded-xl p-8 max-w-md">
+          <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <p className="text-red-700 font-medium mb-2">حدث خطأ</p>
+          <p className="text-red-600 text-sm mb-4">{error}</p>
           <button
-            onClick={fetchExpenses}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            onClick={fetchData}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
           >
-            إعادة محاولة
+            إعادة المحاولة
           </button>
         </div>
       </div>
@@ -130,138 +399,255 @@ export default function ExpensesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">المصروفات</h1>
-          <p className="text-gray-600 mt-1">إدارة المصروفات</p>
-        </div>
-        <div className="flex gap-3">
-          <Link
-            href="/purchases/suppliers"
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            الموردين
-          </Link>
-          <Link
-            href="/purchases/invoices"
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            فواتير الشراء
-          </Link>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            <Plus className="w-5 h-5" />
-            إضافة مصروف
-          </button>
-        </div>
-      </div>
-
-      <EnhancedTable
-        columns={columns}
-        data={expenses}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-      />
-
-      <EnhancedModal
-        isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setEditingExpense(null);
-          resetForm();
-        }}
-        title={editingExpense ? 'تعديل مصروف' : 'إضافة مصروف'}
-      >
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+      {!isFormOpen ? (
+        <>
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">رقم المصروف</label>
-              <input
-                type="text"
-                required
-                value={formData.expenseNumber}
-                onChange={(e) => setFormData({ ...formData, expenseNumber: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <h1 className="text-2xl font-bold text-gray-900">المصروفات</h1>
+              <p className="text-gray-500 text-sm mt-1">إدارة مصروفات الشراء والتشغيل</p>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">الفئة</label>
-              <select
-                required
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleNew}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
               >
-                <option value="">اختر الفئة</option>
-                <option value="رواتب">رواتب</option>
-                <option value="كهرباء">كهرباء</option>
-                <option value="مياه">مياه</option>
-                <option value="صيانة">صيانة</option>
-                <option value="نقل">نقل</option>
-                <option value="أخرى">أخرى</option>
+                <Plus className="w-4 h-4" />
+                مصروف جديد
+              </button>
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard title="إجمالي المصروفات" value={expenses.length} subtitle="مصروف" icon={FileText} color="bg-blue-500" />
+            <StatCard title="إجمالي المبالغ" value={formatCurrency(totalAmount)} subtitle="جميع المصروفات" icon={DollarSign} color="bg-green-500" />
+            <StatCard title="إجمالي الضرائب" value={formatCurrency(totalTax)} subtitle="ضريبة" icon={Calendar} color="bg-yellow-500" />
+            <StatCard title="متوسط المصروف" value={formatCurrency(expenses.length > 0 ? totalAmount / expenses.length : 0)} subtitle="لكل مصروف" icon={ArrowUpDown} color="bg-purple-500" />
+          </div>
+
+          {/* Filters & Table */}
+          <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <div className="flex flex-col sm:flex-row gap-4 mb-4">
+              <div className="relative flex-1">
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="البحث..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pr-10 pl-4 py-2 border border-gray-200 rounded-lg text-sm"
+                />
+              </div>
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value as any)}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm"
+              >
+                <option value="all">جميع الحالات</option>
+                <option value="pending">معلقة</option>
+                <option value="completed">مكتملة</option>
+                <option value="cancelled">ملغية</option>
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">المبلغ</label>
-              <input
-                type="number"
-                required
-                min="0"
-                step="0.01"
-                value={formData.amount}
-                onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-right">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">رقم القيد</th>
+                    <th className="px-4 py-3 font-semibold">التاريخ</th>
+                    <th className="px-4 py-3 font-semibold">المورد</th>
+                    <th className="px-4 py-3 font-semibold">رقم الفاتورة</th>
+                    <th className="px-4 py-3 font-semibold">المبلغ</th>
+                    <th className="px-4 py-3 font-semibold">الحالة</th>
+                    <th className="px-4 py-3 font-semibold"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredExpenses.map((expense) => (
+                    <tr key={expense.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium">{expense.expenseNumber || expense.id.slice(-6)}</td>
+                      <td className="px-4 py-3 text-gray-600">{new Date(expense.date).toLocaleDateString('ar-EG')}</td>
+                      <td className="px-4 py-3">{expense.supplier?.nameAr || '-'}</td>
+                      <td className="px-4 py-3">{expense.invoiceNumber || '-'}</td>
+                      <td className="px-4 py-3 font-medium">{formatCurrency(expense.total)}</td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(expense.status)}`}>
+                          {getStatusLabel(expense.status)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <button onClick={() => handleEdit(expense)} className="text-blue-600 hover:underline text-sm ml-2">تعديل</button>
+                        <button onClick={() => handleDelete(expense)} className="text-red-600 hover:underline text-sm">حذف</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Form Header with Toolbar */}
+          <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-4 rounded-xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ToolbarButton label="حفظ" shortcut="F7" icon={Save} color="blue" onClick={handleSave} />
+                <ToolbarButton label="نسخ" shortcut="F8" icon={Copy} color="green" onClick={handleCopy} />
+                <ToolbarButton label="حذف" shortcut="F9" icon={Trash} color="red" onClick={handleDeleteCurrent} />
+              </div>
+              <div className="flex items-center gap-2">
+                <NavButton icon={ChevronsLeft} onClick={() => handleNavigate('first')} disabled={currentIndex === 0} />
+                <NavButton icon={ChevronLeft} onClick={() => handleNavigate('prev')} disabled={currentIndex === 0} />
+                <NavButton icon={ChevronRight} onClick={() => handleNavigate('next')} disabled={currentIndex >= filteredExpenses.length - 1} />
+                <NavButton icon={ChevronsRight} onClick={() => handleNavigate('last')} disabled={currentIndex >= filteredExpenses.length - 1} />
+              </div>
+              <button onClick={() => setIsFormOpen(false)} className="mr-4 text-lg">المصروفات</button>
+            </div>
+          </div>
+
+          {/* Expense Form - Matching Image */}
+          <form id="expense-form" onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            {/* Row 1 */}
+            <div className="grid grid-cols-6 gap-4 p-4 border-b border-gray-200">
+              <div className="text-center">
+                <label className="block text-sm font-medium text-gray-700 mb-1">رقم القيد</label>
+                <div className="text-xl font-bold">{editingExpense ? currentIndex + 1 : 0}</div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 text-center">تاريخ القيد</label>
+                <input type="datetime-local" required value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 text-center">الفرع</label>
+                <select value={formData.branch} onChange={(e) => setFormData({ ...formData, branch: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                  <option value="">الفرع الرئيسي</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 text-center">الموردين</label>
+                <select value={formData.supplierId} onChange={(e) => setFormData({ ...formData, supplierId: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                  <option value=""></option>
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.id}>{s.nameAr}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 text-center">الرقم الضريبي</label>
+                <input type="text" value={formData.taxNumber} onChange={(e) => setFormData({ ...formData, taxNumber: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 text-center">رقم الفاتورة</label>
+                <input type="text" required value={formData.invoiceNumber} onChange={(e) => setFormData({ ...formData, invoiceNumber: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              </div>
+            </div>
+
+            {/* Row 2 - Totals */}
+            <div className="grid grid-cols-5 gap-4 p-4 border-b border-gray-200 bg-gray-50">
+              <div className="text-center">
+                <label className="block text-sm font-medium text-gray-700 mb-1">المجموع</label>
+                <div className="text-lg font-bold">{formData.total.toFixed(2)}</div>
+              </div>
+              <div className="text-center">
+                <label className="block text-sm font-medium text-gray-700 mb-1">الخصومات</label>
+                <div className="text-lg font-bold text-red-600">0.00</div>
+              </div>
+              <div className="text-center">
+                <label className="block text-sm font-medium text-gray-700 mb-1">الضريبة</label>
+                <div className="text-lg font-bold text-green-600">{formData.tax.toFixed(2)}</div>
+              </div>
+              <div className="text-center">
+                <label className="block text-sm font-medium text-gray-700 mb-1">الحالة</label>
+                <div className="text-lg font-bold">{getStatusLabel(formData.status)}</div>
+              </div>
+            </div>
+
+            {/* Description */}
+            <div className="p-4 border-b border-gray-200">
+              <label className="block text-sm font-medium text-gray-700 mb-1 text-right">البيان</label>
+              <textarea
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">التاريخ</label>
-              <input
-                type="date"
-                required
-                value={formData.date}
-                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+
+            {/* Payments Section Header */}
+            <div className="bg-gray-100 px-4 py-2 border-b border-gray-200 flex items-center gap-2">
+              <div className="w-1 h-4 bg-cyan-500"></div>
+              <span className="font-bold text-gray-700">مراكز التكلفة</span>
+              <CreditCard className="w-4 h-4 text-cyan-500 mr-auto" />
             </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">الوصف</label>
-            <input
-              type="text"
-              required
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">ملاحظات</label>
-            <textarea
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div className="flex gap-2 justify-end">
-            <button
-              type="button"
-              onClick={() => setIsModalOpen(false)}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-            >
-              إلغاء
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              {editingExpense ? 'تحديث' : 'إضافة'}
-            </button>
-          </div>
-        </form>
-      </EnhancedModal>
+
+            {/* Items Table */}
+            <div className="p-4">
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      <th className="px-2 py-2 border border-gray-300 text-center">م</th>
+                      <th className="px-2 py-2 border border-gray-300 text-center">رقم الحساب</th>
+                      <th className="px-2 py-2 border border-gray-300 text-center">اسم الحساب</th>
+                      <th className="px-2 py-2 border border-gray-300 text-center">مدين</th>
+                      <th className="px-2 py-2 border border-gray-300 text-center">دائن</th>
+                      <th className="px-2 py-2 border border-gray-300 text-center">البيان</th>
+                      <th className="px-2 py-2 border border-gray-300 text-center">مراكز التكلفة</th>
+                      <th className="px-2 py-2 border border-gray-300 text-center"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item, index) => (
+                      <tr key={index}>
+                        <td className="px-2 py-2 border border-gray-300 text-center">{index + 1}</td>
+                        <td className="px-2 py-2 border border-gray-300">
+                          <input type="text" value={item.accountNumber} onChange={(e) => handleItemChange(index, 'accountNumber', e.target.value)} className="w-full px-1 py-1 border border-gray-300 rounded text-sm" />
+                        </td>
+                        <td className="px-2 py-2 border border-gray-300">
+                          <input type="text" value={item.accountName} onChange={(e) => handleItemChange(index, 'accountName', e.target.value)} className="w-full px-1 py-1 border border-gray-300 rounded text-sm" />
+                        </td>
+                        <td className="px-2 py-2 border border-gray-300">
+                          <input type="number" min="0" step="0.01" value={item.amount} onChange={(e) => handleItemChange(index, 'amount', parseFloat(e.target.value) || 0)} className="w-full px-1 py-1 border border-gray-300 rounded text-sm text-center" />
+                        </td>
+                        <td className="px-2 py-2 border border-gray-300">
+                          <input type="number" min="0" step="0.01" value={item.tax} onChange={(e) => handleItemChange(index, 'tax', parseFloat(e.target.value) || 0)} className="w-full px-1 py-1 border border-gray-300 rounded text-sm text-center" />
+                        </td>
+                        <td className="px-2 py-2 border border-gray-300">
+                          <input type="text" value={item.description} onChange={(e) => handleItemChange(index, 'description', e.target.value)} className="w-full px-1 py-1 border border-gray-300 rounded text-sm" />
+                        </td>
+                        <td className="px-2 py-2 border border-gray-300">
+                          <select className="w-full px-1 py-1 border border-gray-300 rounded text-sm">
+                            <option>اختر...</option>
+                          </select>
+                        </td>
+                        <td className="px-2 py-2 border border-gray-300 text-center">
+                          <button type="button" onClick={() => handleRemoveItem(index)} className="text-red-600 hover:bg-red-50 p-1 rounded"><Trash2 className="w-4 h-4" /></button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-gray-50 font-bold">
+                    <tr>
+                      <td colSpan={3} className="px-2 py-2 border border-gray-300 text-center">الإجمالي</td>
+                      <td className="px-2 py-2 border border-gray-300 text-center">{items.reduce((sum, i) => sum + i.amount, 0).toFixed(2)}</td>
+                      <td className="px-2 py-2 border border-gray-300 text-center">{items.reduce((sum, i) => sum + i.tax, 0).toFixed(2)}</td>
+                      <td colSpan={3} className="px-2 py-2 border border-gray-300"></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <button type="button" onClick={handleAddItem} className="mt-2 flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700">
+                <Plus className="w-4 h-4" /> إضافة بند
+              </button>
+            </div>
+
+            <button type="submit" className="hidden">Submit</button>
+          </form>
+        </>
+      )}
     </div>
   );
 }
