@@ -12,7 +12,7 @@ import {
   Factory, 
   Settings,
   ChevronDown,
-  ChevronLeft,
+  ChevronRight,
   LayoutDashboard,
   BarChart3
 } from 'lucide-react';
@@ -34,6 +34,7 @@ const menuItems: MenuItem[] = [
   {
     title: 'المشتريات',
     icon: ShoppingCart,
+    href: '/purchases',
     children: [
       { title: 'الموردين', icon: Users, href: '/purchases/suppliers' },
       { title: 'فواتير شراء', icon: FileText, href: '/purchases/invoices' },
@@ -45,17 +46,13 @@ const menuItems: MenuItem[] = [
   {
     title: 'المبيعات',
     icon: TrendingUp,
+    href: '/sales',
     children: [
       { title: 'العملاء', icon: Users, href: '/sales/customers' },
       { title: 'فواتير بيع', icon: FileText, href: '/sales/invoices' },
       { title: 'أوامر بيع', icon: FileText, href: '/sales/orders' },
       { title: 'تقارير المبيعات', icon: TrendingUp, href: '/sales/reports' },
     ],
-  },
-  {
-    title: 'المخزن',
-    icon: Package,
-    href: '/warehouse',
   },
   {
     title: 'المخزون',
@@ -65,6 +62,7 @@ const menuItems: MenuItem[] = [
   {
     title: 'المحاسبة',
     icon: BarChart3,
+    href: '/accounting',
     children: [
       { title: 'الملخص المالي', icon: DollarSign, href: '/accounting' },
       { title: 'القيود اليومية', icon: FileText, href: '/accounting/journal' },
@@ -74,6 +72,7 @@ const menuItems: MenuItem[] = [
   {
     title: 'التصنيع',
     icon: Factory,
+    href: '/manufacturing',
     children: [
       { title: 'أوامر إنتاج', icon: FileText, href: '/manufacturing/production-orders' },
       { title: 'عمليات الإنتاج', icon: Settings, href: '/manufacturing/operations' },
@@ -105,7 +104,7 @@ function SidebarItem({ item, level = 0 }: { item: MenuItem; level?: number }) {
             <span className="font-medium">{item.title}</span>
           </div>
           <div className={`transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}>
-            <ChevronLeft className="w-4 h-4 text-gray-500" />
+            <ChevronRight className="w-4 h-4 text-gray-500" />
           </div>
         </button>
         {isOpen && (
@@ -172,7 +171,7 @@ export default function Sidebar() {
             onClick={toggleCollapse}
             className="p-2.5 hover:bg-gray-100 rounded-xl transition-all duration-300 hover:scale-110 hover:rotate-180 backdrop-blur-sm"
           >
-            <ChevronLeft className={`w-5 h-5 text-gray-600 transition-transform duration-500 ${
+            <ChevronRight className={`w-5 h-5 text-gray-600 transition-transform duration-500 ${
               isCollapsed ? 'rotate-180' : ''
             }`} />
           </button>
