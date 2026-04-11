@@ -13,7 +13,8 @@ import {
   Settings,
   ChevronDown,
   ChevronLeft,
-  LayoutDashboard
+  LayoutDashboard,
+  BarChart3
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -60,6 +61,15 @@ const menuItems: MenuItem[] = [
     title: 'المخزون',
     icon: Package,
     href: '/inventory',
+  },
+  {
+    title: 'المحاسبة',
+    icon: BarChart3,
+    children: [
+      { title: 'الملخص المالي', icon: DollarSign, href: '/accounting' },
+      { title: 'القيود اليومية', icon: FileText, href: '/accounting/journal' },
+      { title: 'قائمة الدخل', icon: TrendingUp, href: '/accounting/profit-loss' },
+    ],
   },
   {
     title: 'التصنيع',

@@ -77,7 +77,7 @@ export default function EnhancedCard({
         <div className="flex items-start justify-between mb-4 relative z-10">
           <div className="flex-1">
             <span className="text-sm font-semibold text-gray-600/80 mb-2 uppercase tracking-wider">{title}</span>
-            <p className="text-3xl font-bold text-gray-900 mb-1">{value}</p>
+            <p className="text-2xl lg:text-3xl font-bold text-gray-900 mb-1 truncate">{value}</p>
           </div>
           
           {/* Icon */}

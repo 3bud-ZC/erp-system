@@ -18,8 +18,6 @@ const nextConfig = {
     optimizePackageImports: ['lucide-react'],
     serverComponentsExternalPackages: ['@prisma/client'],
   },
-  // Performance optimizations
-  swcMinify: true,
   // Production optimizations
   output: 'standalone',
   // Build optimizations

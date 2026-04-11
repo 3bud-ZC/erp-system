@@ -27,7 +27,19 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const { id, ...data } = body;
+    const { id, stock, ...data } = body;
+
+    // SECURITY: Prevent direct stock manipulation via generic product endpoint
+    // Stock must only be modified through inventory operations (invoices, adjustments, etc.)
+    if (stock !== undefined) {
+      return NextResponse.json(
+        {
+          error: 'Cannot modify stock directly. Use inventory operations (invoices, adjustments).',
+        },
+        { status: 400 }
+      );
+    }
+
     const product = await prisma.product.update({
       where: { id },
       data,
@@ -53,3 +65,4 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Failed to delete product' }, { status: 500 });
   }
 }
+

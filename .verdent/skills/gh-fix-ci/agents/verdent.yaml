@@ -1,0 +1,7 @@
+category: Development
+interface:
+  display_name: 'CI Helper'
+  short_description: 'Helps you understand and fix failed checks on GitHub pull requests.'
+  icon_dark: './assets/icon-dark.png'
+  icon_light: './assets/icon-light.png'
+  default_prompt: 'Help debug and fix failing CI checks on this PR.'

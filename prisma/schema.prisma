@@ -58,6 +58,8 @@ model Product {
   productionOrderItems ProductionOrderItem[]
   bomItems      BOMItem[]       @relation("BOMProduct")
   bomMaterials  BOMItem[]       @relation("BOMMaterial")
+  stockMovements StockMovement[] @relation("StockMovements")
+  inventoryValuation InventoryValuation? @relation("InventoryValuation")
 }
 
 model PurchaseOrder {
@@ -193,6 +195,7 @@ model ProductionOrder {
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   items         ProductionOrderItem[]
+  workInProgress WorkInProgress?
 }
 
 model ProductionOrderItem {
@@ -217,4 +220,95 @@ model BOMItem {
   quantity    Float
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// ==================== INVENTORY MODELS ====================
+
+model StockMovement {
+  id              String   @id @default(cuid())
+  productId       String
+  product         Product  @relation("StockMovements", fields: [productId], references: [id])
+  type            String   // IN, OUT, ADJUSTMENT, MANUFACTURING_IN, MANUFACTURING_OUT
+  quantity        Float
+  reference       String?  // Invoice ID, Order ID, etc.
+  referenceType   String?  // SalesInvoice, PurchaseInvoice, ProductionOrder, etc.
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([productId])
+  @@index([referenceType, reference])
+}
+
+model InventoryValuation {
+  id              String   @id @default(cuid())
+  productId       String   @unique
+  product         Product  @relation("InventoryValuation", fields: [productId], references: [id])
+  totalQuantity   Float    @default(0)
+  totalValue      Float    @default(0)   // Cost-based valuation
+  averageCost     Float    @default(0)   // FIFO/Average cost
+  lastUpdated     DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model WorkInProgress {
+  id              String   @id @default(cuid())
+  productionOrderId String  @unique
+  productionOrder ProductionOrder @relation(fields: [productionOrderId], references: [id])
+  rawMaterialCost Float    @default(0)
+  laborCost       Float    @default(0)
+  overheadCost    Float    @default(0)
+  totalCost       Float    @default(0)
+  status          String   @default("in_progress")  // in_progress, completed
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ==================== ACCOUNTING MODELS ====================
+
+model Account {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  nameAr        String
+  nameEn        String?
+  type          String   // Asset, Liability, Equity, Revenue, Expense
+  subType       String?  // Cash, Bank, Receivable, Payable, Sales, COGS, Operating, etc.
+  balance       Decimal  @default(0)
+  description   String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  journalLines  JournalEntryLine[]
+}
+
+model JournalEntry {
+  id            String   @id @default(cuid())
+  entryNumber   String   @unique
+  entryDate     DateTime
+  description   String?
+  referenceType String?  // SalesInvoice, PurchaseInvoice, Expense, etc.
+  referenceId   String?
+  totalDebit    Decimal  @default(0)
+  totalCredit   Decimal  @default(0)
+  isPosted      Boolean  @default(false)
+  postedDate    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  lines         JournalEntryLine[]
+}
+
+model JournalEntryLine {
+  id              String   @id @default(cuid())
+  journalEntryId  String
+  journalEntry    JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  accountCode     String
+  account         Account @relation(fields: [accountCode], references: [code], onDelete: Restrict)
+  debit           Decimal  @default(0)
+  credit          Decimal  @default(0)
+  description     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([journalEntryId])
+  @@index([accountCode])
 }

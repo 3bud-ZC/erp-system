@@ -1,0 +1,7 @@
+category: Productivity
+interface:
+  display_name: 'Agent Browser'
+  short_description: 'Browser automation CLI for AI agents. Navigate pages, fill forms, click buttons, take screenshots, extract data, and automate any browser task.'
+  icon_dark: './assets/icon-dark.png'
+  icon_light: './assets/icon-light.png'
+  default_prompt: 'Open a website and interact with it using browser automation.'

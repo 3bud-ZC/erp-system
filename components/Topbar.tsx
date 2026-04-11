@@ -4,7 +4,7 @@ import { Search, User, Bell } from 'lucide-react';
 
 export default function Topbar() {
   return (
-    <header className="bg-white/80 backdrop-blur-2xl shadow-2xl h-16 fixed top-0 left-64 right-0 z-10 border-b border-white/20">
+    <header className="bg-white/80 backdrop-blur-2xl shadow-2xl h-16 fixed top-0 left-0 right-64 z-10 border-b border-white/20">
       <div className="h-full px-6 flex items-center justify-between">
         <div className="flex-1 max-w-xl">
           <div className="relative group">
