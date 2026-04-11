@@ -83,24 +83,24 @@ function SidebarItem({ item, level = 0 }: { item: MenuItem; level?: number }) {
         <button
           onClick={() => setIsOpen(!isOpen)}
           className={`w-full flex items-center justify-between px-4 py-3 text-sm font-medium transition-all duration-200 ${
-            level === 0 
-              ? 'hover:bg-gray-700/50 hover:text-blue-300' 
-              : 'hover:bg-gray-600/50'
+            level === 0
+              ? 'hover:bg-blue-50 hover:text-blue-600'
+              : 'hover:bg-gray-100'
           }`}
         >
           <div className="flex items-center gap-3">
-            <div className={`p-1.5 rounded-lg ${level === 0 ? 'bg-gray-700/50' : 'bg-gray-600/50'}`}>
+            <div className={`p-1.5 rounded-lg ${level === 0 ? 'bg-blue-50' : 'bg-gray-100'}`}>
               <item.icon className="w-4 h-4" />
             </div>
             <span className="font-medium">{item.title}</span>
           </div>
           <div className={`transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}>
-            <ChevronLeft className="w-4 h-4 text-gray-400" />
+            <ChevronLeft className="w-4 h-4 text-gray-500" />
           </div>
         </button>
         {isOpen && (
           <div className={`overflow-hidden transition-all duration-300 ${
-            level === 0 ? 'bg-gray-700/30' : 'bg-gray-600/30'
+            level === 0 ? 'bg-blue-50/30' : 'bg-gray-100/30'
           }`}>
             <div className="py-1">
               {item.children.map((child, index) => (
@@ -117,13 +117,13 @@ function SidebarItem({ item, level = 0 }: { item: MenuItem; level?: number }) {
     <Link
       href={item.href || '#'}
       className={`flex items-center gap-3 px-4 py-3 text-sm font-medium transition-all duration-200 ${
-        isActive 
-          ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg' 
-          : 'hover:bg-gray-700/50 hover:text-blue-300'
+        isActive
+          ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
+          : 'hover:bg-blue-50 hover:text-blue-600'
       } ${level > 0 ? 'pr-8' : ''} ${level > 1 ? 'pr-12' : ''}`}
     >
       <div className={`p-1.5 rounded-lg transition-colors ${
-        isActive ? 'bg-white/20' : 'bg-gray-700/50'
+        isActive ? 'bg-white/20' : 'bg-blue-50'
       }`}>
         <item.icon className="w-4 h-4" />
       </div>
@@ -144,30 +144,30 @@ export default function Sidebar() {
   };
 
   return (
-    <div className={`fixed top-0 right-0 h-full bg-gradient-to-br from-gray-900/95 to-gray-800/95 backdrop-blur-xl shadow-2xl transition-all duration-500 z-20 ${
+    <div className={`fixed top-0 right-0 h-full bg-gradient-to-br from-white/95 to-gray-50/95 backdrop-blur-xl shadow-2xl transition-all duration-500 z-20 ${
       isCollapsed ? 'w-20' : 'w-64'
     }`}>
       {/* Animated Background */}
-      <div className="absolute inset-0 opacity-10">
+      <div className="absolute inset-0 opacity-5">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 animate-shimmer" />
       </div>
       {/* Header */}
-      <div className="relative p-6 border-b border-white/10">
+      <div className="relative p-6 border-b border-gray-200">
         <div className="flex items-center justify-between">
           <div className={`transition-all duration-500 ${isCollapsed ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
-            <h1 className="text-xl font-bold text-white mb-1">نظام ERP</h1>
-            <p className="text-sm text-gray-300/80">مصنع البلاستيك</p>
+            <h1 className="text-xl font-bold text-gray-900 mb-1">نظام ERP</h1>
+            <p className="text-sm text-gray-600">مصنع البلاستيك</p>
           </div>
           <button
             onClick={toggleCollapse}
-            className="p-2.5 hover:bg-white/10 rounded-xl transition-all duration-300 hover:scale-110 hover:rotate-180 backdrop-blur-sm"
+            className="p-2.5 hover:bg-gray-100 rounded-xl transition-all duration-300 hover:scale-110 hover:rotate-180 backdrop-blur-sm"
           >
-            <ChevronLeft className={`w-5 h-5 text-gray-300 transition-transform duration-500 ${
+            <ChevronLeft className={`w-5 h-5 text-gray-600 transition-transform duration-500 ${
               isCollapsed ? 'rotate-180' : ''
             }`} />
           </button>
         </div>
-        
+
         {/* Decorative Line */}
         <div className="absolute bottom-0 left-6 right-6 h-0.5 bg-gradient-to-r from-blue-500 to-purple-500 animate-pulse shadow-glow" />
       </div>
@@ -184,8 +184,8 @@ export default function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/10">
-        <div className="flex items-center justify-center gap-2 text-xs text-gray-300/80">
+      <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200">
+        <div className="flex items-center justify-center gap-2 text-xs text-gray-600">
           <div className="w-2 h-2 bg-green-500 rounded-full animate-ping" />
           <span className={`transition-all duration-300 ${isCollapsed ? 'opacity-0 w-0' : 'opacity-100'}`}>النظام متصل</span>
         </div>
