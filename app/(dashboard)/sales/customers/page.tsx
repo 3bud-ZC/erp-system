@@ -1,18 +1,63 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import EnhancedTable from '@/components/EnhancedTable';
-import EnhancedModal from '@/components/EnhancedModal';
-import { Plus, Filter, Download, Users, Building, Phone, Mail, MapPin, FileText, User } from 'lucide-react';
 import Link from 'next/link';
+import {
+  Plus,
+  Search,
+  Phone,
+  Mail,
+  MapPin,
+  FileText,
+  RefreshCw,
+  AlertTriangle,
+  Users,
+  UserCheck,
+  Building2,
+  Edit,
+  Trash2,
+  ArrowUpDown,
+} from 'lucide-react';
+
+interface Customer {
+  id: string;
+  code: string;
+  nameAr: string;
+  nameEn?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  taxNumber?: string;
+}
+
+// Stats Card Component
+function StatCard({ title, value, subtitle, icon: Icon, color }: any) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-5">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-gray-500 text-sm font-medium">{title}</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+          {subtitle && <p className="text-gray-400 text-xs mt-1">{subtitle}</p>}
+        </div>
+        <div className={`w-10 h-10 ${color} rounded-lg flex items-center justify-center`}>
+          <Icon className="w-5 h-5 text-white" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingCustomer, setEditingCustomer] = useState<any>(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState<{ key: keyof Customer; direction: 'asc' | 'desc' } | null>(null);
+
+  // Modal states
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [formData, setFormData] = useState({
     code: '',
     nameAr: '',
@@ -44,57 +89,102 @@ export default function CustomersPage() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const method = editingCustomer ? 'PUT' : 'POST';
-    const body = editingCustomer ? { id: editingCustomer.id, ...formData } : formData;
-
-    await fetch('/api/customers', {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-
-    setIsModalOpen(false);
-    setEditingCustomer(null);
-    setFormData({ code: '', nameAr: '', nameEn: '', phone: '', email: '', address: '', taxNumber: '' });
-    fetchCustomers();
+  const handleSort = (key: keyof Customer) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
   };
 
-  const handleEdit = (customer: any) => {
+  const filteredCustomers = customers
+    .filter((c) => {
+      const search = searchTerm.toLowerCase();
+      return (
+        c.nameAr.toLowerCase().includes(search) ||
+        c.nameEn?.toLowerCase().includes(search) ||
+        c.code.toLowerCase().includes(search) ||
+        c.phone?.includes(search)
+      );
+    })
+    .sort((a, b) => {
+      if (!sortConfig) return 0;
+      const aValue = a[sortConfig.key] || '';
+      const bValue = b[sortConfig.key] || '';
+      if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+  const stats = {
+    total: customers.length,
+    withPhone: customers.filter((c) => c.phone).length,
+    withEmail: customers.filter((c) => c.email).length,
+    withTax: customers.filter((c) => c.taxNumber).length,
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const method = editingCustomer ? 'PUT' : 'POST';
+      const body = editingCustomer ? { id: editingCustomer.id, ...formData } : formData;
+
+      const res = await fetch('/api/customers', {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) throw new Error('فشل في حفظ العميل');
+
+      setIsModalOpen(false);
+      setEditingCustomer(null);
+      resetForm();
+      fetchCustomers();
+    } catch (err) {
+      console.error('Error saving customer:', err);
+      alert(err instanceof Error ? err.message : 'خطأ في حفظ العميل');
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      code: '',
+      nameAr: '',
+      nameEn: '',
+      phone: '',
+      email: '',
+      address: '',
+      taxNumber: '',
+    });
+  };
+
+  const handleEdit = (customer: Customer) => {
     setEditingCustomer(customer);
-    setFormData(customer);
+    setFormData({
+      code: customer.code,
+      nameAr: customer.nameAr,
+      nameEn: customer.nameEn || '',
+      phone: customer.phone || '',
+      email: customer.email || '',
+      address: customer.address || '',
+      taxNumber: customer.taxNumber || '',
+    });
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (customer: any) => {
+  const handleDelete = async (customer: Customer) => {
     if (confirm('هل أنت متأكد من حذف هذا العميل؟')) {
       await fetch(`/api/customers?id=${customer.id}`, { method: 'DELETE' });
       fetchCustomers();
     }
   };
 
-  const filteredCustomers = customers.filter(customer =>
-    customer.nameAr.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.nameEn.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.phone.includes(searchTerm)
-  );
-
-  const stats = {
-    totalCustomers: customers.length,
-    activeCustomers: customers.filter(c => c.phone).length,
-    withEmail: customers.filter(c => c.email).length,
-    withTaxNumber: customers.filter(c => c.taxNumber).length,
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="animate-spin mb-4">
-            <Users className="w-8 h-8 text-blue-600 mx-auto" />
-          </div>
+          <RefreshCw className="w-8 h-8 text-green-600 mx-auto animate-spin mb-4" />
           <p className="text-gray-600">جاري تحميل العملاء...</p>
         </div>
       </div>
@@ -103,262 +193,284 @@ export default function CustomersPage() {
 
   if (error) {
     return (
-      <div className="p-6 text-center">
-        <div className="bg-red-50 border border-red-300 rounded-lg p-6 max-w-md mx-auto">
-          <div className="text-6xl mb-4">⚠️</div>
-          <p className="text-red-800 font-medium mb-4">{error}</p>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center bg-red-50 border border-red-200 rounded-xl p-8 max-w-md">
+          <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <p className="text-red-700 font-medium mb-2">حدث خطأ</p>
+          <p className="text-red-600 text-sm mb-4">{error}</p>
           <button
             onClick={fetchCustomers}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
           >
-            إعادة محاولة
+            إعادة المحاولة
           </button>
         </div>
       </div>
     );
   }
 
-  const columns = [
-    { key: 'code', label: 'الكود', className: 'font-medium' },
-    { key: 'nameAr', label: 'الاسم العربي', className: 'font-medium' },
-    { key: 'nameEn', label: 'الاسم الإنجليزي', className: 'font-medium' },
-    { key: 'phone', label: 'الهاتف', render: (value: any) => (
-      <div className="flex items-center gap-2">
-        <Phone className="w-4 h-4 text-gray-400" />
-        <span>{value}</span>
-      </div>
-    )},
-    { key: 'email', label: 'البريد الإلكتروني', render: (value: any) => (
-      <div className="flex items-center gap-2">
-        <Mail className="w-4 h-4 text-gray-400" />
-        <span className="text-sm">{value}</span>
-      </div>
-    )},
-  ];
-
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="relative">
-        <div className="absolute inset-0 bg-gradient-to-r from-green-600/20 to-blue-600/20 rounded-3xl backdrop-blur-xl" />
-        <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-4xl font-bold gradient-text mb-3">العملاء</h1>
-            <p className="text-gray-600/80 text-lg">إدارة العملاء والعملاء</p>
-          </div>
-          <div className="flex gap-3">
-            <Link
-              href="/sales/invoices"
-              className="flex items-center gap-2 px-4 py-2.5 bg-white/50 hover:bg-white/70 rounded-2xl transition-all duration-300 hover:scale-105 hover:shadow-lg backdrop-blur-sm border border-white/20"
-            >
-              <FileText className="w-4 h-4" />
-              <span className="font-medium">فواتير البيع</span>
-            </Link>
-            <Link
-              href="/sales/orders"
-              className="flex items-center gap-2 px-4 py-2.5 bg-white/50 hover:bg-white/70 rounded-2xl transition-all duration-300 hover:scale-105 hover:shadow-lg backdrop-blur-sm border border-white/20"
-            >
-              <Building className="w-4 h-4" />
-              <span className="font-medium">أوامر البيع</span>
-            </Link>
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-2xl transition-all duration-300 hover:scale-105 hover:shadow-xl shadow-lg"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="font-medium">إضافة عميل</span>
-            </button>
-          </div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">العملاء</h1>
+          <p className="text-gray-500 text-sm mt-1">إدارة العملاء وبياناتهم</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/sales/invoices"
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-700"
+          >
+            <FileText className="w-4 h-4" />
+            فواتير البيع
+          </Link>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+          >
+            <Plus className="w-4 h-4" />
+            إضافة عميل
+          </button>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
-        <div className="hidden lg:block animate-slideUp">
-          <div className="card-modern p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
-                <span className="text-sm font-semibold text-gray-600/80 mb-2 uppercase tracking-wider">إجمالي العملاء</span>
-                <p className="text-3xl font-bold text-gray-900 mb-1">{stats.totalCustomers}</p>
-              </div>
-              <div className="p-4 rounded-2xl bg-gradient-to-br from-green-500 to-green-600 shadow-xl animate-float">
-                <User className="w-6 h-6 text-white" />
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="hidden lg:block animate-slideUp" style={{ animationDelay: '0.1s' }}>
-          <div className="card-modern p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
-                <span className="text-sm font-semibold text-gray-600/80 mb-2 uppercase tracking-wider">نشطين</span>
-                <p className="text-3xl font-bold text-gray-900 mb-1">{stats.activeCustomers}</p>
-              </div>
-              <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-xl animate-float">
-                <Phone className="w-6 h-6 text-white" />
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="hidden lg:block animate-slideUp" style={{ animationDelay: '0.2s' }}>
-          <div className="card-modern p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
-                <span className="text-sm font-semibold text-gray-600/80 mb-2 uppercase tracking-wider">لديهم بريد</span>
-                <p className="text-3xl font-bold text-gray-900 mb-1">{stats.withEmail}</p>
-              </div>
-              <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 shadow-xl animate-float">
-                <Mail className="w-6 h-6 text-white" />
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="hidden lg:block animate-slideUp" style={{ animationDelay: '0.3s' }}>
-          <div className="card-modern p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
-                <span className="text-sm font-semibold text-gray-600/80 mb-2 uppercase tracking-wider">رقم ضريبي</span>
-                <p className="text-3xl font-bold text-gray-900 mb-1">{stats.withTaxNumber}</p>
-              </div>
-              <div className="p-4 rounded-2xl bg-gradient-to-br from-orange-500 to-orange-600 shadow-xl animate-float">
-                <FileText className="w-6 h-6 text-white" />
-              </div>
-            </div>
-          </div>
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          title="إجمالي العملاء"
+          value={stats.total}
+          subtitle="عميل مسجل"
+          icon={Users}
+          color="bg-green-500"
+        />
+        <StatCard
+          title="لديهم هاتف"
+          value={stats.withPhone}
+          subtitle={`${stats.total > 0 ? Math.round((stats.withPhone / stats.total) * 100) : 0}%`}
+          icon={Phone}
+          color="bg-blue-500"
+        />
+        <StatCard
+          title="لديهم بريد"
+          value={stats.withEmail}
+          subtitle={`${stats.total > 0 ? Math.round((stats.withEmail / stats.total) * 100) : 0}%`}
+          icon={Mail}
+          color="bg-purple-500"
+        />
+        <StatCard
+          title="رقم ضريبي"
+          value={stats.withTax}
+          subtitle={`${stats.total > 0 ? Math.round((stats.withTax / stats.total) * 100) : 0}%`}
+          icon={Building2}
+          color="bg-orange-500"
+        />
+      </div>
+
+      {/* Search */}
+      <div className="bg-white border border-gray-200 rounded-xl p-4">
+        <div className="relative">
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="البحث في العملاء (الاسم، الكود، الهاتف)..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pr-10 pl-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-sm"
+          />
         </div>
       </div>
 
-      {/* Search Section */}
-      <div className="relative">
-        <div className="absolute inset-0 bg-gradient-to-r from-white/50 to-white/30 rounded-3xl backdrop-blur-xl" />
-        <div className="relative p-6">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="البحث عن العملاء..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pr-10 pl-4 py-3 bg-white/50 border border-white/20 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500 transition-all duration-300 group-hover:bg-white/70 backdrop-blur-sm"
-            />
-            <User className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          </div>
-        </div>
-      </div>
-
-      {/* Customers Table Section */}
-      <div className="relative">
-        <div className="absolute inset-0 bg-gradient-to-r from-white/50 to-white/30 rounded-3xl backdrop-blur-xl" />
-        <div className="relative p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">قائمة العملاء</h2>
-          <div className="hidden lg:block">
-            <EnhancedTable 
-              columns={columns} 
-              data={filteredCustomers} 
-              searchable={false}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              className="shadow-xl"
-            />
-          </div>
+      {/* Table */}
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-right">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th
+                  className="px-4 py-3 font-semibold text-gray-700 cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('code')}
+                >
+                  <div className="flex items-center gap-1">
+                    الكود
+                    <ArrowUpDown className="w-3 h-3" />
+                  </div>
+                </th>
+                <th
+                  className="px-4 py-3 font-semibold text-gray-700 cursor-pointer hover:bg-gray-100"
+                  onClick={() => handleSort('nameAr')}
+                >
+                  <div className="flex items-center gap-1">
+                    الاسم
+                    <ArrowUpDown className="w-3 h-3" />
+                  </div>
+                </th>
+                <th className="px-4 py-3 font-semibold text-gray-700">الهاتف</th>
+                <th className="px-4 py-3 font-semibold text-gray-700">البريد الإلكتروني</th>
+                <th className="px-4 py-3 font-semibold text-gray-700">الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {filteredCustomers.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                    لا يوجد عملاء مطابقين للبحث
+                  </td>
+                </tr>
+              ) : (
+                filteredCustomers.map((customer) => (
+                  <tr key={customer.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-medium text-gray-900">{customer.code}</td>
+                    <td className="px-4 py-3">
+                      <div>
+                        <p className="font-medium text-gray-900">{customer.nameAr}</p>
+                        {customer.nameEn && <p className="text-xs text-gray-500">{customer.nameEn}</p>}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {customer.phone ? (
+                        <div className="flex items-center gap-1 text-gray-600">
+                          <Phone className="w-3 h-3" />
+                          {customer.phone}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {customer.email ? (
+                        <div className="flex items-center gap-1 text-gray-600">
+                          <Mail className="w-3 h-3" />
+                          <span className="text-xs">{customer.email}</span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleEdit(customer)}
+                          className="p-1.5 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(customer)}
+                          className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
       {/* Modal */}
-      <EnhancedModal
-        isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setEditingCustomer(null);
-          setFormData({ code: '', nameAr: '', nameEn: '', phone: '', email: '', address: '', taxNumber: '' });
-        }}
-        title={editingCustomer ? 'تعديل عميل' : 'إضافة عميل جديد'}
-        size="lg"
-      >
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">الكود</label>
-              <input
-                type="text"
-                required
-                value={formData.code}
-                onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                className="w-full px-4 py-3 bg-white/50 border border-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500 backdrop-blur-sm transition-all duration-300"
-              />
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-lg font-bold text-gray-900">
+                {editingCustomer ? 'تعديل عميل' : 'إضافة عميل جديد'}
+              </h2>
             </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">الاسم العربي</label>
-              <input
-                type="text"
-                required
-                value={formData.nameAr}
-                onChange={(e) => setFormData({ ...formData, nameAr: e.target.value })}
-                className="w-full px-4 py-3 bg-white/50 border border-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500 backdrop-blur-sm transition-all duration-300"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">الاسم الإنجليزي</label>
-              <input
-                type="text"
-                value={formData.nameEn}
-                onChange={(e) => setFormData({ ...formData, nameEn: e.target.value })}
-                className="w-full px-4 py-3 bg-white/50 border border-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500 backdrop-blur-sm transition-all duration-300"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">الهاتف</label>
-              <input
-                type="text"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full px-4 py-3 bg-white/50 border border-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500 backdrop-blur-sm transition-all duration-300"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">البريد الإلكتروني</label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-4 py-3 bg-white/50 border border-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500 backdrop-blur-sm transition-all duration-300"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">الرقم الضريبي</label>
-              <input
-                type="text"
-                value={formData.taxNumber}
-                onChange={(e) => setFormData({ ...formData, taxNumber: e.target.value })}
-                className="w-full px-4 py-3 bg-white/50 border border-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500 backdrop-blur-sm transition-all duration-300"
-              />
-            </div>
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">الكود *</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.code}
+                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">الاسم العربي *</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.nameAr}
+                    onChange={(e) => setFormData({ ...formData, nameAr: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">الاسم الإنجليزي</label>
+                  <input
+                    type="text"
+                    value={formData.nameEn}
+                    onChange={(e) => setFormData({ ...formData, nameEn: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">الهاتف</label>
+                  <input
+                    type="tel"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">البريد الإلكتروني</label>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">الرقم الضريبي</label>
+                  <input
+                    type="text"
+                    value={formData.taxNumber}
+                    onChange={(e) => setFormData({ ...formData, taxNumber: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">العنوان</label>
+                <textarea
+                  rows={3}
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 text-sm"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setEditingCustomer(null);
+                    resetForm();
+                  }}
+                  className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium"
+                >
+                  {editingCustomer ? 'تحديث' : 'إضافة'}
+                </button>
+              </div>
+            </form>
           </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">العنوان</label>
-            <textarea
-              value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              rows={3}
-              className="w-full px-4 py-3 bg-white/50 border border-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500 backdrop-blur-sm transition-all duration-300"
-            />
-          </div>
-          <div className="flex justify-end gap-3 pt-6 border-t border-white/20">
-            <button
-              type="button"
-              onClick={() => setIsModalOpen(false)}
-              className="px-6 py-3 bg-white/50 hover:bg-white/70 rounded-xl transition-all duration-300 hover:scale-105 backdrop-blur-sm border border-white/20 font-medium"
-            >
-              إلغاء
-            </button>
-            <button
-              type="submit"
-              className="px-6 py-3 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-xl font-medium"
-            >
-              {editingCustomer ? 'تحديث' : 'إضافة'}
-            </button>
-          </div>
-        </form>
-      </EnhancedModal>
+        </div>
+      )}
     </div>
   );
 }
