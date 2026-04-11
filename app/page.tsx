@@ -1,7 +1,7 @@
-import { redirect } from 'next/navigation';
+import DashboardPage from './(dashboard)/page';
 
 export const dynamic = 'force-dynamic';
 
 export default function HomePage() {
-  redirect('/dashboard');
+  return <DashboardPage />;
 }
