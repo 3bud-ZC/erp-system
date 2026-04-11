@@ -2,21 +2,24 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { 
-  ShoppingCart, 
-  Package, 
-  Users, 
-  DollarSign, 
-  FileText, 
-  TrendingUp, 
-  Factory, 
-  Settings,
-  ChevronDown,
-  ChevronRight,
-  LayoutDashboard,
-  BarChart3
-} from 'lucide-react';
 import { useState } from 'react';
+import {
+  LayoutDashboard,
+  ShoppingCart,
+  Package,
+  Users,
+  TrendingUp,
+  BarChart3,
+  Factory,
+  Settings,
+  ChevronRight,
+  ChevronLeft,
+  FileText,
+  DollarSign,
+  Search,
+  Menu,
+  X,
+} from 'lucide-react';
 
 interface MenuItem {
   title: string;
@@ -84,38 +87,50 @@ const menuItems: MenuItem[] = [
 function SidebarItem({ item, level = 0 }: { item: MenuItem; level?: number }) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
-  const isActive = item.href === pathname;
+  const isActive = item.href === pathname || (item.href && pathname.startsWith(item.href + '/'));
+  const hasActiveChild = item.children?.some(child => 
+    child.href === pathname || (child.href && pathname.startsWith(child.href))
+  );
+
+  // Auto-open if has active child
+  const shouldBeOpen = isOpen || hasActiveChild;
 
   if (item.children) {
     return (
-      <div>
+      <div className="mb-1">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className={`w-full flex items-center justify-between px-4 py-3 text-sm font-medium transition-all duration-200 ${
-            level === 0
-              ? 'hover:bg-blue-50 hover:text-blue-600'
-              : 'hover:bg-gray-100'
+          className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 ${
+            hasActiveChild 
+              ? 'bg-blue-50 text-blue-700' 
+              : 'hover:bg-gray-100 text-gray-700'
           }`}
         >
           <div className="flex items-center gap-3">
-            <div className={`p-1.5 rounded-lg ${level === 0 ? 'bg-blue-50' : 'bg-gray-100'}`}>
-              <item.icon className="w-4 h-4" />
-            </div>
+            <item.icon className="w-5 h-5" />
             <span className="font-medium">{item.title}</span>
           </div>
-          <div className={`transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}>
-            <ChevronRight className="w-4 h-4 text-gray-500" />
-          </div>
+          <ChevronRight 
+            className={`w-4 h-4 transition-transform duration-200 ${shouldBeOpen ? 'rotate-90' : ''}`} 
+          />
         </button>
-        {isOpen && (
-          <div className={`overflow-hidden transition-all duration-300 ${
-            level === 0 ? 'bg-blue-50/30' : 'bg-gray-100/30'
-          }`}>
-            <div className="py-1">
-              {item.children.map((child, index) => (
-                <SidebarItem key={index} item={child} level={level + 1} />
-              ))}
-            </div>
+        
+        {shouldBeOpen && (
+          <div className="mt-1 mr-4 pr-4 border-r-2 border-gray-200">
+            {item.children.map((child, index) => (
+              <Link
+                key={index}
+                href={child.href || '#'}
+                className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all duration-200 mb-1 ${
+                  pathname === child.href
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'hover:bg-gray-100 text-gray-600'
+                }`}
+              >
+                <child.icon className="w-4 h-4" />
+                <span>{child.title}</span>
+              </Link>
+            ))}
           </div>
         )}
       </div>
@@ -125,80 +140,125 @@ function SidebarItem({ item, level = 0 }: { item: MenuItem; level?: number }) {
   return (
     <Link
       href={item.href || '#'}
-      className={`flex items-center gap-3 px-4 py-3 text-sm font-medium transition-all duration-200 ${
+      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 mb-1 ${
         isActive
-          ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
-          : 'hover:bg-blue-50 hover:text-blue-600'
-      } ${level > 0 ? 'pr-8' : ''} ${level > 1 ? 'pr-12' : ''}`}
+          ? 'bg-blue-600 text-white shadow-md'
+          : 'hover:bg-gray-100 text-gray-700'
+      }`}
     >
-      <div className={`p-1.5 rounded-lg transition-colors ${
-        isActive ? 'bg-white/20' : 'bg-blue-50'
-      }`}>
-        <item.icon className="w-4 h-4" />
-      </div>
+      <item.icon className="w-5 h-5" />
       <span className="font-medium">{item.title}</span>
-      {isActive && (
-        <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-      )}
+      {isActive && <div className="w-2 h-2 bg-white rounded-full mr-auto" />}
     </Link>
   );
 }
 
 export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const pathname = usePathname();
 
-  const toggleCollapse = () => {
-    setIsCollapsed(!isCollapsed);
-  };
+  const toggleCollapse = () => setIsCollapsed(!isCollapsed);
+  const toggleMobile = () => setIsMobileOpen(!isMobileOpen);
 
   return (
-    <div className={`fixed top-0 right-0 h-full bg-gradient-to-br from-white/95 to-gray-50/95 backdrop-blur-xl shadow-2xl transition-all duration-500 z-20 ${
-      isCollapsed ? 'w-20' : 'w-64'
-    }`}>
-      {/* Animated Background */}
-      <div className="absolute inset-0 opacity-5">
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 animate-shimmer" />
-      </div>
-      {/* Header */}
-      <div className="relative p-6 border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <div className={`transition-all duration-500 ${isCollapsed ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}>
-            <h1 className="text-xl font-bold text-gray-900 mb-1">نظام ERP</h1>
-            <p className="text-sm text-gray-600">مصنع البلاستيك</p>
+    <>
+      {/* Mobile Menu Button */}
+      <button
+        onClick={toggleMobile}
+        className="fixed top-4 right-4 z-50 lg:hidden bg-blue-600 text-white p-3 rounded-lg shadow-lg"
+      >
+        {isMobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+      </button>
+
+      {/* Mobile Overlay */}
+      {isMobileOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+          onClick={() => setIsMobileOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside 
+        className={`fixed top-0 right-0 h-full bg-white shadow-xl z-40 transition-all duration-300 ${
+          isCollapsed ? 'w-20' : 'w-72'
+        } ${isMobileOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}`}
+      >
+        {/* Header */}
+        <div className="border-b border-gray-200">
+          <div className="p-5 flex items-center justify-between">
+            {!isCollapsed && (
+              <div className="flex-1">
+                <h1 className="text-xl font-bold text-gray-900">نظام ERP</h1>
+                <p className="text-sm text-gray-500">مصنع البلاستيك</p>
+              </div>
+            )}
+            <button
+              onClick={toggleCollapse}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors hidden lg:flex"
+            >
+              <ChevronRight className={`w-5 h-5 text-gray-600 transition-transform ${isCollapsed ? 'rotate-180' : ''}`} />
+            </button>
+            <button
+              onClick={toggleMobile}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors lg:hidden"
+            >
+              <X className="w-5 h-5 text-gray-600" />
+            </button>
           </div>
-          <button
-            onClick={toggleCollapse}
-            className="p-2.5 hover:bg-gray-100 rounded-xl transition-all duration-300 hover:scale-110 hover:rotate-180 backdrop-blur-sm"
-          >
-            <ChevronRight className={`w-5 h-5 text-gray-600 transition-transform duration-500 ${
-              isCollapsed ? 'rotate-180' : ''
-            }`} />
-          </button>
-        </div>
-
-        {/* Decorative Line */}
-        <div className="absolute bottom-0 left-6 right-6 h-0.5 bg-gradient-to-r from-blue-500 to-purple-500 animate-pulse shadow-glow" />
-      </div>
-
-      {/* Navigation */}
-      <nav className="py-4 px-2 custom-scrollbar overflow-y-auto">
-        <div className="space-y-2">
-          {menuItems.map((item, index) => (
-            <div key={index} className="transform transition-all duration-300 hover:translate-x-1">
-              <SidebarItem item={item} />
+          
+          {/* Search Bar */}
+          {!isCollapsed && (
+            <div className="px-4 pb-4">
+              <div className="relative">
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="بحث..."
+                  className="w-full pr-10 pl-4 py-2 bg-gray-100 border-0 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
             </div>
-          ))}
+          )}
         </div>
-      </nav>
 
-      {/* Footer */}
-      <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200">
-        <div className="flex items-center justify-center gap-2 text-xs text-gray-600">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-ping" />
-          <span className={`transition-all duration-300 ${isCollapsed ? 'opacity-0 w-0' : 'opacity-100'}`}>النظام متصل</span>
+        {/* Navigation */}
+        <nav className="p-3 overflow-y-auto h-[calc(100%-140px)]">
+          {!isCollapsed ? (
+            <div className="space-y-1">
+              {menuItems.map((item, index) => (
+                <SidebarItem key={index} item={item} />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-4 pt-4">
+              {menuItems.map((item, index) => (
+                <Link
+                  key={index}
+                  href={item.href || '#'}
+                  className={`p-3 rounded-xl transition-all ${
+                    pathname === item.href || (item.href && pathname.startsWith(item.href))
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'hover:bg-gray-100 text-gray-600'
+                  }`}
+                  title={item.title}
+                >
+                  <item.icon className="w-5 h-5" />
+                </Link>
+              ))}
+            </div>
+          )}
+        </nav>
+
+        {/* Footer */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-white">
+          <div className="flex items-center justify-center gap-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            {!isCollapsed && <span className="text-xs text-gray-500">النظام متصل</span>}
+          </div>
         </div>
-      </div>
-    </div>
+      </aside>
+    </>
   );
 }
