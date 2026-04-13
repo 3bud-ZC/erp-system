@@ -344,3 +344,63 @@ export async function createNotification(
     console.error('Error creating notification:', error);
   }
 }
+
+/**
+ * Get authenticated user from request headers
+ * Compatible with Next.js 14 App Router - call this inside route handlers
+ */
+export async function getAuthenticatedUser(req: Request): Promise<{
+  id: string;
+  email: string;
+  name: string;
+  roles: string[];
+  permissions: string[];
+} | null> {
+  try {
+    const authHeader = req.headers.get('authorization');
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return null;
+    }
+
+    const token = authHeader.substring(7);
+    const decoded = verifyToken(token);
+
+    if (!decoded) {
+      return null;
+    }
+
+    const user = await getUserWithPermissions(decoded.userId);
+    
+    if (!user || !user.isActive) {
+      return null;
+    }
+
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name || '',
+      roles: user.roles,
+      permissions: user.permissions,
+    };
+  } catch (error) {
+    console.error('Error getting authenticated user:', error);
+    return null;
+  }
+}
+
+/**
+ * Check if authenticated user has specific permission
+ * Call this after getAuthenticatedUser
+ */
+export function checkPermission(user: any, permissionCode: string): boolean {
+  return user.permissions.includes(permissionCode);
+}
+
+/**
+ * Check if authenticated user has specific role
+ * Call this after getAuthenticatedUser
+ */
+export function checkRole(user: any, roleCode: string): boolean {
+  return user.roles.includes(roleCode);
+}

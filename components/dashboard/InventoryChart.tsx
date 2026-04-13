@@ -19,11 +19,18 @@ interface InventoryChartProps {
 }
 
 export default function InventoryChart({ data }: InventoryChartProps) {
+  // Defensive checks for undefined data
+  const safeData = {
+    rawMaterials: data?.rawMaterials || 0,
+    finishedGoods: data?.finishedGoods || 0,
+    packaging: data?.packaging || 0,
+  };
+
   const chartData = {
     labels: ['الخامات', 'المنتجات النهائية', 'مواد التعبئة'],
     datasets: [
       {
-        data: [data.rawMaterials, data.finishedGoods, data.packaging],
+        data: [safeData.rawMaterials, safeData.finishedGoods, safeData.packaging],
         backgroundColor: [
           'rgba(59, 130, 246, 0.8)',   // Blue - Raw Materials
           'rgba(34, 197, 94, 0.8)',    // Green - Finished Goods
@@ -79,7 +86,7 @@ export default function InventoryChart({ data }: InventoryChartProps) {
     },
   };
 
-  const total = data.rawMaterials + data.finishedGoods + data.packaging;
+  const total = safeData.rawMaterials + safeData.finishedGoods + safeData.packaging;
 
   return (
     <div className="relative h-56">

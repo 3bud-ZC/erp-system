@@ -130,9 +130,42 @@ export default function DashboardPage() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/dashboard');
+      const response = await fetch('/api/dashboard', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
+        },
+      });
       if (!response.ok) throw new Error('فشل في تحميل البيانات');
-      const dashboardData = await response.json();
+      const result = await response.json();
+      
+      // Ensure safe defaults for all arrays and objects
+      const dashboardData: DashboardData = {
+        totalSales: result.totalSales || 0,
+        totalPurchases: result.totalPurchases || 0,
+        totalExpenses: result.totalExpenses || 0,
+        salesTrend: result.salesTrend || 0,
+        purchasesTrend: result.purchasesTrend || 0,
+        expensesTrend: result.expensesTrend || 0,
+        grossProfit: result.grossProfit || 0,
+        netProfit: result.netProfit || 0,
+        profitMargin: result.profitMargin || 0,
+        lowStockProducts: result.lowStockProducts || 0,
+        totalProducts: result.totalProducts || 0,
+        totalInventoryValue: result.totalInventoryValue || 0,
+        recentActivities: result.recentActivities || [],
+        alerts: result.alerts || [],
+        chartData: {
+          labels: result.chartData?.labels || [],
+          sales: result.chartData?.sales || [],
+          purchases: result.chartData?.purchases || [],
+        },
+        inventoryData: {
+          rawMaterials: result.inventoryData?.rawMaterials || 0,
+          finishedGoods: result.inventoryData?.finishedGoods || 0,
+          packaging: result.inventoryData?.packaging || 0,
+        },
+      };
+      
       setData(dashboardData);
       setError(null);
     } catch (err) {
@@ -178,7 +211,7 @@ export default function DashboardPage() {
 
   if (!data) return null;
 
-  // Prepare alerts with low stock
+  // Prepare alerts with low stock (with defensive checks)
   const alerts: Alert[] = [
     ...(data.lowStockProducts > 0 ? [{
       id: 'stock-1',
@@ -188,7 +221,7 @@ export default function DashboardPage() {
       severity: 'high' as const,
       date: 'الآن',
     }] : []),
-    ...data.alerts,
+    ...(data.alerts || []),
   ];
 
   return (
@@ -255,7 +288,7 @@ export default function DashboardPage() {
       <div className="bg-gray-50 rounded-xl p-4">
         <h2 className="text-sm font-semibold text-gray-700 mb-3">الإجراءات السريعة</h2>
         <div className="flex flex-wrap gap-2">
-          {quickActions.map((action) => {
+          {(quickActions || []).map((action) => {
             const Icon = action.icon;
             return (
               <Link

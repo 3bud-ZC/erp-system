@@ -33,12 +33,19 @@ interface SalesChartProps {
 }
 
 export default function SalesChart({ data }: SalesChartProps) {
+  // Defensive checks for undefined data
+  const safeData = {
+    labels: data?.labels || [],
+    sales: data?.sales || [],
+    purchases: data?.purchases || [],
+  };
+
   const chartData = {
-    labels: data.labels,
+    labels: safeData.labels,
     datasets: [
       {
         label: 'المبيعات',
-        data: data.sales,
+        data: safeData.sales,
         borderColor: 'rgb(34, 197, 94)',
         backgroundColor: 'rgba(34, 197, 94, 0.1)',
         fill: true,
@@ -48,7 +55,7 @@ export default function SalesChart({ data }: SalesChartProps) {
       },
       {
         label: 'المشتريات',
-        data: data.purchases,
+        data: safeData.purchases,
         borderColor: 'rgb(59, 130, 246)',
         backgroundColor: 'rgba(59, 130, 246, 0.1)',
         fill: true,

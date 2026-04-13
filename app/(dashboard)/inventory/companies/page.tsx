@@ -92,16 +92,16 @@ export default function CompaniesPage() {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch('/api/companies').catch(() => ({ ok: true, json: async () => [] }));
-      if (res.ok) {
-        const data = await res.json();
-        setCompanies(Array.isArray(data) ? data : []);
-      } else {
-        setCompanies([]);
+      const res = await fetch('/api/companies');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
       }
+      const json = await res.json();
+      setCompanies(Array.isArray(json.data) ? json.data : []);
     } catch (err) {
       console.error('Error fetching companies:', err);
-      setCompanies([]);
+      setError(err instanceof Error ? err.message : 'فشل في تحميل الشركات');
     } finally {
       setLoading(false);
     }
@@ -123,9 +123,12 @@ export default function CompaniesPage() {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
-      }).catch(() => ({ ok: true }));
+      });
 
-      if (!res.ok) throw new Error('فشل في حفظ الشركة');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'فشل في حفظ الشركة');
+      }
 
       resetForm();
       setIsFormOpen(false);
@@ -171,7 +174,12 @@ export default function CompaniesPage() {
 
   const handleDelete = async (company: Company) => {
     if (confirm('هل أنت متأكد من حذف هذه الشركة؟')) {
-      await fetch(`/api/companies?id=${company.id}`, { method: 'DELETE' }).catch(() => ({ ok: true }));
+      const res = await fetch(`/api/companies?id=${company.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'فشل في حذف الشركة');
+        return;
+      }
       fetchCompanies();
     }
   };

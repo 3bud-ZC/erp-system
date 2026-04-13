@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
+import { logAuditAction, getAuthenticatedUser } from '@/lib/auth';
 
 export async function GET(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search')?.trim() || '';
     const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
@@ -24,9 +31,9 @@ export async function GET(request: Request) {
       prisma.unit.count({ where }),
     ]);
 
-    return NextResponse.json({ data, total, page, limit });
+    return apiSuccess({ data, total, page, limit });
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch units' }, { status: 500 });
+    return handleApiError(error, 'Fetch units');
   }
 }
 
@@ -39,32 +46,54 @@ function uniqueConflictMessage(error: any): string {
 
 export async function POST(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     const body = await request.json();
     const code = body.code?.toString().trim();
     const nameAr = body.nameAr?.toString().trim();
     const nameEn = body.nameEn?.toString().trim() || null;
 
     if (!code) {
-      return NextResponse.json({ error: 'الكود مطلوب' }, { status: 400 });
+      return handleApiError(new Error('الكود مطلوب'), 'Create unit');
     }
     if (!nameAr) {
-      return NextResponse.json({ error: 'الاسم العربي مطلوب' }, { status: 400 });
+      return handleApiError(new Error('الاسم العربي مطلوب'), 'Create unit');
     }
 
     const unit = await prisma.unit.create({
       data: { code, nameAr, nameEn },
     });
-    return NextResponse.json(unit, { status: 201 });
+
+    await logAuditAction(
+      user.id,
+      'CREATE',
+      'inventory',
+      'Unit',
+      unit.id,
+      { unit },
+      request.headers.get('x-forwarded-for') || undefined,
+      request.headers.get('user-agent') || undefined
+    );
+
+    return apiSuccess(unit, 'Unit created successfully');
   } catch (error: any) {
     if (error?.code === 'P2002') {
-      return NextResponse.json({ error: uniqueConflictMessage(error) }, { status: 409 });
+      return handleApiError(new Error(uniqueConflictMessage(error)), 'Create unit');
     }
-    return NextResponse.json({ error: 'Failed to create unit' }, { status: 500 });
+    return handleApiError(error, 'Create unit');
   }
 }
 
 export async function PUT(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     const body = await request.json();
     const { id } = body;
     const code = body.code?.toString().trim();
@@ -72,46 +101,75 @@ export async function PUT(request: Request) {
     const nameEn = body.nameEn?.toString().trim() || null;
 
     if (!id) {
-      return NextResponse.json({ error: 'id مطلوب' }, { status: 400 });
+      return handleApiError(new Error('id مطلوب'), 'Update unit');
     }
     if (!code) {
-      return NextResponse.json({ error: 'الكود مطلوب' }, { status: 400 });
+      return handleApiError(new Error('الكود مطلوب'), 'Update unit');
     }
     if (!nameAr) {
-      return NextResponse.json({ error: 'الاسم العربي مطلوب' }, { status: 400 });
+      return handleApiError(new Error('الاسم العربي مطلوب'), 'Update unit');
     }
 
     const unit = await prisma.unit.update({
       where: { id },
       data: { code, nameAr, nameEn },
     });
-    return NextResponse.json(unit);
+
+    await logAuditAction(
+      user.id,
+      'UPDATE',
+      'inventory',
+      'Unit',
+      unit.id,
+      { data: { code, nameAr, nameEn } },
+      request.headers.get('x-forwarded-for') || undefined,
+      request.headers.get('user-agent') || undefined
+    );
+
+    return apiSuccess(unit, 'Unit updated successfully');
   } catch (error: any) {
     if (error?.code === 'P2002') {
-      return NextResponse.json({ error: uniqueConflictMessage(error) }, { status: 409 });
+      return handleApiError(new Error(uniqueConflictMessage(error)), 'Update unit');
     }
     if (error?.code === 'P2025') {
-      return NextResponse.json({ error: 'الوحدة غير موجودة' }, { status: 404 });
+      return handleApiError(new Error('الوحدة غير موجودة'), 'Update unit');
     }
-    return NextResponse.json({ error: 'Failed to update unit' }, { status: 500 });
+    return handleApiError(error, 'Update unit');
   }
 }
 
 export async function DELETE(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
     if (!id) {
-      return NextResponse.json({ error: 'id is required' }, { status: 400 });
+      return handleApiError(new Error('id is required'), 'Delete unit');
     }
 
     await prisma.unit.delete({ where: { id } });
-    return NextResponse.json({ success: true });
+
+    await logAuditAction(
+      user.id,
+      'DELETE',
+      'inventory',
+      'Unit',
+      id,
+      undefined,
+      request.headers.get('x-forwarded-for') || undefined,
+      request.headers.get('user-agent') || undefined
+    );
+
+    return apiSuccess({ id }, 'Unit deleted successfully');
   } catch (error: any) {
     if (error?.code === 'P2025') {
-      return NextResponse.json({ error: 'Unit not found' }, { status: 404 });
+      return handleApiError(new Error('Unit not found'), 'Delete unit');
     }
-    return NextResponse.json({ error: 'Failed to delete unit' }, { status: 500 });
+    return handleApiError(error, 'Delete unit');
   }
 }

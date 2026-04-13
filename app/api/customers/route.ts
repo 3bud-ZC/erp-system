@@ -1,55 +1,119 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
+import { logAuditAction, getAuthenticatedUser } from '@/lib/auth';
 
-export async function GET() {
+// GET - Read customers
+export async function GET(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     const customers = await prisma.customer.findMany({
       orderBy: { createdAt: 'desc' },
     });
-    return NextResponse.json(customers);
+    return apiSuccess(customers);
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch customers' }, { status: 500 });
+    return handleApiError(error, 'Fetch customers');
   }
 }
 
+// POST - Create customer
 export async function POST(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     const body = await request.json();
     const customer = await prisma.customer.create({
       data: body,
     });
-    return NextResponse.json(customer);
+
+    await logAuditAction(
+      user.id,
+      'CREATE',
+      'sales',
+      'Customer',
+      customer.id,
+      { customer },
+      request.headers.get('x-forwarded-for') || undefined,
+      request.headers.get('user-agent') || undefined
+    );
+
+    return apiSuccess(customer, 'Customer created successfully');
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to create customer' }, { status: 500 });
+    return handleApiError(error, 'Create customer');
   }
 }
 
+// PUT - Update customer
 export async function PUT(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     const body = await request.json();
     const { id, ...data } = body;
     const customer = await prisma.customer.update({
       where: { id },
       data,
     });
-    return NextResponse.json(customer);
+
+    await logAuditAction(
+      user.id,
+      'UPDATE',
+      'sales',
+      'Customer',
+      customer.id,
+      { data },
+      request.headers.get('x-forwarded-for') || undefined,
+      request.headers.get('user-agent') || undefined
+    );
+
+    return apiSuccess(customer, 'Customer updated successfully');
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to update customer' }, { status: 500 });
+    return handleApiError(error, 'Update customer');
   }
 }
 
+// DELETE - Delete customer
 export async function DELETE(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
+
     if (!id) {
-      return NextResponse.json({ error: 'ID is required' }, { status: 400 });
+      return handleApiError(new Error('ID is required'), 'Delete customer');
     }
+
     await prisma.customer.delete({
       where: { id },
     });
-    return NextResponse.json({ success: true });
+
+    await logAuditAction(
+      user.id,
+      'DELETE',
+      'sales',
+      'Customer',
+      id,
+      undefined,
+      request.headers.get('x-forwarded-for') || undefined,
+      request.headers.get('user-agent') || undefined
+    );
+
+    return apiSuccess({ id }, 'Customer deleted successfully');
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to delete customer' }, { status: 500 });
+    return handleApiError(error, 'Delete customer');
   }
 }

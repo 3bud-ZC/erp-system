@@ -145,14 +145,14 @@ export default function PurchaseOrdersPage() {
     try {
       setLoading(true);
       setError(null);
-      // Fetch from the API - using purchase-invoices as base, but we'll create orders
       const [ordersRes, suppliersRes, productsRes] = await Promise.all([
-        fetch('/api/purchases/orders').catch(() => ({ ok: true, json: async () => [] })),
+        fetch('/api/purchase-orders'),
         fetch('/api/suppliers'),
         fetch('/api/products'),
       ]);
 
-      const ordersData = ordersRes.ok ? await ordersRes.json() : [];
+      if (!ordersRes.ok) throw new Error('Failed to fetch orders');
+      const ordersData = await ordersRes.json();
       setOrders(Array.isArray(ordersData) ? ordersData : []);
       setSuppliers(await suppliersRes.json());
       setProducts(await productsRes.json());
@@ -237,7 +237,7 @@ export default function PurchaseOrdersPage() {
       };
 
       const method = editingOrder ? 'PUT' : 'POST';
-      const url = editingOrder ? `/api/purchases/orders?id=${editingOrder.id}` : '/api/purchases/orders';
+      const url = editingOrder ? `/api/purchase-orders?id=${editingOrder.id}` : '/api/purchase-orders';
 
       const res = await fetch(url, {
         method,
@@ -298,7 +298,7 @@ export default function PurchaseOrdersPage() {
 
   const handleDelete = async (order: PurchaseOrder) => {
     if (confirm('هل أنت متأكد من حذف هذا الأمر؟')) {
-      await fetch(`/api/purchases/orders?id=${order.id}`, { method: 'DELETE' });
+      await fetch(`/api/purchase-orders?id=${order.id}`, { method: 'DELETE' });
       fetchData();
     }
   };

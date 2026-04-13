@@ -84,17 +84,16 @@ export default function UnitsPage() {
     try {
       setLoading(true);
       setError(null);
-      // For now, use local data or fetch from API
-      const res = await fetch('/api/units').catch(() => ({ ok: true, json: async () => [] }));
-      if (res.ok) {
-        const data = await res.json();
-        setUnits(Array.isArray(data) ? data : []);
-      } else {
-        setUnits([]);
+      const res = await fetch('/api/units');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
       }
+      const json = await res.json();
+      setUnits(Array.isArray(json.data) ? json.data : []);
     } catch (err) {
       console.error('Error fetching units:', err);
-      setUnits([]);
+      setError(err instanceof Error ? err.message : 'فشل في تحميل الوحدات');
     } finally {
       setLoading(false);
     }
@@ -116,9 +115,12 @@ export default function UnitsPage() {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
-      }).catch(() => ({ ok: true }));
+      });
 
-      if (!res.ok) throw new Error('فشل في حفظ الوحدة');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'فشل في حفظ الوحدة');
+      }
 
       resetForm();
       setIsFormOpen(false);
@@ -156,7 +158,12 @@ export default function UnitsPage() {
 
   const handleDelete = async (unit: Unit) => {
     if (confirm('هل أنت متأكد من حذف هذه الوحدة؟')) {
-      await fetch(`/api/units?id=${unit.id}`, { method: 'DELETE' }).catch(() => ({ ok: true }));
+      const res = await fetch(`/api/units?id=${unit.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'فشل في حذف الوحدة');
+        return;
+      }
       fetchUnits();
     }
   };

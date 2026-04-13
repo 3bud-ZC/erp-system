@@ -7,6 +7,54 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Unit {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  nameAr    String    @unique
+  nameEn    String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  products  Product[]
+}
+
+model ItemGroup {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  nameAr      String    @unique
+  nameEn      String?
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  products    Product[]
+}
+
+model Warehouse {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  nameAr    String    @unique
+  nameEn    String?
+  address   String?
+  phone     String?
+  manager   String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  products  Product[]
+}
+
+model Company {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  nameAr    String    @unique
+  nameEn    String?
+  address   String?
+  phone     String?
+  email     String?
+  taxNumber String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  products  Product[]
+}
+
 model Supplier {
   id            String          @id @default(cuid())
   code          String          @unique
@@ -48,6 +96,14 @@ model Product {
   cost          Float           @default(0)
   stock         Float           @default(0)
   minStock      Float           @default(0)
+  unitId        String?
+  unitRef       Unit?           @relation(fields: [unitId], references: [id])
+  companyId     String?
+  company       Company?        @relation(fields: [companyId], references: [id])
+  itemGroupId   String?
+  itemGroup     ItemGroup?      @relation(fields: [itemGroupId], references: [id])
+  warehouseId   String?
+  warehouse     Warehouse?      @relation(fields: [warehouseId], references: [id])
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   purchaseOrderItems PurchaseOrderItem[]
@@ -311,4 +367,136 @@ model JournalEntryLine {
 
   @@index([journalEntryId])
   @@index([accountCode])
+}
+
+// ==================== AUTHENTICATION & AUTHORIZATION MODELS ====================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String    // bcrypt hashed password
+  isActive      Boolean   @default(true)
+  lastLogin     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Relations
+  roles         UserRole[]
+  sessions      Session[]
+  auditLogs     AuditLog[]
+}
+
+model Role {
+  id            String    @id @default(cuid())
+  code          String    @unique
+  nameAr        String    @unique
+  nameEn        String?
+  description   String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Relations
+  users         UserRole[]
+  permissions   RolePermission[]
+}
+
+model UserRole {
+  id            String    @id @default(cuid())
+  userId        String
+  roleId        String
+  assignedAt    DateTime  @default(now())
+  
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role          Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+}
+
+model Permission {
+  id            String    @id @default(cuid())
+  code          String    @unique
+  nameAr        String    @unique
+  nameEn        String?
+  description   String?
+  module        String    // inventory, sales, purchases, manufacturing, accounting
+  action        String    // create, read, update, delete
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Relations
+  roles         RolePermission[]
+}
+
+model RolePermission {
+  id            String    @id @default(cuid())
+  roleId        String
+  permissionId  String
+  grantedAt     DateTime  @default(now())
+  
+  role          Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission    Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+}
+
+model Session {
+  id            String    @id @default(cuid())
+  userId        String
+  token         String    @unique
+  expiresAt     DateTime
+  isActive      Boolean   @default(true)
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime  @default(now())
+  
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([token])
+}
+
+model AuditLog {
+  id            String    @id @default(cuid())
+  userId        String
+  action        String    // CREATE, UPDATE, DELETE, LOGIN, LOGOUT
+  module        String    // inventory, sales, purchases, manufacturing, accounting
+  entityType    String    // Product, Invoice, Order, etc.
+  entityId      String?
+  changes       String?   // JSON string of before/after values
+  ipAddress     String?
+  userAgent     String?
+  status        String    @default("success") // success, failure
+  errorMessage  String?
+  createdAt     DateTime  @default(now())
+  
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([module])
+  @@index([entityType])
+  @@index([createdAt])
+}
+
+model Notification {
+  id            String    @id @default(cuid())
+  userId        String?   // null for system-wide notifications
+  type          String    // LOW_STOCK, INVOICE_DUE, PAYMENT_RECEIVED, ERROR
+  title         String
+  message       String
+  relatedModule String?   // inventory, sales, purchases, accounting
+  relatedId     String?   // ID of the related entity
+  isRead        Boolean   @default(false)
+  readAt        DateTime?
+  createdAt     DateTime  @default(now())
+  
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
 }

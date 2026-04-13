@@ -107,22 +107,37 @@ export default function SalesInvoicesPage() {
     try {
       setLoading(true);
       setError(null);
+      
+      const token = localStorage.getItem('token');
+      const headers = {
+        'Authorization': `Bearer ${token || ''}`,
+      };
+      
       const [invoicesRes, customersRes, productsRes] = await Promise.all([
-        fetch('/api/sales-invoices'),
-        fetch('/api/customers'),
-        fetch('/api/products'),
+        fetch('/api/sales-invoices', { headers }),
+        fetch('/api/customers', { headers }),
+        fetch('/api/products', { headers }),
       ]);
 
       if (!invoicesRes.ok || !customersRes.ok || !productsRes.ok) {
         throw new Error('فشل في تحميل البيانات');
       }
 
-      setInvoices(await invoicesRes.json());
-      setCustomers(await customersRes.json());
-      setProducts(await productsRes.json());
+      const invoicesData = await invoicesRes.json();
+      const customersData = await customersRes.json();
+      const productsData = await productsRes.json();
+      
+      // Safe data extraction - handle both wrapped and unwrapped responses
+      setInvoices(Array.isArray(invoicesData) ? invoicesData : (invoicesData?.data || []));
+      setCustomers(Array.isArray(customersData) ? customersData : (customersData?.data || []));
+      setProducts(Array.isArray(productsData) ? productsData : (productsData?.data || []));
     } catch (err) {
       console.error('Error fetching data:', err);
       setError(err instanceof Error ? err.message : 'خطأ في تحميل البيانات');
+      // Set safe defaults on error
+      setInvoices([]);
+      setCustomers([]);
+      setProducts([]);
     } finally {
       setLoading(false);
     }
@@ -405,14 +420,14 @@ export default function SalesInvoicesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {invoices.length === 0 ? (
+                  {(invoices || []).length === 0 ? (
                     <tr>
                       <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
                         لا توجد فواتير
                       </td>
                     </tr>
                   ) : (
-                    invoices.map((invoice) => (
+                    (invoices || []).map((invoice) => (
                       <tr key={invoice.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 font-medium">{invoice.invoiceNumber}</td>
                         <td className="px-4 py-3">{invoice.customer?.nameAr || '-'}</td>
@@ -574,7 +589,7 @@ export default function SalesInvoicesPage() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm"
                 >
                   <option value="">اختر...</option>
-                  {customers.map((customer: any) => (
+                  {(customers || []).map((customer: any) => (
                     <option key={customer.id} value={customer.id}>{customer.nameAr}</option>
                   ))}
                 </select>
@@ -627,7 +642,7 @@ export default function SalesInvoicesPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((item, index) => (
+                    {(items || []).map((item, index) => (
                       <tr key={index}>
                         <td className="px-2 py-2 border border-gray-300 text-center">{index + 1}</td>
                         <td className="px-2 py-2 border border-gray-300">
@@ -645,7 +660,7 @@ export default function SalesInvoicesPage() {
                             className="w-full px-1 py-1 border border-gray-300 rounded text-sm"
                           >
                             <option value=""></option>
-                            {products.map((product: any) => (
+                            {(products || []).map((product: any) => (
                               <option key={product.id} value={product.id}>{product.code}</option>
                             ))}
                           </select>

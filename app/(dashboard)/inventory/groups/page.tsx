@@ -86,16 +86,16 @@ export default function ItemGroupsPage() {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch('/api/item-groups').catch(() => ({ ok: true, json: async () => [] }));
-      if (res.ok) {
-        const data = await res.json();
-        setGroups(Array.isArray(data) ? data : []);
-      } else {
-        setGroups([]);
+      const res = await fetch('/api/item-groups');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
       }
+      const json = await res.json();
+      setGroups(Array.isArray(json.data) ? json.data : []);
     } catch (err) {
       console.error('Error fetching groups:', err);
-      setGroups([]);
+      setError(err instanceof Error ? err.message : 'فشل في تحميل المجموعات');
     } finally {
       setLoading(false);
     }
@@ -117,9 +117,12 @@ export default function ItemGroupsPage() {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
-      }).catch(() => ({ ok: true }));
+      });
 
-      if (!res.ok) throw new Error('فشل في حفظ المجموعة');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'فشل في حفظ المجموعة');
+      }
 
       resetForm();
       setIsFormOpen(false);
@@ -159,7 +162,12 @@ export default function ItemGroupsPage() {
 
   const handleDelete = async (group: ItemGroup) => {
     if (confirm('هل أنت متأكد من حذف هذه المجموعة؟')) {
-      await fetch(`/api/item-groups?id=${group.id}`, { method: 'DELETE' }).catch(() => ({ ok: true }));
+      const res = await fetch(`/api/item-groups?id=${group.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'فشل في حذف المجموعة');
+        return;
+      }
       fetchGroups();
     }
   };

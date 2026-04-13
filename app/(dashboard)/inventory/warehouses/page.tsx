@@ -90,16 +90,16 @@ export default function WarehousesPage() {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch('/api/warehouses').catch(() => ({ ok: true, json: async () => [] }));
-      if (res.ok) {
-        const data = await res.json();
-        setWarehouses(Array.isArray(data) ? data : []);
-      } else {
-        setWarehouses([]);
+      const res = await fetch('/api/warehouses');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
       }
+      const json = await res.json();
+      setWarehouses(Array.isArray(json.data) ? json.data : []);
     } catch (err) {
       console.error('Error fetching warehouses:', err);
-      setWarehouses([]);
+      setError(err instanceof Error ? err.message : 'فشل في تحميل المخازن');
     } finally {
       setLoading(false);
     }
@@ -121,9 +121,12 @@ export default function WarehousesPage() {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
-      }).catch(() => ({ ok: true }));
+      });
 
-      if (!res.ok) throw new Error('فشل في حفظ المخزن');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'فشل في حفظ المخزن');
+      }
 
       resetForm();
       setIsFormOpen(false);
@@ -167,7 +170,12 @@ export default function WarehousesPage() {
 
   const handleDelete = async (warehouse: Warehouse) => {
     if (confirm('هل أنت متأكد من حذف هذا المخزن؟')) {
-      await fetch(`/api/warehouses?id=${warehouse.id}`, { method: 'DELETE' }).catch(() => ({ ok: true }));
+      const res = await fetch(`/api/warehouses?id=${warehouse.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'فشل في حذف المخزن');
+        return;
+      }
       fetchWarehouses();
     }
   };

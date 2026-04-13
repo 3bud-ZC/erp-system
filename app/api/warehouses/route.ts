@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
+import { logAuditAction, getAuthenticatedUser } from '@/lib/auth';
 
 export async function GET(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search')?.trim() || '';
     const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
@@ -24,9 +31,9 @@ export async function GET(request: Request) {
       prisma.warehouse.count({ where }),
     ]);
 
-    return NextResponse.json({ data, total, page, limit });
+    return apiSuccess({ data, total, page, limit });
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch warehouses' }, { status: 500 });
+    return handleApiError(error, 'Fetch warehouses');
   }
 }
 
@@ -39,6 +46,11 @@ function uniqueConflictMessage(error: any): string {
 
 export async function POST(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     const body = await request.json();
     const code = body.code?.toString().trim();
     const nameAr = body.nameAr?.toString().trim();
@@ -48,26 +60,43 @@ export async function POST(request: Request) {
     const manager = body.manager?.toString().trim() || null;
 
     if (!code) {
-      return NextResponse.json({ error: 'الكود مطلوب' }, { status: 400 });
+      return handleApiError(new Error('الكود مطلوب'), 'Create warehouse');
     }
     if (!nameAr) {
-      return NextResponse.json({ error: 'الاسم العربي مطلوب' }, { status: 400 });
+      return handleApiError(new Error('الاسم العربي مطلوب'), 'Create warehouse');
     }
 
     const warehouse = await prisma.warehouse.create({
       data: { code, nameAr, nameEn, address, phone, manager },
     });
-    return NextResponse.json(warehouse, { status: 201 });
+
+    await logAuditAction(
+      user.id,
+      'CREATE',
+      'inventory',
+      'Warehouse',
+      warehouse.id,
+      { warehouse },
+      request.headers.get('x-forwarded-for') || undefined,
+      request.headers.get('user-agent') || undefined
+    );
+
+    return apiSuccess(warehouse, 'Warehouse created successfully');
   } catch (error: any) {
     if (error?.code === 'P2002') {
-      return NextResponse.json({ error: uniqueConflictMessage(error) }, { status: 409 });
+      return handleApiError(new Error(uniqueConflictMessage(error)), 'Create warehouse');
     }
-    return NextResponse.json({ error: 'Failed to create warehouse' }, { status: 500 });
+    return handleApiError(error, 'Create warehouse');
   }
 }
 
 export async function PUT(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     const body = await request.json();
     const { id } = body;
     const code = body.code?.toString().trim();
@@ -78,46 +107,75 @@ export async function PUT(request: Request) {
     const manager = body.manager?.toString().trim() || null;
 
     if (!id) {
-      return NextResponse.json({ error: 'id مطلوب' }, { status: 400 });
+      return handleApiError(new Error('id مطلوب'), 'Update warehouse');
     }
     if (!code) {
-      return NextResponse.json({ error: 'الكود مطلوب' }, { status: 400 });
+      return handleApiError(new Error('الكود مطلوب'), 'Update warehouse');
     }
     if (!nameAr) {
-      return NextResponse.json({ error: 'الاسم العربي مطلوب' }, { status: 400 });
+      return handleApiError(new Error('الاسم العربي مطلوب'), 'Update warehouse');
     }
 
     const warehouse = await prisma.warehouse.update({
       where: { id },
       data: { code, nameAr, nameEn, address, phone, manager },
     });
-    return NextResponse.json(warehouse);
+
+    await logAuditAction(
+      user.id,
+      'UPDATE',
+      'inventory',
+      'Warehouse',
+      warehouse.id,
+      { data: { code, nameAr, nameEn, address, phone, manager } },
+      request.headers.get('x-forwarded-for') || undefined,
+      request.headers.get('user-agent') || undefined
+    );
+
+    return apiSuccess(warehouse, 'Warehouse updated successfully');
   } catch (error: any) {
     if (error?.code === 'P2002') {
-      return NextResponse.json({ error: uniqueConflictMessage(error) }, { status: 409 });
+      return handleApiError(new Error(uniqueConflictMessage(error)), 'Update warehouse');
     }
     if (error?.code === 'P2025') {
-      return NextResponse.json({ error: 'المخزن غير موجود' }, { status: 404 });
+      return handleApiError(new Error('المخزن غير موجود'), 'Update warehouse');
     }
-    return NextResponse.json({ error: 'Failed to update warehouse' }, { status: 500 });
+    return handleApiError(error, 'Update warehouse');
   }
 }
 
 export async function DELETE(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
     if (!id) {
-      return NextResponse.json({ error: 'id مطلوب' }, { status: 400 });
+      return handleApiError(new Error('id مطلوب'), 'Delete warehouse');
     }
 
     await prisma.warehouse.delete({ where: { id } });
-    return NextResponse.json({ success: true });
+
+    await logAuditAction(
+      user.id,
+      'DELETE',
+      'inventory',
+      'Warehouse',
+      id,
+      undefined,
+      request.headers.get('x-forwarded-for') || undefined,
+      request.headers.get('user-agent') || undefined
+    );
+
+    return apiSuccess({ id }, 'Warehouse deleted successfully');
   } catch (error: any) {
     if (error?.code === 'P2025') {
-      return NextResponse.json({ error: 'المخزن غير موجود' }, { status: 404 });
+      return handleApiError(new Error('المخزن غير موجود'), 'Delete warehouse');
     }
-    return NextResponse.json({ error: 'Failed to delete warehouse' }, { status: 500 });
+    return handleApiError(error, 'Delete warehouse');
   }
 }

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
+import { getAuthenticatedUser, checkPermission } from '@/lib/auth';
 
 // ==================== PROFIT & LOSS STATEMENT ====================
 
@@ -7,7 +9,6 @@ async function getProfitAndLossReport(fromDate?: Date, toDate?: Date) {
   const startDate = fromDate || new Date(new Date().getFullYear(), 0, 1);
   const endDate = toDate || new Date();
 
-  // Fetch revenue transactions
   const revenueEntries = await prisma.journalEntry.findMany({
     where: {
       isPosted: true,
@@ -20,7 +21,6 @@ async function getProfitAndLossReport(fromDate?: Date, toDate?: Date) {
     include: { lines: true },
   });
 
-  // Fetch expense transactions
   const expenseEntries = await prisma.journalEntry.findMany({
     where: {
       isPosted: true,
@@ -33,28 +33,23 @@ async function getProfitAndLossReport(fromDate?: Date, toDate?: Date) {
     include: { lines: true },
   });
 
-  // Calculate totals
   let totalRevenue = 0;
   let totalCOGS = 0;
   let totalOperatingExpenses = 0;
 
-  // Process revenue (account 4010 - Sales Revenue)
   revenueEntries.forEach((entry) => {
     entry.lines.forEach((line) => {
       if (line.accountCode === '4010') {
         totalRevenue += Number(line.credit) - Number(line.debit);
       }
-      // COGS (account 5010)
       if (line.accountCode === '5010') {
         totalCOGS += Number(line.debit) - Number(line.credit);
       }
     });
   });
 
-  // Process expenses
   expenseEntries.forEach((entry) => {
     entry.lines.forEach((line) => {
-      // Operating expenses (5020-5060)
       if (['5020', '5030', '5040', '5050', '5060'].includes(line.accountCode)) {
         totalOperatingExpenses += Number(line.debit) - Number(line.credit);
       }
@@ -63,7 +58,7 @@ async function getProfitAndLossReport(fromDate?: Date, toDate?: Date) {
 
   const grossProfit = totalRevenue - totalCOGS;
   const operatingIncome = grossProfit - totalOperatingExpenses;
-  const netIncome = operatingIncome; // Simplified (no taxes/interest)
+  const netIncome = operatingIncome;
 
   return {
     period: { from: startDate, to: endDate },
@@ -73,7 +68,7 @@ async function getProfitAndLossReport(fromDate?: Date, toDate?: Date) {
     costOfGoodsSold: totalCOGS,
     grossProfit,
     operatingExpenses: {
-      salaries: 0, // Would need to aggregate by account
+      salaries: 0,
       rent: 0,
       utilities: 0,
       marketing: 0,
@@ -91,13 +86,11 @@ async function getProfitAndLossReport(fromDate?: Date, toDate?: Date) {
 async function getBalanceSheet(asOfDate?: Date) {
   const date = asOfDate || new Date();
 
-  // Fetch all accounts and their balances
   const accounts = await prisma.account.findMany({
     where: { isActive: true },
     include: { journalLines: true },
   });
 
-  // Calculate balance for each account up to asOfDate
   const assets: any = {};
   const liabilities: any = {};
   const equity: any = {};
@@ -169,7 +162,6 @@ async function getCashFlowReport(fromDate?: Date, toDate?: Date) {
   const startDate = fromDate || new Date(new Date().getFullYear(), 0, 1);
   const endDate = toDate || new Date();
 
-  // Operating activities
   const operatingEntries = await prisma.journalEntry.findMany({
     where: {
       isPosted: true,
@@ -179,7 +171,6 @@ async function getCashFlowReport(fromDate?: Date, toDate?: Date) {
     include: { lines: true },
   });
 
-  // Investing activities (fixed assets)
   const investingEntries = await prisma.journalEntry.findMany({
     where: {
       isPosted: true,
@@ -189,7 +180,6 @@ async function getCashFlowReport(fromDate?: Date, toDate?: Date) {
     include: { lines: true },
   });
 
-  // Financing activities (loans, capital)
   const financingEntries = await prisma.journalEntry.findMany({
     where: {
       isPosted: true,
@@ -199,12 +189,10 @@ async function getCashFlowReport(fromDate?: Date, toDate?: Date) {
     include: { lines: true },
   });
 
-  // Calculate cash movements
   let operatingCash = 0;
   let investingCash = 0;
   let financingCash = 0;
 
-  // Operating: Cash receipts from sales (account 1001/1010)
   operatingEntries.forEach((entry) => {
     entry.lines.forEach((line) => {
       if (['1001', '1010'].includes(line.accountCode)) {
@@ -213,7 +201,6 @@ async function getCashFlowReport(fromDate?: Date, toDate?: Date) {
     });
   });
 
-  // Simplified calculation
   const netCashIncrease = operatingCash + investingCash + financingCash;
 
   return {
@@ -268,47 +255,55 @@ async function getInventoryValuation() {
 
 // ==================== API ROUTES ====================
 
+// GET - Read reports (requires view_financial_reports permission)
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const reportType = searchParams.get('type') || 'summary';
-    const fromDate = searchParams.get('fromDate') ? new Date(searchParams.get('fromDate')!) : undefined;
-    const toDate = searchParams.get('toDate') ? new Date(searchParams.get('toDate')!) : undefined;
-
-    let report: any = {};
-
-    switch (reportType) {
-      case 'profit-loss':
-        report.profitAndLoss = await getProfitAndLossReport(fromDate, toDate);
-        break;
-
-      case 'balance-sheet':
-        report.balanceSheet = await getBalanceSheet(toDate);
-        break;
-
-      case 'cash-flow':
-        report.cashFlow = await getCashFlowReport(fromDate, toDate);
-        break;
-
-      case 'inventory':
-        report.inventory = await getInventoryValuation();
-        break;
-
-      case 'summary':
-      default:
-        // Return all reports
-        report = {
-          profitAndLoss: await getProfitAndLossReport(fromDate, toDate),
-          balanceSheet: await getBalanceSheet(toDate),
-          cashFlow: await getCashFlowReport(fromDate, toDate),
-          inventory: await getInventoryValuation(),
-        };
-        break;
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
     }
 
-    return NextResponse.json(report);
-  } catch (error) {
-    console.error('Error generating report:', error);
-    return NextResponse.json({ error: 'Failed to generate report' }, { status: 500 });
+    if (!checkPermission(user, 'view_financial_reports')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
+
+    const { searchParams } = new URL(request.url);
+      const reportType = searchParams.get('type') || 'summary';
+      const fromDate = searchParams.get('fromDate') ? new Date(searchParams.get('fromDate')!) : undefined;
+      const toDate = searchParams.get('toDate') ? new Date(searchParams.get('toDate')!) : undefined;
+
+      let report: any = {};
+
+      switch (reportType) {
+        case 'profit-loss':
+          report.profitAndLoss = await getProfitAndLossReport(fromDate, toDate);
+          break;
+
+        case 'balance-sheet':
+          report.balanceSheet = await getBalanceSheet(toDate);
+          break;
+
+        case 'cash-flow':
+          report.cashFlow = await getCashFlowReport(fromDate, toDate);
+          break;
+
+        case 'inventory':
+          report.inventory = await getInventoryValuation();
+          break;
+
+        case 'summary':
+        default:
+          report = {
+            profitAndLoss: await getProfitAndLossReport(fromDate, toDate),
+            balanceSheet: await getBalanceSheet(toDate),
+            cashFlow: await getCashFlowReport(fromDate, toDate),
+            inventory: await getInventoryValuation(),
+          };
+          break;
+      }
+
+      return apiSuccess(report);
+    } catch (error) {
+      return handleApiError(error, 'Generate report');
+    }
   }
-}

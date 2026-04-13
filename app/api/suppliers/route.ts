@@ -1,55 +1,119 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
+import { logAuditAction, getAuthenticatedUser } from '@/lib/auth';
 
-export async function GET() {
+// GET - Read suppliers
+export async function GET(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     const suppliers = await prisma.supplier.findMany({
       orderBy: { createdAt: 'desc' },
     });
-    return NextResponse.json(suppliers);
+    return apiSuccess(suppliers);
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch suppliers' }, { status: 500 });
+    return handleApiError(error, 'Fetch suppliers');
   }
 }
 
+// POST - Create supplier
 export async function POST(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     const body = await request.json();
     const supplier = await prisma.supplier.create({
       data: body,
     });
-    return NextResponse.json(supplier);
+
+    await logAuditAction(
+      user.id,
+      'CREATE',
+      'purchases',
+      'Supplier',
+      supplier.id,
+      { supplier },
+      request.headers.get('x-forwarded-for') || undefined,
+      request.headers.get('user-agent') || undefined
+    );
+
+    return apiSuccess(supplier, 'Supplier created successfully');
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to create supplier' }, { status: 500 });
+    return handleApiError(error, 'Create supplier');
   }
 }
 
+// PUT - Update supplier
 export async function PUT(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     const body = await request.json();
     const { id, ...data } = body;
     const supplier = await prisma.supplier.update({
       where: { id },
       data,
     });
-    return NextResponse.json(supplier);
+
+    await logAuditAction(
+      user.id,
+      'UPDATE',
+      'purchases',
+      'Supplier',
+      supplier.id,
+      { data },
+      request.headers.get('x-forwarded-for') || undefined,
+      request.headers.get('user-agent') || undefined
+    );
+
+    return apiSuccess(supplier, 'Supplier updated successfully');
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to update supplier' }, { status: 500 });
+    return handleApiError(error, 'Update supplier');
   }
 }
 
+// DELETE - Delete supplier
 export async function DELETE(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
+
     if (!id) {
-      return NextResponse.json({ error: 'ID is required' }, { status: 400 });
+      return handleApiError(new Error('ID is required'), 'Delete supplier');
     }
+
     await prisma.supplier.delete({
       where: { id },
     });
-    return NextResponse.json({ success: true });
+
+    await logAuditAction(
+      user.id,
+      'DELETE',
+      'purchases',
+      'Supplier',
+      id,
+      undefined,
+      request.headers.get('x-forwarded-for') || undefined,
+      request.headers.get('user-agent') || undefined
+    );
+
+    return apiSuccess({ id }, 'Supplier deleted successfully');
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to delete supplier' }, { status: 500 });
+    return handleApiError(error, 'Delete supplier');
   }
 }

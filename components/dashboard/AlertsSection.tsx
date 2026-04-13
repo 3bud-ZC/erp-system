@@ -44,7 +44,10 @@ const alertColors = {
 };
 
 export default function AlertsSection({ alerts }: AlertsSectionProps) {
-  if (alerts.length === 0) {
+  // Defensive check for undefined alerts
+  const safeAlerts = alerts || [];
+  
+  if (safeAlerts.length === 0) {
     return (
       <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
         <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
@@ -60,7 +63,7 @@ export default function AlertsSection({ alerts }: AlertsSectionProps) {
 
   return (
     <div className="space-y-3 max-h-64 overflow-y-auto custom-scrollbar">
-      {alerts.map((alert) => {
+      {safeAlerts.map((alert) => {
         const Icon = alertIcons[alert.type];
         const colors = alertColors[alert.severity];
 

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { calculateProfitAndLoss } from '@/lib/accounting';
+import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
+import { getAuthenticatedUser } from '@/lib/auth';
 
 // Helper: Calculate totals for a given date range
 async function getFinancialData(startDate: Date, endDate: Date) {
@@ -114,8 +116,14 @@ async function getRecentActivities() {
     .slice(0, 5);
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
+
     // Get current month data
     const now = new Date();
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -224,9 +232,6 @@ export async function GET() {
     });
   } catch (error) {
     console.error('Error fetching dashboard data:', error);
-    return NextResponse.json(
-      { error: 'فشل في تحميل بيانات لوحة التحكم' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'Fetch dashboard data');
   }
 }

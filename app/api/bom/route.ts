@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
+import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
 
 export async function GET(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     const { searchParams } = new URL(request.url);
     const productId = searchParams.get('productId');
 
@@ -14,7 +21,7 @@ export async function GET(request: Request) {
         },
         orderBy: { createdAt: 'desc' },
       });
-      return NextResponse.json(allBOMs);
+      return apiSuccess(allBOMs);
     }
 
     const bom = await prisma.bOMItem.findMany({
@@ -25,24 +32,32 @@ export async function GET(request: Request) {
       },
     });
 
-    return NextResponse.json(bom);
+    return apiSuccess(bom);
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch BOM' }, { status: 500 });
+    return handleApiError(error, 'Fetch BOM');
   }
 }
 
 export async function POST(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
+    if (!checkPermission(user, 'create_product')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
+
     const body = await request.json();
     const { productId, materialId, quantity } = body;
 
-    // Validate both products exist
     const product = await prisma.product.findUnique({
       where: { id: productId },
     });
 
     if (!product) {
-      return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+      return apiError('Product not found', 404);
     }
 
     const material = await prisma.product.findUnique({
@@ -50,33 +65,38 @@ export async function POST(request: Request) {
     });
 
     if (!material) {
-      return NextResponse.json({ error: 'Material product not found' }, { status: 404 });
+      return apiError('Material product not found', 404);
     }
 
-    // Prevent circular BOM (e.g., product cannot be its own material)
     if (productId === materialId) {
-      return NextResponse.json(
-        { error: 'A product cannot be its own raw material' },
-        { status: 400 }
-      );
+      return apiError('A product cannot be its own raw material', 400);
     }
 
-    // Check if BOM item already exists
     const existing = await prisma.bOMItem.findFirst({
       where: { productId, materialId },
     });
 
     if (existing) {
-      // Update instead of creating
       const updated = await prisma.bOMItem.update({
         where: { id: existing.id },
         data: { quantity },
         include: { product: true, material: true },
       });
-      return NextResponse.json(updated);
+
+      await logAuditAction(
+        user.id,
+        'UPDATE',
+        'manufacturing',
+        'BOMItem',
+        updated.id,
+        { quantity },
+        request.headers.get('x-forwarded-for') || undefined,
+        request.headers.get('user-agent') || undefined
+      );
+
+      return apiSuccess(updated, 'BOM item updated successfully');
     }
 
-    // Create new BOM item
     const bomItem = await prisma.bOMItem.create({
       data: {
         productId,
@@ -89,15 +109,34 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json(bomItem);
+    await logAuditAction(
+      user.id,
+      'CREATE',
+      'manufacturing',
+      'BOMItem',
+      bomItem.id,
+      { bomItem },
+      request.headers.get('x-forwarded-for') || undefined,
+      request.headers.get('user-agent') || undefined
+    );
+
+    return apiSuccess(bomItem, 'BOM item created successfully');
   } catch (error) {
-    console.error('Error creating BOM item:', error);
-    return NextResponse.json({ error: 'Failed to create BOM item' }, { status: 500 });
+    return handleApiError(error, 'Create BOM item');
   }
 }
 
 export async function PUT(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
+    if (!checkPermission(user, 'update_product')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
+
     const body = await request.json();
     const { id, quantity } = body;
 
@@ -107,29 +146,58 @@ export async function PUT(request: Request) {
       include: { product: true, material: true },
     });
 
-    return NextResponse.json(bomItem);
+    await logAuditAction(
+      user.id,
+      'UPDATE',
+      'manufacturing',
+      'BOMItem',
+      bomItem.id,
+      { quantity },
+      request.headers.get('x-forwarded-for') || undefined,
+      request.headers.get('user-agent') || undefined
+    );
+
+    return apiSuccess(bomItem, 'BOM item updated successfully');
   } catch (error) {
-    console.error('Error updating BOM item:', error);
-    return NextResponse.json({ error: 'Failed to update BOM item' }, { status: 500 });
+    return handleApiError(error, 'Update BOM item');
   }
 }
 
 export async function DELETE(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
+    if (!checkPermission(user, 'delete_product')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
     if (!id) {
-      return NextResponse.json({ error: 'ID is required' }, { status: 400 });
+      return handleApiError(new Error('ID is required'), 'Delete BOM item');
     }
 
     await prisma.bOMItem.delete({
       where: { id },
     });
 
-    return NextResponse.json({ success: true });
+    await logAuditAction(
+      user.id,
+      'DELETE',
+      'manufacturing',
+      'BOMItem',
+      id,
+      undefined,
+      request.headers.get('x-forwarded-for') || undefined,
+      request.headers.get('user-agent') || undefined
+    );
+
+    return apiSuccess({ id }, 'BOM item deleted successfully');
   } catch (error) {
-    console.error('Error deleting BOM item:', error);
-    return NextResponse.json({ error: 'Failed to delete BOM item' }, { status: 500 });
+    return handleApiError(error, 'Delete BOM item');
   }
 }

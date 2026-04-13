@@ -1,0 +1,11 @@
+category: Backend
+interface:
+  display_name: ASP.NET Core
+  short_description: Build and architect ASP.NET Core web applications
+  icon_dark: ./assets/icon-dark.png
+  icon_light: ./assets/icon-light.png
+  default_prompt: Help me build an ASP.NET Core web application following best practices.
+  label:
+  - dotnet
+  - web-development
+  - backend

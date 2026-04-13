@@ -8,9 +8,17 @@ import {
   recordManufacturingOverhead,
   postJournalEntry,
 } from '@/lib/accounting';
+import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
+import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
 
-export async function GET() {
+// GET - Read production orders (requires read_production_order permission)
+export async function GET(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     const orders = await prisma.productionOrder.findMany({
       include: {
         product: true,
@@ -23,281 +31,367 @@ export async function GET() {
       },
       orderBy: { createdAt: 'desc' },
     });
-    return NextResponse.json(orders);
+    return apiSuccess(orders);
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch production orders' }, { status: 500 });
+    return handleApiError(error, 'Fetch production orders');
   }
 }
 
+// POST - Create production order (requires create_production_order permission)
 export async function POST(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
+    if (!checkPermission(user, 'create_production_order')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
+
     const body = await request.json();
-    const { productId, quantity, laborCost = 0, overheadCost = 0, ...orderData } = body;
+      const { productId, quantity, laborCost = 0, overheadCost = 0, ...orderData } = body;
 
-    // STEP 1: Fetch the BOM for this product
-    const bomItems = await prisma.bOMItem.findMany({
-      where: { productId },
-      include: { material: true },
-    });
-
-    if (bomItems.length === 0) {
-      return NextResponse.json(
-        { error: 'No Bill of Materials (BOM) found for this product' },
-        { status: 400 }
-      );
-    }
-
-    // STEP 2: Calculate total raw materials needed (BOM explosion)
-    const rawMaterialsNeeded = bomItems.map((bom) => ({
-      productId: bom.materialId,
-      quantity: bom.quantity * quantity, // Scale BOM by production quantity
-    }));
-
-    // STEP 3: Validate stock availability for all raw materials
-    const validation = await validateStockAvailability(rawMaterialsNeeded);
-    if (!validation.valid) {
-      return NextResponse.json(
-        {
-          error: 'Insufficient raw materials for production',
-          details: validation.errors,
+      // Auto-generate orderNumber in format PO-YYYY-XXXX
+      const year = new Date().getFullYear();
+      const lastOrder = await prisma.productionOrder.findFirst({
+        where: {
+          orderNumber: {
+            startsWith: `PO-${year}-`
+          }
         },
-        { status: 400 }
-      );
-    }
-
-    // STEP 4: Create production order, consume raw materials, and record WIP atomically
-    const order = await prisma.$transaction(async (tx) => {
-      // Create the production order
-      const newOrder = await tx.productionOrder.create({
-        data: {
-          ...orderData,
-          productId,
-          quantity,
-          date: new Date(orderData.date),
-          items: {
-            create: rawMaterialsNeeded.map((rm) => ({
-              productId: rm.productId,
-              quantity: rm.quantity,
-              cost: 0, // Will be calculated from material cost
-              total: 0,
-            })),
-          },
-        },
-        include: {
-          items: true,
-          product: true,
-        },
+        orderBy: {
+          orderNumber: 'desc'
+        }
       });
-
-      // Create WIP record
-      const wipEntry = await tx.workInProgress.create({
-        data: {
-          productionOrderId: newOrder.id,
-          rawMaterialCost: 0, // Will be updated when materials are consumed
-          laborCost: laborCost || 0,
-          overheadCost: overheadCost || 0,
-          totalCost: laborCost || overheadCost || 0,
-        },
-      });
-
-      // Decrement raw material stock with movement recording
-      await decrementStockInTransaction(tx, rawMaterialsNeeded, newOrder.id, 'ProductionOrder');
-
-      return newOrder;
-    });
-
-    // STEP 5: Calculate raw material cost and create accounting entries
-    let totalRawMaterialCost = 0;
-    for (const rm of rawMaterialsNeeded) {
-      const material = await prisma.product.findUnique({
-        where: { id: rm.productId },
-        select: { cost: true },
-      });
-      if (material) {
-        totalRawMaterialCost += rm.quantity * material.cost;
+      
+      let nextNumber = 1;
+      if (lastOrder && lastOrder.orderNumber) {
+        const lastNumber = parseInt(lastOrder.orderNumber.split('-')[2]);
+        nextNumber = lastNumber + 1;
       }
+      
+      const orderNumber = `PO-${year}-${String(nextNumber).padStart(4, '0')}`;
+
+      // STEP 1: Fetch the BOM for this product
+      const bomItems = await prisma.bOMItem.findMany({
+        where: { productId },
+        include: { material: true },
+      });
+
+      if (bomItems.length === 0) {
+        return apiError('No Bill of Materials (BOM) found for this product', 400);
+      }
+
+      // STEP 2: Calculate total raw materials needed (BOM explosion)
+      const rawMaterialsNeeded = bomItems.map((bom) => ({
+        productId: bom.materialId,
+        quantity: bom.quantity * quantity,
+      }));
+
+      // STEP 3: Validate stock availability for all raw materials
+      const validation = await validateStockAvailability(rawMaterialsNeeded);
+      if (!validation.valid) {
+        return apiError(
+          'Insufficient raw materials for production',
+          400,
+          { details: validation.errors }
+        );
+      }
+
+      // STEP 4: Create production order, consume raw materials, and record WIP atomically
+      const order = await prisma.$transaction(async (tx) => {
+        const newOrder = await tx.productionOrder.create({
+          data: {
+            ...orderData,
+            orderNumber,
+            productId,
+            quantity,
+            date: new Date(orderData.date),
+            items: {
+              create: rawMaterialsNeeded.map((rm) => ({
+                productId: rm.productId,
+                quantity: rm.quantity,
+                cost: 0,
+                total: 0,
+              })),
+            },
+          },
+          include: {
+            items: true,
+            product: true,
+          },
+        });
+
+        const wipEntry = await tx.workInProgress.create({
+          data: {
+            productionOrderId: newOrder.id,
+            rawMaterialCost: 0,
+            laborCost: laborCost || 0,
+            overheadCost: overheadCost || 0,
+            totalCost: laborCost || overheadCost || 0,
+          },
+        });
+
+        await decrementStockInTransaction(tx, rawMaterialsNeeded, newOrder.id, 'ProductionOrder');
+
+        return newOrder;
+      });
+
+      // STEP 5: Calculate raw material cost and create accounting entries
+      let totalRawMaterialCost = 0;
+      for (const rm of rawMaterialsNeeded) {
+        const material = await prisma.product.findUnique({
+          where: { id: rm.productId },
+          select: { cost: true },
+        });
+        if (material) {
+          totalRawMaterialCost += rm.quantity * material.cost;
+        }
+      }
+
+      const totalManufacturingCost = totalRawMaterialCost + (laborCost || 0) + (overheadCost || 0);
+
+      await prisma.workInProgress.update({
+        where: { productionOrderId: order.id },
+        data: {
+          rawMaterialCost: totalRawMaterialCost,
+          totalCost: totalManufacturingCost,
+        },
+      });
+
+      const wipJournal = await recordRawMaterialConsumption(
+        order.id,
+        totalRawMaterialCost,
+        rawMaterialsNeeded
+      );
+
+      if (wipJournal) {
+        await postJournalEntry(wipJournal.id);
+      }
+
+      // Log audit action
+      await logAuditAction(
+        user.id,
+        'CREATE',
+        'manufacturing',
+        'ProductionOrder',
+        order.id,
+        { order },
+        request.headers.get('x-forwarded-for') || undefined,
+        request.headers.get('user-agent') || undefined
+      );
+
+      return apiSuccess(order, 'Production order created successfully');
+    } catch (error) {
+      return handleApiError(error, 'Create production order');
     }
-
-    const totalManufacturingCost = totalRawMaterialCost + (laborCost || 0) + (overheadCost || 0);
-
-    // Record raw material consumption to WIP
-    await prisma.workInProgress.update({
-      where: { productionOrderId: order.id },
-      data: {
-        rawMaterialCost: totalRawMaterialCost,
-        totalCost: totalManufacturingCost,
-      },
-    });
-
-    // STEP 6: Create manufacturing accounting entries (WIP to Finished Goods on completion)
-    // For now, just record the WIP entry - actual GL posting happens when order is completed
-    const journalEntry = await createManufacturingEntry(
-      order.id,
-      quantity,
-      totalManufacturingCost
-    );
-
-    if (journalEntry) {
-      await postJournalEntry(journalEntry.id);
-    }
-
-    return NextResponse.json(order);
-  } catch (error) {
-    console.error('Error creating production order:', error);
-    return NextResponse.json({ error: 'Failed to create production order' }, { status: 500 });
   }
-}
 
+// PUT - Update production order (requires update_production_order permission)
 export async function PUT(request: Request) {
   try {
-    const body = await request.json();
-    const { id, status, ...updateData } = body;
-
-    const order = await prisma.productionOrder.findUnique({
-      where: { id },
-      include: { items: true, workInProgress: true },
-    });
-
-    if (!order) {
-      return NextResponse.json({ error: 'Production order not found' }, { status: 404 });
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
     }
 
-    // If status is changing to "completed", finalize the manufacturing
-    if (status === 'completed' && order.status !== 'completed') {
-      const updatedOrder = await prisma.$transaction(async (tx) => {
-        // Update order status
-        const updated = await tx.productionOrder.update({
-          where: { id },
-          data: { status, ...updateData },
-          include: { product: true, items: true, workInProgress: true },
+    if (!checkPermission(user, 'update_production_order')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
+
+    const body = await request.json();
+      const { id, status, ...updateData } = body;
+
+      const order = await prisma.productionOrder.findUnique({
+        where: { id },
+        include: { items: true, workInProgress: true },
+      });
+
+      if (!order) {
+        return handleApiError(new Error('Production order not found'), 'Update production order');
+      }
+
+      if (status === 'completed' && order.status !== 'completed') {
+        const updatedOrder = await prisma.$transaction(async (tx) => {
+          const updated = await tx.productionOrder.update({
+            where: { id },
+            data: { status, ...updateData },
+            include: { product: true, items: true, workInProgress: true },
+          });
+
+          const wip = await tx.workInProgress.findUnique({
+            where: { productionOrderId: id },
+          });
+
+          if (wip) {
+            await tx.product.update({
+              where: { id: updated.productId },
+              data: {
+                stock: {
+                  increment: updated.quantity,
+                },
+              },
+            });
+
+            await tx.stockMovement.create({
+              data: {
+                productId: updated.productId,
+                type: 'MANUFACTURING_IN',
+                quantity: updated.quantity,
+                reference: id,
+                referenceType: 'ProductionOrder',
+                notes: `Finished goods from manufacturing (Cost: ${wip.totalCost})`,
+              },
+            });
+
+            const existingProduct = await tx.product.findUnique({
+              where: { id: updated.productId },
+              select: { cost: true },
+            });
+
+            if (existingProduct) {
+              const newCost = wip.totalCost / updated.quantity;
+              await tx.product.update({
+                where: { id: updated.productId },
+                data: { cost: newCost },
+              });
+            }
+
+            await tx.workInProgress.update({
+              where: { productionOrderId: id },
+              data: { status: 'completed' },
+            });
+          }
+
+          return updated;
         });
 
-        // Get the total WIP cost
-        const wip = await tx.workInProgress.findUnique({
-          where: { productionOrderId: id },
-        });
-
+        const wip = updatedOrder.workInProgress;
         if (wip) {
-          // Create finished goods (add to finished product inventory)
+          const journalEntry = await createManufacturingEntry(
+            id,
+            updatedOrder.quantity,
+            wip.totalCost
+          );
+          if (journalEntry) {
+            await postJournalEntry(journalEntry.id);
+          }
+        }
+
+        // Log audit action
+        await logAuditAction(
+          user.id,
+          'UPDATE',
+          'manufacturing',
+          'ProductionOrder',
+          order.id,
+          { status: 'completed' },
+          request.headers.get('x-forwarded-for') || undefined,
+          request.headers.get('user-agent') || undefined
+        );
+
+        return apiSuccess(updatedOrder, 'Production order completed successfully');
+      }
+
+      const updated = await prisma.productionOrder.update({
+        where: { id },
+        data: { status, ...updateData },
+        include: { items: true, workInProgress: true },
+      });
+
+      // Log audit action
+      await logAuditAction(
+        user.id,
+        'UPDATE',
+        'manufacturing',
+        'ProductionOrder',
+        order.id,
+        { updateData },
+        request.headers.get('x-forwarded-for') || undefined,
+        request.headers.get('user-agent') || undefined
+      );
+
+      return apiSuccess(updated, 'Production order updated successfully');
+    } catch (error) {
+      return handleApiError(error, 'Update production order');
+    }
+  }
+
+// DELETE - Delete production order (requires delete_production_order permission)
+export async function DELETE(request: Request) {
+  try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
+    if (!checkPermission(user, 'delete_production_order')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
+
+    const { searchParams } = new URL(request.url);
+      const id = searchParams.get('id');
+
+      if (!id) {
+        return handleApiError(new Error('ID is required'), 'Delete production order');
+      }
+
+      await prisma.$transaction(async (tx) => {
+        const order = await tx.productionOrder.findUnique({
+          where: { id },
+          include: { items: true },
+        });
+
+        if (!order) {
+          throw new Error('Production order not found');
+        }
+
+        for (const item of order.items) {
           await tx.product.update({
-            where: { id: updated.productId },
+            where: { id: item.productId },
             data: {
               stock: {
-                increment: updated.quantity,
+                increment: item.quantity,
               },
             },
           });
 
-          // Record stock movement for finished goods
           await tx.stockMovement.create({
             data: {
-              productId: updated.productId,
-              type: 'MANUFACTURING_IN',
-              quantity: updated.quantity,
+              productId: item.productId,
+              type: 'MANUFACTURING_OUT',
+              quantity: -item.quantity,
               reference: id,
               referenceType: 'ProductionOrder',
-              notes: `Finished goods from manufacturing (Cost: ${wip.totalCost})`,
+              notes: 'Deleted production order - raw materials restored',
             },
-          });
-
-          // Update the finished product cost (FIFO: use WIP cost)
-          const existingProduct = await tx.product.findUnique({
-            where: { id: updated.productId },
-            select: { cost: true },
-          });
-
-          if (existingProduct) {
-            const newCost = wip.totalCost / updated.quantity;
-            await tx.product.update({
-              where: { id: updated.productId },
-              data: { cost: newCost },
-            });
-          }
-
-          // Mark WIP as completed
-          await tx.workInProgress.update({
-            where: { productionOrderId: id },
-            data: { status: 'completed' },
           });
         }
 
-        return updated;
-      });
-
-      return NextResponse.json(updatedOrder);
-    }
-
-    // Simple update if not completing
-    const updated = await prisma.productionOrder.update({
-      where: { id },
-      data: { status, ...updateData },
-      include: { items: true, workInProgress: true },
-    });
-
-    return NextResponse.json(updated);
-  } catch (error) {
-    console.error('Error updating production order:', error);
-    return NextResponse.json({ error: 'Failed to update production order' }, { status: 500 });
-  }
-}
-
-export async function DELETE(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-
-    if (!id) {
-      return NextResponse.json({ error: 'ID is required' }, { status: 400 });
-    }
-
-    await prisma.$transaction(async (tx) => {
-      const order = await tx.productionOrder.findUnique({
-        where: { id },
-        include: { items: true },
-      });
-
-      if (!order) {
-        throw new Error('Production order not found');
-      }
-
-      // Restore raw material stock (reverse the deduction)
-      for (const item of order.items) {
-        await tx.product.update({
-          where: { id: item.productId },
-          data: {
-            stock: {
-              increment: item.quantity,
-            },
-          },
+        await tx.workInProgress.deleteMany({
+          where: { productionOrderId: id },
         });
 
-        // Record stock movement reversal
-        await tx.stockMovement.create({
-          data: {
-            productId: item.productId,
-            type: 'MANUFACTURING_OUT', // Reversal
-            quantity: -item.quantity,
-            reference: id,
-            referenceType: 'ProductionOrder',
-            notes: 'Deleted production order - raw materials restored',
-          },
+        await tx.productionOrder.delete({
+          where: { id },
         });
-      }
-
-      // Delete WIP
-      await tx.workInProgress.deleteMany({
-        where: { productionOrderId: id },
       });
 
-      // Delete production order
-      await tx.productionOrder.delete({
-        where: { id },
-      });
-    });
+      // Log audit action
+      await logAuditAction(
+        user.id,
+        'DELETE',
+        'manufacturing',
+        'ProductionOrder',
+        id,
+        undefined,
+        request.headers.get('x-forwarded-for') || undefined,
+        request.headers.get('user-agent') || undefined
+      );
 
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('Error deleting production order:', error);
-    return NextResponse.json({ error: 'Failed to delete production order' }, { status: 500 });
+      return apiSuccess({ id }, 'Production order deleted successfully');
+    } catch (error) {
+      return handleApiError(error, 'Delete production order');
+    }
   }
-}

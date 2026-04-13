@@ -47,7 +47,10 @@ const statusLabels = {
 };
 
 export default function ActivityLog({ activities }: ActivityLogProps) {
-  if (activities.length === 0) {
+  // Defensive check for undefined activities
+  const safeActivities = activities || [];
+  
+  if (safeActivities.length === 0) {
     return (
       <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
         <p className="text-gray-500 text-sm">لا توجد نشاطات حديثة</p>
@@ -57,7 +60,7 @@ export default function ActivityLog({ activities }: ActivityLogProps) {
 
   return (
     <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
-      {activities.map((activity) => {
+      {safeActivities.map((activity) => {
         const config = activityIcons[activity.type];
         const Icon = config.icon;
         const Arrow = config.arrow;
