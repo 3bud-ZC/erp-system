@@ -229,11 +229,20 @@ model SalesInvoiceItem {
 model Expense {
   id            String    @id @default(cuid())
   expenseNumber String    @unique
-  category      String
-  description   String
-  amount        Float
+  category      String    @default("")
+  description   String    @default("")
+  amount        Float     @default(0)
+  tax           Float     @default(0)
+  total         Float     @default(0)
   date          DateTime
   notes         String?
+  supplierId    String?
+  branch        String?
+  taxNumber     String?
+  invoiceNumber String?
+  status        String    @default("pending")
+  costCenter    String?
+  accountNumber String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }

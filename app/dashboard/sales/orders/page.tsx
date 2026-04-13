@@ -5,10 +5,12 @@ import EnhancedTable from '@/components/EnhancedTable';
 import EnhancedModal from '@/components/EnhancedModal';
 import { Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
+import { fetchApi } from '@/lib/api-client';
 
 interface SalesOrder {
   id: string;
   orderNumber: string;
+  customerId?: string;
   customer?: { nameAr: string };
   date: string;
   status: string;
@@ -20,13 +22,13 @@ interface SalesOrder {
 interface FormItem {
   productId: string;
   quantity: number;
-  unitPrice: number;
+  price: number;
 }
 
 export default function SalesOrdersPage() {
   const [orders, setOrders] = useState<SalesOrder[]>([]);
-  const [customers, setCustomers] = useState([]);
-  const [products, setProducts] = useState([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +42,7 @@ export default function SalesOrdersPage() {
   });
   
   const [items, setItems] = useState<FormItem[]>([
-    { productId: '', quantity: 0, unitPrice: 0 },
+    { productId: '', quantity: 0, price: 0 },
   ]);
 
   useEffect(() => {
@@ -69,7 +71,7 @@ export default function SalesOrdersPage() {
   };
 
   const handleAddItem = () => {
-    setItems([...items, { productId: '', quantity: 0, unitPrice: 0 }]);
+    setItems([...items, { productId: '', quantity: 0, price: 0 }]);
   };
 
   const handleRemoveItem = (index: number) => {
@@ -79,12 +81,23 @@ export default function SalesOrdersPage() {
   const handleItemChange = (index: number, field: string, value: any) => {
     const newItems = [...items];
     newItems[index] = { ...newItems[index], [field]: value };
+    
+    // Auto-fill product details when product is selected
+    if (field === 'productId' && value) {
+      const product = products.find((p: any) => p.id === value);
+      if (product) {
+        newItems[index].price = product.price || 0;
+      }
+    }
+    
     setItems(newItems);
   };
 
   const calculateTotal = () => {
-    return items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+    return items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
   };
+
+  const [editingOrder, setEditingOrder] = useState<SalesOrder | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,31 +114,70 @@ export default function SalesOrdersPage() {
 
     try {
       setLoading(true);
-      const response = await fetch('/api/sales-orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          date: new Date(formData.date).toISOString(),
-          items: items.map(item => ({
-            productId: item.productId,
-            quantity: Number(item.quantity),
-            unitPrice: Number(item.unitPrice),
-          })),
-        }),
+      const method = editingOrder ? 'PUT' : 'POST';
+      const body = {
+        ...(editingOrder ? { id: editingOrder.id } : {}),
+        ...formData,
+        date: new Date(formData.date).toISOString(),
+        items: items.map(item => ({
+          productId: item.productId,
+          quantity: Number(item.quantity),
+          price: Number(item.price),
+          total: Number(item.quantity) * Number(item.price),
+        })),
+      };
+      
+      await fetchApi('/api/sales-orders', {
+        method,
+        body: JSON.stringify(body),
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to create sales order');
-      }
 
       setIsModalOpen(false);
       resetForm();
+      setEditingOrder(null);
       await fetchData();
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create sales order');
+      setError(err instanceof Error ? err.message : 'Failed to save sales order');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEdit = (order: SalesOrder) => {
+    setEditingOrder(order);
+    setFormData({
+      orderNumber: order.orderNumber || '',
+      customerId: order.customerId || '',
+      date: new Date(order.date).toISOString().split('T')[0],
+      status: order.status || 'pending',
+      notes: order.notes || '',
+    });
+    
+    // Populate items
+    if (order.items && order.items.length > 0) {
+      setItems(order.items.map(item => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        price: item.price || 0,
+      })));
+    } else {
+      setItems([{ productId: '', quantity: 0, price: 0 }]);
+    }
+    
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = async (order: SalesOrder) => {
+    if (!confirm('هل أنت متأكد من حذف هذا الأمر؟')) return;
+    
+    try {
+      setLoading(true);
+      await fetch(`/api/sales-orders?id=${order.id}`, { method: 'DELETE' });
+      await fetchData();
+    } catch (err) {
+      console.error('Error deleting order:', err);
+      setError('فشل حذف أمر البيع');
     } finally {
       setLoading(false);
     }
@@ -139,7 +191,7 @@ export default function SalesOrdersPage() {
       status: 'pending',
       notes: '',
     });
-    setItems([{ productId: '', quantity: 0, unitPrice: 0 }]);
+    setItems([{ productId: '', quantity: 0, price: 0 }]);
     setError(null);
   };
 
@@ -176,6 +228,26 @@ export default function SalesOrdersPage() {
         </span>
       ),
     },
+    {
+      key: 'actions',
+      label: 'الإجراءات',
+      render: (_: any, row: SalesOrder) => (
+        <div className="flex gap-2">
+          <button
+            onClick={() => handleEdit(row)}
+            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+          >
+            تعديل
+          </button>
+          <button
+            onClick={() => handleDelete(row)}
+            className="text-red-600 hover:text-red-800 text-sm font-medium"
+          >
+            حذف
+          </button>
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -187,13 +259,13 @@ export default function SalesOrdersPage() {
         </div>
         <div className="flex gap-3">
           <Link
-            href="/sales/customers"
+            href="/dashboard/sales/customers"
             className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
           >
             العملاء
           </Link>
           <Link
-            href="/sales/invoices"
+            href="/dashboard/sales/invoices"
             className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
           >
             فواتير البيع
@@ -227,8 +299,9 @@ export default function SalesOrdersPage() {
         onClose={() => {
           setIsModalOpen(false);
           resetForm();
+          setEditingOrder(null);
         }}
-        title="إضافة أمر بيع جديد"
+        title={editingOrder ? 'تعديل أمر بيع' : 'إضافة أمر بيع جديد'}
         size="xl"
       >
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -331,13 +404,13 @@ export default function SalesOrdersPage() {
                           required
                           min="0"
                           step="0.01"
-                          value={item.unitPrice}
-                          onChange={(e) => handleItemChange(index, 'unitPrice', parseFloat(e.target.value) || 0)}
+                          value={item.price}
+                          onChange={(e) => handleItemChange(index, 'price', parseFloat(e.target.value) || 0)}
                           className="w-full px-2 py-1.5 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       </td>
                       <td className="px-4 py-2">
-                        <span className="font-medium">{(item.quantity * item.unitPrice).toFixed(2)} ج.م</span>
+                        <span className="font-medium">{(item.quantity * item.price).toFixed(2)} ج.م</span>
                       </td>
                       <td className="px-4 py-2">
                         {items.length > 1 && (

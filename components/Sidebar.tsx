@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -91,15 +91,21 @@ const menuItems: MenuItem[] = [
 ];
 
 function SidebarItem({ item, level = 0 }: { item: MenuItem; level?: number }) {
-  const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
-  const isActive = item.href === pathname || (item.href && pathname.startsWith(item.href + '/'));
-  const hasActiveChild = item.children?.some(child => 
-    child.href === pathname || (child.href && pathname.startsWith(child.href))
-  );
+  const isActive = item.href === pathname;
+  const hasActiveChild = item.children?.some(child => child.href === pathname);
 
-  // Auto-open if has active child
-  const shouldBeOpen = isOpen || hasActiveChild;
+  // Auto-open if has active child - use controlled state
+  const [isOpen, setIsOpen] = useState(hasActiveChild);
+  
+  // Update isOpen when pathname changes
+  useEffect(() => {
+    if (hasActiveChild) {
+      setIsOpen(true);
+    }
+  }, [hasActiveChild]);
+
+  const shouldBeOpen = isOpen;
 
   if (item.children) {
     return (

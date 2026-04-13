@@ -44,7 +44,7 @@ export default function JournalPage() {
         throw new Error('Failed to fetch journal entries');
       }
       const json = await response.json();
-      setEntries(Array.isArray(json.data) ? json.data : []);
+      setEntries(Array.isArray(json.entries) ? json.entries : (Array.isArray(json.data) ? json.data : []));
     } catch (error) {
       console.error('Error loading entries:', error);
     } finally {
@@ -112,8 +112,8 @@ export default function JournalPage() {
                   <p className="text-sm text-gray-600 mt-1">{entry.description}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-medium">مدين: {entry.totalDebit?.toFixed(2)} ريال</p>
-                  <p className="text-sm font-medium">دائن: {entry.totalCredit?.toFixed(2)} ريال</p>
+                  <p className="text-sm font-medium">مدين: {(Number(entry.totalDebit) || 0).toFixed(2)} ج.م</p>
+                  <p className="text-sm font-medium">دائن: {(Number(entry.totalCredit) || 0).toFixed(2)} ج.م</p>
                 </div>
                 <Eye className="w-5 h-5 ml-4 text-gray-400" />
               </button>
@@ -131,9 +131,9 @@ export default function JournalPage() {
                     <tbody>
                       {entry.lines.map((line) => (
                         <tr key={line.id} className="border-b">
-                          <td className="py-2">{line.account.nameAr}</td>
-                          <td className="text-right">{line.debit > 0 ? line.debit?.toFixed(2) : '-'} ريال</td>
-                          <td className="text-right">{line.credit > 0 ? line.credit?.toFixed(2) : '-'} ريال</td>
+                          <td className="py-2">{line.account?.nameAr || line.accountCode || '-'}</td>
+                          <td className="text-right">{Number(line.debit) > 0 ? (Number(line.debit) || 0).toFixed(2) : '-'} ج.م</td>
+                          <td className="text-right">{Number(line.credit) > 0 ? (Number(line.credit) || 0).toFixed(2) : '-'} ج.م</td>
                         </tr>
                       ))}
                     </tbody>

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx prisma:*)",
+      "Bash(tasklist)",
+      "mcp__Claude_Preview__preview_start"
+    ]
+  }
+}

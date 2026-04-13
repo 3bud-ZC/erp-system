@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { fetchApi } from '@/lib/api-client';
 import {
   Plus,
   Search,
@@ -57,6 +58,7 @@ export default function SuppliersPage() {
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     code: '',
     nameAr: '',
@@ -124,17 +126,15 @@ export default function SuppliersPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     try {
       const method = editingSupplier ? 'PUT' : 'POST';
       const body = editingSupplier ? { id: editingSupplier.id, ...formData } : formData;
 
-      const res = await fetch('/api/suppliers', {
+      await fetchApi('/api/suppliers', {
         method,
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-
-      if (!res.ok) throw new Error('فشل في حفظ المورد');
 
       setIsModalOpen(false);
       setEditingSupplier(null);
@@ -143,6 +143,8 @@ export default function SuppliersPage() {
     } catch (err) {
       console.error('Error saving supplier:', err);
       alert(err instanceof Error ? err.message : 'خطأ في حفظ المورد');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -174,7 +176,11 @@ export default function SuppliersPage() {
 
   const handleDelete = async (supplier: Supplier) => {
     if (confirm('هل أنت متأكد من حذف هذا المورد؟')) {
-      await fetch(`/api/suppliers?id=${supplier.id}`, { method: 'DELETE' });
+      try {
+        await fetchApi(`/api/suppliers?id=${supplier.id}`, { method: 'DELETE' });
+      } catch (error: any) {
+        alert(`خطأ في الحذف: ${error.message}`);
+      }
       fetchSuppliers();
     }
   };
@@ -218,7 +224,7 @@ export default function SuppliersPage() {
         </div>
         <div className="flex items-center gap-2">
           <Link
-            href="/purchases/invoices"
+            href="/dashboard/purchases/invoices"
             className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-700"
           >
             <FileText className="w-4 h-4" />
@@ -461,9 +467,10 @@ export default function SuppliersPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 text-sm font-medium"
                 >
-                  {editingSupplier ? 'تحديث' : 'إضافة'}
+                  {isSubmitting ? 'جاري الحفظ...' : (editingSupplier ? 'تحديث' : 'إضافة')}
                 </button>
               </div>
             </form>

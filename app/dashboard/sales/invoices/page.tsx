@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { fetchApi } from '@/lib/api-client';
 import {
   Plus,
   Trash2,
@@ -56,6 +57,20 @@ function NavButton({ icon: Icon, onClick, disabled }: any) {
   );
 }
 
+interface Product {
+  id: string;
+  nameAr: string;
+  code: string;
+  unit: string;
+  price: number;
+  stock?: number;
+}
+
+interface Customer {
+  id: string;
+  nameAr: string;
+}
+
 interface Invoice {
   id: string;
   invoiceNumber: string;
@@ -64,16 +79,14 @@ interface Invoice {
   date: string;
   total: number;
   status: string;
-  branch?: string;
-  discountPercent?: number;
-  discountAmount?: number;
-  tax?: number;
+  notes?: string;
+  items?: Array<{ productId: string; quantity: number; price: number; total: number }>;
 }
 
 export default function SalesInvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [customers, setCustomers] = useState([]);
-  const [products, setProducts] = useState([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -84,19 +97,13 @@ export default function SalesInvoicesPage() {
   const [formData, setFormData] = useState({
     invoiceNumber: '',
     customerId: '',
-    store: '',
-    branch: '',
-    account: '',
     date: new Date().toISOString().split('T')[0],
     status: 'pending',
     notes: '',
-    discountPercent: 0,
-    discountAmount: 0,
-    tax: 0,
   });
 
   const [items, setItems] = useState([
-    { productId: '', productName: '', unit: '', quantity: 0, price: 0, discount: 0, discountPercent: 0, tax: 0, netTax: 0, total: 0 },
+    { productId: '', productName: '', productCode: '', unit: '', quantity: 0, price: 0, discount: 0, discountPercent: 0, tax: 0, netTax: 0, total: 0 },
   ]);
 
   useEffect(() => {
@@ -108,33 +115,22 @@ export default function SalesInvoicesPage() {
       setLoading(true);
       setError(null);
       
-      const token = localStorage.getItem('token');
-      const headers = {
-        'Authorization': `Bearer ${token || ''}`,
-      };
-      
       const [invoicesRes, customersRes, productsRes] = await Promise.all([
-        fetch('/api/sales-invoices', { headers }),
-        fetch('/api/customers', { headers }),
-        fetch('/api/products', { headers }),
+        fetch('/api/sales-invoices'),
+        fetch('/api/customers'),
+        fetch('/api/products'),
       ]);
 
       if (!invoicesRes.ok || !customersRes.ok || !productsRes.ok) {
         throw new Error('فشل في تحميل البيانات');
       }
 
-      const invoicesData = await invoicesRes.json();
-      const customersData = await customersRes.json();
-      const productsData = await productsRes.json();
-      
-      // Safe data extraction - handle both wrapped and unwrapped responses
-      setInvoices(Array.isArray(invoicesData) ? invoicesData : (invoicesData?.data || []));
-      setCustomers(Array.isArray(customersData) ? customersData : (customersData?.data || []));
-      setProducts(Array.isArray(productsData) ? productsData : (productsData?.data || []));
+      setInvoices(await invoicesRes.json());
+      setCustomers(await customersRes.json());
+      setProducts(await productsRes.json());
     } catch (err) {
       console.error('Error fetching data:', err);
       setError(err instanceof Error ? err.message : 'خطأ في تحميل البيانات');
-      // Set safe defaults on error
       setInvoices([]);
       setCustomers([]);
       setProducts([]);
@@ -144,30 +140,88 @@ export default function SalesInvoicesPage() {
   };
 
   const handleAddItem = () => {
-    setItems([...items, { productId: '', productName: '', unit: '', quantity: 0, price: 0, discount: 0, discountPercent: 0, tax: 0, netTax: 0, total: 0 }]);
+    const newItem = { 
+      productId: '', 
+      productName: '', 
+      productCode: '', 
+      unit: '', 
+      quantity: 0, 
+      price: 0, 
+      discount: 0, 
+      discountPercent: 0, 
+      tax: 0, 
+      netTax: 0, 
+      total: 0 
+    };
+    setItems([...items, newItem]);
   };
 
   const handleRemoveItem = (index: number) => {
-    setItems(items.filter((_, i) => i !== index));
+    // Don't remove the last item
+    if (items.length > 1) {
+      setItems(items.filter((_, i) => i !== index));
+    } else {
+      // Reset the last item instead of removing it
+      setItems([{ 
+        productId: '', 
+        productName: '', 
+        productCode: '', 
+        unit: '', 
+        quantity: 0, 
+        price: 0, 
+        discount: 0, 
+        discountPercent: 0, 
+        tax: 0, 
+        netTax: 0, 
+        total: 0 
+      }]);
+    }
   };
 
   const handleItemChange = (index: number, field: string, value: any) => {
     const newItems = [...items];
     newItems[index] = { ...newItems[index], [field]: value };
     
+    // Auto-fill product details when product is selected
+    if (field === 'productId' && value) {
+      const product = products.find((p: any) => p.id === value);
+      if (product) {
+        newItems[index].productName = product.nameAr || '';
+        newItems[index].productCode = product.code || '';
+        newItems[index].unit = product.unit || '';
+        newItems[index].price = parseFloat(product.price.toString()) || 0;
+        // Also set quantity to 1 if not set
+        if (!newItems[index].quantity || newItems[index].quantity === 0) {
+          newItems[index].quantity = 1;
+        }
+      }
+    } else if (field === 'productId' && !value) {
+      // Clear product details when product is cleared
+      newItems[index].productName = '';
+      newItems[index].productCode = '';
+      newItems[index].unit = '';
+      newItems[index].price = 0;
+      newItems[index].quantity = 0;
+    }
+    
     // Auto-calculate totals
-    if (field === 'quantity' || field === 'price' || field === 'discount' || field === 'discountPercent' || field === 'tax') {
-      const qty = newItems[index].quantity || 0;
-      const price = newItems[index].price || 0;
-      const disc = newItems[index].discount || 0;
-      const discPercent = newItems[index].discountPercent || 0;
-      const tax = newItems[index].tax || 0;
+    if (field === 'quantity' || field === 'price' || field === 'discount' || field === 'discountPercent' || field === 'tax' || field === 'productId') {
+      const qty = Math.max(0, parseFloat(newItems[index].quantity.toString()) || 0);
+      const price = Math.max(0, parseFloat(newItems[index].price.toString()) || 0);
+      const disc = Math.max(0, parseFloat(newItems[index].discount.toString()) || 0);
+      const discPercent = Math.max(0, Math.min(100, parseFloat(newItems[index].discountPercent.toString()) || 0));
+      const tax = Math.max(0, parseFloat(newItems[index].tax.toString()) || 0);
       
       const subtotal = qty * price;
       const discountAmount = disc + (subtotal * discPercent / 100);
       const afterDiscount = subtotal - discountAmount;
       const taxAmount = afterDiscount * tax / 100;
       
+      newItems[index].quantity = qty;
+      newItems[index].price = price;
+      newItems[index].discount = disc;
+      newItems[index].discountPercent = discPercent;
+      newItems[index].tax = tax;
       newItems[index].total = afterDiscount + taxAmount;
       newItems[index].netTax = taxAmount;
     }
@@ -181,61 +235,102 @@ export default function SalesInvoicesPage() {
     const totalTax = items.reduce((sum, item) => sum + item.netTax, 0);
     const total = items.reduce((sum, item) => sum + item.total, 0);
     
-    // Apply invoice-level discounts
-    const invoiceDiscount = formData.discountAmount + (total * formData.discountPercent / 100);
-    const finalTotal = total - invoiceDiscount;
-    
-    return { subtotal, totalDiscount, totalTax, total: finalTotal };
+    return { subtotal, totalDiscount, totalTax, total };
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
+      // Enhanced validation
+      if (!formData.invoiceNumber.trim()) {
+        alert('يرجى إدخال رقم الفاتورة');
+        return;
+      }
+
       if (!formData.customerId) {
         alert('يرجى اختيار عميل');
         return;
       }
 
-      if (items.some(i => !i.productId || i.quantity <= 0)) {
-        alert('يرجى إدخال المنتجات والكميات بشكل صحيح');
+      if (!formData.date) {
+        alert('يرجى اختيار التاريخ');
+        return;
+      }
+
+      // Filter out empty items and validate
+      const validItems = items.filter(i => i.productId && i.quantity > 0);
+      if (validItems.length === 0) {
+        alert('يرجى إدخال منتج واحد على الأقل');
+        return;
+      }
+
+      // Check for invalid prices
+      if (validItems.some(i => i.price < 0)) {
+        alert('السعر لا يمكن أن يكون سالباً');
         return;
       }
 
       const totals = calculateTotals();
       const data = {
-        ...formData,
-        date: new Date(formData.date),
+        invoiceNumber: formData.invoiceNumber.trim(),
+        customerId: formData.customerId,
+        date: new Date(formData.date + 'T00:00:00.000Z'),
+        status: formData.status,
+        notes: formData.notes?.trim() || null,
         total: totals.total,
-        items: items.map(item => ({
+        items: validItems.map(item => ({
           productId: item.productId,
           quantity: parseFloat(item.quantity.toString()),
           price: parseFloat(item.price.toString()),
-          discount: item.discount,
-          discountPercent: item.discountPercent,
-          tax: item.tax,
-          total: item.total,
+          total: parseFloat(item.total.toString()),
         })),
       };
+
+      console.log('Submitting invoice:', data);
 
       const method = editingInvoice ? 'PUT' : 'POST';
       const body = editingInvoice ? { id: editingInvoice.id, ...data } : data;
 
-      const res = await fetch('/api/sales-invoices', {
+      const response = await fetch('/api/sales-invoices', {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(body),
       });
 
-      if (!res.ok) throw new Error('فشل في حفظ الفاتورة');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Invoice submission error:', errorData);
+        throw new Error(errorData.error || errorData.message || 'Failed to save invoice');
+      }
 
-      resetForm();
-      setIsFormOpen(false);
-      setEditingInvoice(null);
+      const result = await response.json();
+      console.log('Invoice saved successfully:', result);
+
+      // Only close form and reset if it's a new invoice
+      if (!editingInvoice) {
+        resetForm();
+        setIsFormOpen(false);
+      } else {
+        // For editing, keep form open but refresh data
+        setEditingInvoice(null);
+        setTimeout(() => {
+          // Find and reopen the updated invoice
+          const updatedInvoice = invoices.find(inv => inv.id === result.data?.id);
+          if (updatedInvoice) {
+            handleEdit(updatedInvoice);
+          }
+        }, 100);
+      }
+      
+      // Always refresh the main data
       fetchData();
     } catch (err) {
       console.error('Error submitting invoice:', err);
-      alert(err instanceof Error ? err.message : 'خطأ في حفظ الفاتورة');
+      const message = err instanceof Error ? err.message : 'Error saving invoice';
+      alert(message);
     }
   };
 
@@ -243,17 +338,11 @@ export default function SalesInvoicesPage() {
     setFormData({
       invoiceNumber: '',
       customerId: '',
-      store: '',
-      branch: '',
-      account: '',
       date: new Date().toISOString().split('T')[0],
       status: 'pending',
       notes: '',
-      discountPercent: 0,
-      discountAmount: 0,
-      tax: 0,
     });
-    setItems([{ productId: '', productName: '', unit: '', quantity: 0, price: 0, discount: 0, discountPercent: 0, tax: 0, netTax: 0, total: 0 }]);
+    setItems([{ productId: '', productName: '', productCode: '', unit: '', quantity: 0, price: 0, discount: 0, discountPercent: 0, tax: 0, netTax: 0, total: 0 }]);
   };
 
   const handleEdit = (invoice: Invoice) => {
@@ -261,41 +350,94 @@ export default function SalesInvoicesPage() {
     setFormData({
       invoiceNumber: invoice.invoiceNumber,
       customerId: invoice.customerId,
-      store: invoice.branch || '',
-      branch: invoice.branch || '',
-      account: '',
       date: new Date(invoice.date).toISOString().split('T')[0],
       status: invoice.status,
-      notes: '',
-      discountPercent: invoice.discountPercent || 0,
-      discountAmount: invoice.discountAmount || 0,
-      tax: invoice.tax || 0,
+      notes: invoice.notes || '',
     });
+    if (invoice.items && invoice.items.length > 0) {
+      setItems(invoice.items.map((item) => {
+        const product = products.find((p: any) => p.id === item.productId);
+        return {
+          productId: item.productId || '',
+          productName: product?.nameAr || '',
+          productCode: product?.code || '',
+          unit: product?.unit || '',
+          quantity: item.quantity || 0,
+          price: item.price || 0,
+          discount: 0,
+          discountPercent: 0,
+          tax: 0,
+          netTax: 0,
+          total: item.total || 0,
+        };
+      }));
+    } else {
+      setItems([{ productId: '', productName: '', productCode: '', unit: '', quantity: 0, price: 0, discount: 0, discountPercent: 0, tax: 0, netTax: 0, total: 0 }]);
+    }
     setIsFormOpen(true);
   };
 
   const handleDelete = async (invoice: Invoice) => {
     if (confirm('هل أنت متأكد من حذف هذه الفاتورة؟')) {
-      await fetch(`/api/sales-invoices?id=${invoice.id}`, { method: 'DELETE' });
-      fetchData();
+      try {
+        const response = await fetch(`/api/sales-invoices?id=${invoice.id}`, { 
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || errorData.message || 'Failed to delete invoice');
+        }
+        
+        // Close form if deleting the currently edited invoice
+        if (editingInvoice && editingInvoice.id === invoice.id) {
+          setIsFormOpen(false);
+          setEditingInvoice(null);
+          resetForm();
+        }
+        
+        fetchData();
+      } catch (error: any) {
+        console.error('Delete error:', error);
+        alert(`خطأ في الحذف: ${error.message}`);
+      }
     }
   };
 
   const handleNew = () => {
     resetForm();
     setEditingInvoice(null);
+    // Generate auto invoice number
+    const newInvoiceNumber = `INV-${new Date().getFullYear()}-${String(invoices.length + 1).padStart(4, '0')}`;
+    setFormData(prev => ({ ...prev, invoiceNumber: newInvoiceNumber }));
     setIsFormOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const form = document.getElementById('sales-invoice-form') as HTMLFormElement;
-    if (form) form.requestSubmit();
+    if (form) {
+      try {
+        form.requestSubmit();
+      } catch (error) {
+        console.error('Save error:', error);
+        alert('حدث خطأ أثناء الحفظ');
+      }
+    }
   };
 
   const handleCopy = () => {
     if (editingInvoice) {
-      setFormData({ ...formData, invoiceNumber: '', date: new Date().toISOString().split('T')[0] });
+      // Create a copy with new invoice number and current date
+      const newInvoiceNumber = `INV-${new Date().getFullYear()}-${String(invoices.length + 1).padStart(4, '0')}`;
+      setFormData({ 
+        ...formData, 
+        invoiceNumber: newInvoiceNumber, 
+        date: new Date().toISOString().split('T')[0],
+        status: 'pending'
+      });
       setEditingInvoice(null);
+      // Keep items as they are for copying
     }
   };
 
@@ -388,11 +530,11 @@ export default function SalesInvoicesPage() {
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">أوامر البيع</h1>
+              <h1 className="text-2xl font-bold text-gray-900">فواتير البيع</h1>
               <p className="text-gray-500 text-sm mt-1">إدارة فواتير البيع</p>
             </div>
             <div className="flex items-center gap-2">
-              <Link href="/sales/customers" className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm">
+              <Link href="/dashboard/sales/customers" className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm">
                 العملاء
               </Link>
               <button
@@ -487,137 +629,81 @@ export default function SalesInvoicesPage() {
                 onClick={() => setIsFormOpen(false)}
                 className="mr-4 text-white hover:text-gray-200"
               >
-                <span className="text-lg">أوامر البيع</span>
+                <span className="text-lg">فواتير البيع</span>
               </button>
             </div>
           </div>
 
           {/* Sales Invoice Form */}
           <form id="sales-invoice-form" onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-            {/* First Row */}
+            {/* First Row - Basic Info */}
             <div className="grid grid-cols-12 gap-4 p-4 border-b border-gray-200">
-              <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1 text-center">رقم الفاتورة</label>
+              <div className="col-span-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">رقم الفاتورة</label>
                 <input
                   type="text"
                   required
                   value={formData.invoiceNumber}
                   onChange={(e) => setFormData({ ...formData, invoiceNumber: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm"
+                  placeholder="INV-YYYY-0001"
                 />
               </div>
-              <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1 text-center">التاريخ</label>
+              <div className="col-span-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">التاريخ</label>
                 <input
-                  type="datetime-local"
+                  type="date"
                   required
                   value={formData.date}
                   onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm"
                 />
               </div>
-              <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1 text-center">الفرع</label>
-                <select
-                  value={formData.branch}
-                  onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm"
-                >
-                  <option value="">اختر...</option>
-                  <option value="main">الرئيسي</option>
-                </select>
-              </div>
-              <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1 text-center">الخصم %</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={formData.discountPercent}
-                  onChange={(e) => setFormData({ ...formData, discountPercent: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm text-center"
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1 text-center">الخصم $</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={formData.discountAmount}
-                  onChange={(e) => setFormData({ ...formData, discountAmount: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm text-center"
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1 text-center">الضريبة</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={formData.tax}
-                  onChange={(e) => setFormData({ ...formData, tax: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm text-center"
-                />
-              </div>
-            </div>
-
-            {/* Second Row - Totals */}
-            <div className="grid grid-cols-8 gap-4 p-4 border-b border-gray-200 bg-gray-50">
-              <div className="text-center">
-                <label className="block text-sm font-medium text-gray-700 mb-1">المجموع</label>
-                <div className="text-lg font-bold text-gray-900">{totals.total.toFixed(2)}</div>
-              </div>
-              <div className="text-center">
-                <label className="block text-sm font-medium text-gray-700 mb-1">الخصومات</label>
-                <div className="text-lg font-bold text-red-600">{totals.totalDiscount.toFixed(2)}</div>
-              </div>
-              <div className="text-center">
-                <label className="block text-sm font-medium text-gray-700 mb-1">الضريبة</label>
-                <div className="text-lg font-bold text-green-600">{totals.totalTax.toFixed(2)}</div>
-              </div>
-            </div>
-
-            {/* Third Row - Customer & Store */}
-            <div className="grid grid-cols-4 gap-4 p-4 border-b border-gray-200">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 text-center">العميل</label>
+              <div className="col-span-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">العميل</label>
                 <select
                   required
                   value={formData.customerId}
                   onChange={(e) => setFormData({ ...formData, customerId: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm"
                 >
-                  <option value="">اختر...</option>
+                  <option value="">اختر عميل...</option>
                   {(customers || []).map((customer: any) => (
                     <option key={customer.id} value={customer.id}>{customer.nameAr}</option>
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 text-center">المخزن</label>
+              <div className="col-span-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">الحالة</label>
                 <select
-                  value={formData.store}
-                  onChange={(e) => setFormData({ ...formData, store: e.target.value })}
+                  value={formData.status}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm"
                 >
-                  <option value="">اختر...</option>
-                  <option value="main">المخزن الرئيسي</option>
+                  <option value="pending">معلقة</option>
+                  <option value="completed">مكتملة</option>
+                  <option value="cancelled">ملغية</option>
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 text-center">الحركة</label>
-                <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm"
-                >
-                  <option value="">اختر...</option>
-                </select>
+            </div>
+
+            {/* Second Row - Totals Display */}
+            <div className="grid grid-cols-4 gap-4 p-4 border-b border-gray-200 bg-gray-50">
+              <div className="text-center">
+                <label className="block text-sm font-medium text-gray-700 mb-1">المجموع الفرعي</label>
+                <div className="text-lg font-bold text-gray-900">{totals.subtotal.toFixed(2)}</div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 text-center">رقم المصدر</label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm"
-                />
+              <div className="text-center">
+                <label className="block text-sm font-medium text-gray-700 mb-1">الخصم</label>
+                <div className="text-lg font-bold text-red-600">{totals.totalDiscount.toFixed(2)}</div>
+              </div>
+              <div className="text-center">
+                <label className="block text-sm font-medium text-gray-700 mb-1">الضريبة</label>
+                <div className="text-lg font-bold text-green-600">{totals.totalTax.toFixed(2)}</div>
+              </div>
+              <div className="text-center">
+                <label className="block text-sm font-medium text-gray-700 mb-1">الإجمالي</label>
+                <div className="text-xl font-bold text-blue-600">{totals.total.toFixed(2)}</div>
               </div>
             </div>
 
@@ -648,16 +734,8 @@ export default function SalesInvoicesPage() {
                         <td className="px-2 py-2 border border-gray-300">
                           <select
                             value={item.productId}
-                            onChange={(e) => {
-                              const product = products.find((p: any) => p.id === e.target.value);
-                              handleItemChange(index, 'productId', e.target.value);
-                              if (product) {
-                                handleItemChange(index, 'productName', (product as any).nameAr);
-                                handleItemChange(index, 'unit', (product as any).unit);
-                                handleItemChange(index, 'price', (product as any).price);
-                              }
-                            }}
-                            className="w-full px-1 py-1 border border-gray-300 rounded text-sm"
+                            onChange={(e) => handleItemChange(index, 'productId', e.target.value)}
+                            className="w-full px-1 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           >
                             <option value=""></option>
                             {(products || []).map((product: any) => (

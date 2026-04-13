@@ -15,7 +15,7 @@ export async function GET(request: Request) {
         warehouse: true,
       },
     });
-    return apiSuccess({ products });
+    return NextResponse.json(products);
   } catch (error) {
     return handleApiError(error, 'Fetch products');
   }

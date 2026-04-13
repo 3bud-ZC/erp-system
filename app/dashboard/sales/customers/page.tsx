@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { fetchApi } from '@/lib/api-client';
 import {
   Plus,
   Search,
@@ -58,6 +59,7 @@ export default function CustomersPage() {
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     code: '',
     nameAr: '',
@@ -125,17 +127,15 @@ export default function CustomersPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     try {
       const method = editingCustomer ? 'PUT' : 'POST';
       const body = editingCustomer ? { id: editingCustomer.id, ...formData } : formData;
 
-      const res = await fetch('/api/customers', {
+      await fetchApi('/api/customers', {
         method,
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-
-      if (!res.ok) throw new Error('فشل في حفظ العميل');
 
       setIsModalOpen(false);
       setEditingCustomer(null);
@@ -144,6 +144,8 @@ export default function CustomersPage() {
     } catch (err) {
       console.error('Error saving customer:', err);
       alert(err instanceof Error ? err.message : 'خطأ في حفظ العميل');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -175,7 +177,11 @@ export default function CustomersPage() {
 
   const handleDelete = async (customer: Customer) => {
     if (confirm('هل أنت متأكد من حذف هذا العميل؟')) {
-      await fetch(`/api/customers?id=${customer.id}`, { method: 'DELETE' });
+      try {
+        await fetchApi(`/api/customers?id=${customer.id}`, { method: 'DELETE' });
+      } catch (error: any) {
+        alert(`خطأ في الحذف: ${error.message}`);
+      }
       fetchCustomers();
     }
   };
@@ -219,7 +225,7 @@ export default function CustomersPage() {
         </div>
         <div className="flex items-center gap-2">
           <Link
-            href="/sales/invoices"
+            href="/dashboard/sales/invoices"
             className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-700"
           >
             <FileText className="w-4 h-4" />
@@ -462,9 +468,10 @@ export default function CustomersPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-green-300 text-sm font-medium"
                 >
-                  {editingCustomer ? 'تحديث' : 'إضافة'}
+                  {isSubmitting ? 'جاري الحفظ...' : (editingCustomer ? 'تحديث' : 'إضافة')}
                 </button>
               </div>
             </form>

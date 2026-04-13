@@ -27,7 +27,7 @@ export async function GET(request: Request) {
       },
       orderBy: { createdAt: 'desc' },
     });
-    return apiSuccess(orders);
+    return NextResponse.json(orders);
   } catch (error) {
     return handleApiError(error, 'Fetch production orders');
   }

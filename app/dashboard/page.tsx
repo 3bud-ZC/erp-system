@@ -71,12 +71,12 @@ interface Alert {
 
 // Quick Actions
 const quickActions = [
-  { label: 'فاتورة بيع', href: '/sales/invoices', icon: FileText, color: 'bg-green-500 hover:bg-green-600' },
-  { label: 'فاتورة شراء', href: '/purchases/invoices', icon: ShoppingCart, color: 'bg-blue-500 hover:bg-blue-600' },
-  { label: 'عميل جديد', href: '/sales/customers', icon: Users, color: 'bg-orange-500 hover:bg-orange-600' },
-  { label: 'مورد جديد', href: '/purchases/suppliers', icon: Users, color: 'bg-cyan-500 hover:bg-cyan-600' },
-  { label: 'منتج جديد', href: '/inventory', icon: Plus, color: 'bg-purple-500 hover:bg-purple-600' },
-  { label: 'أمر إنتاج', href: '/manufacturing/production-orders', icon: Package, color: 'bg-indigo-500 hover:bg-indigo-600' },
+  { label: 'فاتورة بيع', href: '/dashboard/sales/invoices', icon: FileText, color: 'bg-green-500 hover:bg-green-600' },
+  { label: 'فاتورة شراء', href: '/dashboard/purchases/invoices', icon: ShoppingCart, color: 'bg-blue-500 hover:bg-blue-600' },
+  { label: 'عميل جديد', href: '/dashboard/sales/customers', icon: Users, color: 'bg-orange-500 hover:bg-orange-600' },
+  { label: 'مورد جديد', href: '/dashboard/purchases/suppliers', icon: Users, color: 'bg-cyan-500 hover:bg-cyan-600' },
+  { label: 'منتج جديد', href: '/dashboard/inventory', icon: Plus, color: 'bg-purple-500 hover:bg-purple-600' },
+  { label: 'أمر إنتاج', href: '/dashboard/manufacturing/production-orders', icon: Package, color: 'bg-indigo-500 hover:bg-indigo-600' },
 ];
 
 // KPICard Component
@@ -130,11 +130,7 @@ export default function DashboardPage() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/dashboard', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
-        },
-      });
+      const response = await fetch('/api/dashboard');
       if (!response.ok) throw new Error('فشل في تحميل البيانات');
       const result = await response.json();
       
@@ -319,7 +315,7 @@ export default function DashboardPage() {
         <div className="bg-white border border-gray-200 rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-gray-900">توزيع المخزون</h2>
-            <Link href="/inventory" className="text-sm text-blue-600 hover:text-blue-700">
+            <Link href="/dashboard/inventory" className="text-sm text-blue-600 hover:text-blue-700">
               عرض الكل
             </Link>
           </div>

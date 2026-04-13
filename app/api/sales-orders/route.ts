@@ -30,7 +30,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { items, customerId, ...orderData } = body;
+    const { items, customerId, orderNumber, date, status, notes, total } = body;
 
     // Validate required fields
     if (!customerId) {
@@ -39,6 +39,10 @@ export async function POST(request: Request) {
 
     if (!items || items.length === 0) {
       return NextResponse.json({ error: 'At least one item is required' }, { status: 400 });
+    }
+
+    if (!date) {
+      return NextResponse.json({ error: 'Date is required' }, { status: 400 });
     }
 
     // Verify customer exists
@@ -50,16 +54,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }
 
-    // Create order with items
+    // Check for duplicate order number
+    if (orderNumber) {
+      const existing = await prisma.salesOrder.findUnique({
+        where: { orderNumber },
+      });
+      if (existing) {
+        return NextResponse.json({ error: `Order number ${orderNumber} already exists` }, { status: 400 });
+      }
+    }
+
+    // Create order with items - use connect for customer relation
     const order = await prisma.salesOrder.create({
       data: {
-        ...orderData,
-        customerId,
+        orderNumber: orderNumber || `SO-${Date.now()}`,
+        date: new Date(date),
+        status: status || 'pending',
+        notes: notes || null,
+        total: total || 0,
+        customer: {
+          connect: { id: customerId }
+        },
         items: {
           create: items.map((item: any) => ({
             productId: item.productId,
             quantity: item.quantity,
-            unitPrice: item.unitPrice || 0,
+            price: item.price || 0,
+            total: (item.quantity || 0) * (item.price || 0),
           })),
         },
       },
@@ -74,19 +95,24 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(order);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating sales order:', error);
-    return NextResponse.json({ error: 'Failed to create sales order' }, { status: 500 });
+    const errorMessage = error.message || error.meta?.cause || 'Failed to create sales order';
+    return NextResponse.json({ error: errorMessage, details: error.meta }, { status: 500 });
   }
 }
 
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const { id, items, ...orderData } = body;
+    const { id, items, orderNumber, date, status, notes, total, customerId } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
+    }
+
+    if (!date) {
+      return NextResponse.json({ error: 'Date is required' }, { status: 400 });
     }
 
     // Verify order exists
@@ -99,17 +125,37 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Sales order not found' }, { status: 404 });
     }
 
+    // Check for duplicate order number (if changed)
+    if (orderNumber && orderNumber !== existingOrder.orderNumber) {
+      const existing = await prisma.salesOrder.findUnique({
+        where: { orderNumber },
+      });
+      if (existing) {
+        return NextResponse.json({ error: `Order number ${orderNumber} already exists` }, { status: 400 });
+      }
+    }
+
     // Update order
     const order = await prisma.salesOrder.update({
       where: { id },
       data: {
-        ...orderData,
+        orderNumber,
+        date: new Date(date),
+        status: status || 'pending',
+        notes: notes || null,
+        total: total || 0,
+        ...(customerId && {
+          customer: {
+            connect: { id: customerId }
+          }
+        }),
         items: {
           deleteMany: {},
           create: items.map((item: any) => ({
             productId: item.productId,
             quantity: item.quantity,
-            unitPrice: item.unitPrice || 0,
+            price: item.price || 0,
+            total: (item.quantity || 0) * (item.price || 0),
           })),
         },
       },
@@ -124,9 +170,10 @@ export async function PUT(request: Request) {
     });
 
     return NextResponse.json(order);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating sales order:', error);
-    return NextResponse.json({ error: 'Failed to update sales order' }, { status: 500 });
+    const errorMessage = error.message || error.meta?.cause || 'Failed to update sales order';
+    return NextResponse.json({ error: errorMessage, details: error.meta }, { status: 500 });
   }
 }
 
@@ -139,13 +186,20 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'ID is required' }, { status: 400 });
     }
 
-    await prisma.salesOrder.delete({
-      where: { id },
-    });
+    // Delete items first, then order
+    await prisma.$transaction([
+      prisma.salesOrderItem.deleteMany({
+        where: { salesOrderId: id },
+      }),
+      prisma.salesOrder.delete({
+        where: { id },
+      }),
+    ]);
 
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting sales order:', error);
-    return NextResponse.json({ error: 'Failed to delete sales order' }, { status: 500 });
+    const errorMessage = error.message || error.meta?.cause || 'Failed to delete sales order';
+    return NextResponse.json({ error: errorMessage, details: error.meta }, { status: 500 });
   }
 }

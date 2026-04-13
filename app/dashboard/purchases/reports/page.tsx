@@ -62,16 +62,61 @@ export default function PurchaseReportsPage() {
       setLoading(true);
       setError(null);
 
-      const params = new URLSearchParams({
-        fromDate: dateRange.fromDate,
-        toDate: dateRange.toDate,
+      let invoices: any[] = [];
+      let suppliers: any[] = [];
+
+      await Promise.allSettled([
+        fetch('/api/purchase-invoices').then(r => r.ok ? r.json() : []).then(d => { invoices = Array.isArray(d) ? d : []; }),
+        fetch('/api/suppliers').then(r => r.ok ? r.json() : []).then(d => { suppliers = Array.isArray(d) ? d : []; }),
+      ]);
+
+      const startDate = new Date(dateRange.fromDate);
+      const endDate = new Date(dateRange.toDate);
+      endDate.setHours(23, 59, 59, 999);
+
+      const filtered = invoices.filter((inv: any) => {
+        const d = new Date(inv.date || inv.createdAt);
+        return d >= startDate && d <= endDate;
       });
 
-      const response = await fetch(`/api/purchases/reports?${params}`);
-      if (!response.ok) throw new Error('فشل في تحميل التقرير');
+      const totalPurchases = filtered.reduce((sum: number, inv: any) => {
+        if (inv.total) return sum + inv.total;
+        const t = inv.items?.reduce((s: number, item: any) => s + (item.quantity || 0) * (item.price || 0), 0) || 0;
+        return sum + t;
+      }, 0);
 
-      const data = await response.json();
-      setReportData(data);
+      const totalInvoices = filtered.length;
+      const averageOrderValue = totalInvoices > 0 ? totalPurchases / totalInvoices : 0;
+
+      // Build top suppliers map
+      const supplierMap: Record<string, { name: string; total: number; invoiceCount: number }> = {};
+      filtered.forEach((inv: any) => {
+        const supplierId = inv.supplierId || 'unknown';
+        const supplier = suppliers.find((s: any) => s.id === supplierId);
+        const name = supplier?.nameAr || inv.supplier?.nameAr || supplierId;
+        const invTotal = inv.total || inv.items?.reduce((s: number, item: any) => s + (item.quantity || 0) * (item.price || 0), 0) || 0;
+        if (!supplierMap[supplierId]) supplierMap[supplierId] = { name, total: 0, invoiceCount: 0 };
+        supplierMap[supplierId].total += invTotal;
+        supplierMap[supplierId].invoiceCount += 1;
+      });
+
+      const topSuppliers = Object.values(supplierMap)
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 5);
+
+      // Build monthly trends
+      const monthMap: Record<string, number> = {};
+      filtered.forEach((inv: any) => {
+        const d = new Date(inv.date || inv.createdAt);
+        const key = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const invTotal = inv.total || inv.items?.reduce((s: number, item: any) => s + (item.quantity || 0) * (item.price || 0), 0) || 0;
+        monthMap[key] = (monthMap[key] || 0) + invTotal;
+      });
+      const monthlyTrends = Object.entries(monthMap)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([month, total]) => ({ month, total }));
+
+      setReportData({ totalPurchases, averageOrderValue, totalInvoices, topSuppliers, monthlyTrends, categoryBreakdown: [] });
     } catch (err) {
       console.error('Error generating report:', err);
       setError(err instanceof Error ? err.message : 'فشل في إنشاء التقرير');
@@ -288,7 +333,7 @@ export default function PurchaseReportsPage() {
       {/* Links */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Link
-          href="/purchases/invoices"
+          href="/dashboard/purchases/invoices"
           className="flex items-center gap-3 bg-blue-600 text-white rounded-xl p-5 hover:bg-blue-700 transition-colors"
         >
           <FileText className="w-6 h-6" />
@@ -299,7 +344,7 @@ export default function PurchaseReportsPage() {
           <ArrowUpRight className="w-5 h-5 mr-auto" />
         </Link>
         <Link
-          href="/purchases/suppliers"
+          href="/dashboard/purchases/suppliers"
           className="flex items-center gap-3 bg-green-600 text-white rounded-xl p-5 hover:bg-green-700 transition-colors"
         >
           <Users className="w-6 h-6" />

@@ -30,7 +30,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { items, supplierId, ...orderData } = body;
+    const { items, supplierId, orderNumber, date, status, notes, total, branch, warehouse } = body;
 
     // Validate required fields
     if (!supplierId) {
@@ -39,6 +39,10 @@ export async function POST(request: Request) {
 
     if (!items || items.length === 0) {
       return NextResponse.json({ error: 'At least one item is required' }, { status: 400 });
+    }
+
+    if (!date) {
+      return NextResponse.json({ error: 'Date is required' }, { status: 400 });
     }
 
     // Verify supplier exists
@@ -50,17 +54,39 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Supplier not found' }, { status: 404 });
     }
 
-    // Create order with items
+    // Check for duplicate order number
+    if (orderNumber) {
+      const existing = await prisma.purchaseOrder.findUnique({
+        where: { orderNumber },
+      });
+      if (existing) {
+        return NextResponse.json({ error: `Order number ${orderNumber} already exists` }, { status: 400 });
+      }
+    }
+
+    // Create order with items - use connect for supplier relation
     const order = await prisma.purchaseOrder.create({
       data: {
-        ...orderData,
-        supplierId,
+        orderNumber,
+        date: new Date(date),
+        status: status || 'pending',
+        notes: notes || null,
+        total: total || 0,
+        supplier: {
+          connect: { id: supplierId }
+        },
         items: {
-          create: items.map((item: any) => ({
-            productId: item.productId,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice || 0,
-          })),
+          create: items.map((item: any) => {
+            const quantity = item.quantity || 0;
+            const price = item.unitPrice || item.price || 0;
+            const total = quantity * price;
+            return {
+              productId: item.productId,
+              quantity,
+              price,
+              total,
+            };
+          }),
         },
       },
       include: {
@@ -74,19 +100,25 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(order);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating purchase order:', error);
-    return NextResponse.json({ error: 'Failed to create purchase order' }, { status: 500 });
+    // Return more detailed error message
+    const errorMessage = error.message || error.meta?.cause || 'Failed to create purchase order';
+    return NextResponse.json({ error: errorMessage, details: error.meta }, { status: 500 });
   }
 }
 
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const { id, items, ...orderData } = body;
+    const { id, items, orderNumber, date, status, notes, total, supplierId } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
+    }
+
+    if (!date) {
+      return NextResponse.json({ error: 'Date is required' }, { status: 400 });
     }
 
     // Verify order exists
@@ -99,18 +131,43 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Purchase order not found' }, { status: 404 });
     }
 
+    // Check for duplicate order number (if changed)
+    if (orderNumber && orderNumber !== existingOrder.orderNumber) {
+      const existing = await prisma.purchaseOrder.findUnique({
+        where: { orderNumber },
+      });
+      if (existing) {
+        return NextResponse.json({ error: `Order number ${orderNumber} already exists` }, { status: 400 });
+      }
+    }
+
     // Update order
     const order = await prisma.purchaseOrder.update({
       where: { id },
       data: {
-        ...orderData,
+        orderNumber,
+        date: new Date(date),
+        status: status || 'pending',
+        notes: notes || null,
+        total: total || 0,
+        ...(supplierId && {
+          supplier: {
+            connect: { id: supplierId }
+          }
+        }),
         items: {
           deleteMany: {},
-          create: items.map((item: any) => ({
-            productId: item.productId,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice || 0,
-          })),
+          create: items.map((item: any) => {
+            const quantity = item.quantity || 0;
+            const price = item.unitPrice || item.price || 0;
+            const total = quantity * price;
+            return {
+              productId: item.productId,
+              quantity,
+              price,
+              total,
+            };
+          }),
         },
       },
       include: {
@@ -124,9 +181,10 @@ export async function PUT(request: Request) {
     });
 
     return NextResponse.json(order);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating purchase order:', error);
-    return NextResponse.json({ error: 'Failed to update purchase order' }, { status: 500 });
+    const errorMessage = error.message || error.meta?.cause || 'Failed to update purchase order';
+    return NextResponse.json({ error: errorMessage, details: error.meta }, { status: 500 });
   }
 }
 

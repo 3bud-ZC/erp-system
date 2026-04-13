@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, CheckCircle2, Clock, Package } from 'lucide-react';
+import { fetchApi } from '@/lib/api-client';
+import { Plus, Trash2, CheckCircle2, Clock, Package, PlayCircle, Info } from 'lucide-react';
 import EnhancedCard from '@/components/EnhancedCard';
 
 interface ProductionOrder {
@@ -52,33 +53,37 @@ export default function ProductionOrdersPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await fetch('/api/production-orders', {
+      await fetchApi('/api/production-orders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
-
-      if (response.ok) {
-        setFormData({ productId: '', quantity: 0, laborCost: 0, overheadCost: 0, date: new Date().toISOString().split('T')[0] });
-        setShowForm(false);
-        loadData();
-      }
+      setFormData({ productId: '', quantity: 0, laborCost: 0, overheadCost: 0, date: new Date().toISOString().split('T')[0] });
+      setShowForm(false);
+      loadData();
     } catch (error) {
       console.error('Error creating order:', error);
     }
   };
 
+  const handleStart = async (id: string) => {
+    try {
+      await fetchApi('/api/production-orders', {
+        method: 'PUT',
+        body: JSON.stringify({ id, status: 'in_progress' }),
+      });
+      loadData();
+    } catch (error) {
+      console.error('Error starting order:', error);
+    }
+  };
+
   const handleComplete = async (id: string) => {
     try {
-      const response = await fetch('/api/production-orders', {
+      await fetchApi('/api/production-orders', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, status: 'completed' }),
       });
-
-      if (response.ok) {
-        loadData();
-      }
+      loadData();
     } catch (error) {
       console.error('Error completing order:', error);
     }
@@ -87,13 +92,8 @@ export default function ProductionOrdersPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('هل تريد حذف أمر الإنتاج؟')) return;
     try {
-      const response = await fetch(`/api/production-orders?id=${id}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        loadData();
-      }
+      await fetchApi(`/api/production-orders?id=${id}`, { method: 'DELETE' });
+      loadData();
     } catch (error) {
       console.error('Error deleting order:', error);
     }
@@ -112,6 +112,33 @@ export default function ProductionOrdersPage() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Guide Banner */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 shadow-sm">
+        <div className="flex items-start gap-3">
+          <div className="bg-blue-500 text-white p-2 rounded-lg">
+            <Info className="w-5 h-5" />
+          </div>
+          <div className="flex-1">
+            <p className="text-base font-bold text-blue-900 mb-2">📋 دليل سير العمل الإنتاجي</p>
+            <div className="space-y-2 text-sm text-blue-800">
+              <div className="flex items-center gap-2">
+                <span className="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded text-xs font-medium">1. قيد الانتظار</span>
+                <span>→ إنشاء أمر إنتاج جديد</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-medium">2. جاري الإنتاج</span>
+                <span>→ بدء التشغيل وخصم المواد الخام من المخزون</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-medium">3. مكتمل</span>
+                <span>→ إضافة المنتج النهائي للمخزون + تسجيل التكاليف</span>
+              </div>
+            </div>
+            <p className="text-xs text-blue-600 mt-3 font-medium">💡 ملاحظة: يتم ربط الإنتاج تلقائياً بالمخزون والمحاسبة</p>
+          </div>
+        </div>
+      </div>
+
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">أوامر الإنتاج</h1>
         <button
@@ -224,26 +251,43 @@ export default function ProductionOrdersPage() {
                   </p>
                   {order.workInProgress && (
                     <p className="text-sm text-blue-600 mt-1">
-                      التكلفة الإجمالية: {order.workInProgress.totalCost.toFixed(2)} ريال
+                      التكلفة الإجمالية: {order.workInProgress.totalCost.toFixed(2)} ج.م
                     </p>
                   )}
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {order.status === 'pending' ? (
+                  {order.status === 'pending' && (
                     <>
                       <span className="text-sm bg-yellow-100 text-yellow-800 px-2 py-1 rounded flex items-center gap-1">
                         <Clock className="w-4 h-4" />
-                        قيد الإنتظار
+                        قيد الانتظار
+                      </span>
+                      <button
+                        onClick={() => handleStart(order.id)}
+                        className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm flex items-center gap-1"
+                      >
+                        <PlayCircle className="w-4 h-4" />
+                        بدء الإنتاج
+                      </button>
+                    </>
+                  )}
+                  {order.status === 'in_progress' && (
+                    <>
+                      <span className="text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded flex items-center gap-1">
+                        <PlayCircle className="w-4 h-4" />
+                        جاري الإنتاج
                       </span>
                       <button
                         onClick={() => handleComplete(order.id)}
-                        className="bg-green-600 text-white px-3 py-2 rounded-lg text-sm"
+                        className="bg-green-600 text-white px-3 py-2 rounded-lg text-sm flex items-center gap-1"
                       >
-                        إكمال
+                        <CheckCircle2 className="w-4 h-4" />
+                        إتمام الإنتاج
                       </button>
                     </>
-                  ) : (
+                  )}
+                  {order.status === 'completed' && (
                     <span className="text-sm bg-green-100 text-green-800 px-2 py-1 rounded flex items-center gap-1">
                       <CheckCircle2 className="w-4 h-4" />
                       مكتمل

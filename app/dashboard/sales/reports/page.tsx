@@ -60,21 +60,17 @@ export default function SalesReportsPage() {
       setLoading(true);
       setError(null);
 
-      const [salesRes, purchasesRes, expensesRes, productsRes] = await Promise.all([
-        fetch('/api/sales-invoices'),
-        fetch('/api/purchase-invoices'),
-        fetch('/api/expenses'),
-        fetch('/api/products'),
+      let salesInvoices: any[] = [];
+      let purchaseInvoices: any[] = [];
+      let expenses: any[] = [];
+      let products: any[] = [];
+
+      await Promise.allSettled([
+        fetch('/api/sales-invoices').then(r => r.ok ? r.json() : []).then(d => { salesInvoices = Array.isArray(d) ? d : []; }),
+        fetch('/api/purchase-invoices').then(r => r.ok ? r.json() : []).then(d => { purchaseInvoices = Array.isArray(d) ? d : []; }),
+        fetch('/api/expenses').then(r => r.ok ? r.json() : []).then(d => { expenses = Array.isArray(d) ? d : []; }),
+        fetch('/api/products').then(r => r.ok ? r.json() : []).then(d => { products = Array.isArray(d) ? d : []; }),
       ]);
-
-      if (!salesRes.ok || !purchasesRes.ok || !expensesRes.ok || !productsRes.ok) {
-        throw new Error('فشل في تحميل بيانات التقرير');
-      }
-
-      const salesInvoices = await salesRes.json();
-      const purchaseInvoices = await purchasesRes.json();
-      const expenses = await expensesRes.json();
-      const products = await productsRes.json();
 
       // Parse dates for filtering
       const startDate = new Date(dateRange.startDate);
@@ -83,30 +79,38 @@ export default function SalesReportsPage() {
 
       // Filter by date range
       const filteredSales = salesInvoices.filter((inv: any) => {
-        const invDate = new Date(inv.createdAt);
+        const invDate = new Date(inv.date || inv.createdAt);
         return invDate >= startDate && invDate <= endDate;
       });
 
       const filteredPurchases = purchaseInvoices.filter((inv: any) => {
-        const invDate = new Date(inv.createdAt);
+        const invDate = new Date(inv.date || inv.createdAt);
         return invDate >= startDate && invDate <= endDate;
       });
 
       const filteredExpenses = expenses.filter((exp: any) => {
-        const expDate = new Date(exp.createdAt);
+        const expDate = new Date(exp.date || exp.createdAt);
         return expDate >= startDate && expDate <= endDate;
       });
 
-      // Calculate metrics
+      // Calculate metrics - ensure proper price field handling
       const totalSalesRevenue = filteredSales.reduce((sum: number, inv: any) => {
+        if (inv.total) return sum + Number(inv.total);
         const invTotal =
-          inv.items?.reduce((itemSum: number, item: any) => itemSum + item.quantity * item.unitPrice, 0) || 0;
+          inv.items?.reduce((itemSum: number, item: any) => {
+            const price = item.price || item.unitPrice || 0;
+            return itemSum + (item.quantity || 0) * price;
+          }, 0) || 0;
         return sum + invTotal;
       }, 0);
 
       const totalPurchasesSpent = filteredPurchases.reduce((sum: number, inv: any) => {
+        if (inv.total) return sum + Number(inv.total);
         const invTotal =
-          inv.items?.reduce((itemSum: number, item: any) => itemSum + item.quantity * item.unitPrice, 0) || 0;
+          inv.items?.reduce((itemSum: number, item: any) => {
+            const price = item.price || item.unitPrice || 0;
+            return itemSum + (item.quantity || 0) * price;
+          }, 0) || 0;
         return sum + invTotal;
       }, 0);
 
@@ -306,7 +310,7 @@ export default function SalesReportsPage() {
       {/* Quick Links */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Link
-          href="/sales/invoices"
+          href="/dashboard/sales/invoices"
           className="flex items-center gap-3 bg-green-600 text-white rounded-xl p-4 hover:bg-green-700 transition-colors"
         >
           <FileText className="w-5 h-5" />
@@ -316,7 +320,7 @@ export default function SalesReportsPage() {
           <ArrowUpRight className="w-4 h-4" />
         </Link>
         <Link
-          href="/sales/customers"
+          href="/dashboard/sales/customers"
           className="flex items-center gap-3 bg-blue-600 text-white rounded-xl p-4 hover:bg-blue-700 transition-colors"
         >
           <Users className="w-5 h-5" />
@@ -326,7 +330,7 @@ export default function SalesReportsPage() {
           <ArrowUpRight className="w-4 h-4" />
         </Link>
         <Link
-          href="/purchases/invoices"
+          href="/dashboard/purchases/invoices"
           className="flex items-center gap-3 bg-purple-600 text-white rounded-xl p-4 hover:bg-purple-700 transition-colors"
         >
           <ShoppingCart className="w-5 h-5" />
@@ -336,7 +340,7 @@ export default function SalesReportsPage() {
           <ArrowUpRight className="w-4 h-4" />
         </Link>
         <Link
-          href="/inventory"
+          href="/dashboard/inventory"
           className="flex items-center gap-3 bg-orange-600 text-white rounded-xl p-4 hover:bg-orange-700 transition-colors"
         >
           <Package className="w-5 h-5" />

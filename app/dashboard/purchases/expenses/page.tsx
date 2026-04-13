@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { fetchApi } from '@/lib/api-client';
 import {
   Plus,
   Search,
@@ -94,6 +95,8 @@ interface Expense {
   notes: string;
   costCenter?: string;
   accountNumber?: string;
+  category?: string;
+  description?: string;
 }
 
 interface Supplier {
@@ -128,11 +131,9 @@ export default function ExpensesPage() {
     notes: '',
     costCenter: '',
     accountNumber: '',
+    category: '',
+    description: '',
   });
-
-  const [items, setItems] = useState([
-    { accountNumber: '', accountName: '', description: '', amount: 0, tax: 0, total: 0 },
-  ]);
 
   useEffect(() => {
     fetchData();
@@ -173,61 +174,80 @@ export default function ExpensesPage() {
   const totalAmount = expenses.reduce((sum, exp) => sum + exp.total, 0);
   const totalTax = expenses.reduce((sum, exp) => sum + (exp.tax || 0), 0);
 
-  const handleAddItem = () => {
-    setItems([...items, { accountNumber: '', accountName: '', description: '', amount: 0, tax: 0, total: 0 }]);
-  };
-
-  const handleRemoveItem = (index: number) => {
-    setItems(items.filter((_, i) => i !== index));
-  };
-
-  const handleItemChange = (index: number, field: string, value: any) => {
-    const newItems = [...items];
-    newItems[index] = { ...newItems[index], [field]: value };
-
-    if (field === 'amount' || field === 'tax') {
-      const amount = newItems[index].amount || 0;
-      const tax = newItems[index].tax || 0;
-      newItems[index].total = amount + tax;
-    }
-
-    setItems(newItems);
-    
-    // Update total
-    const newTotal = newItems.reduce((sum, item) => sum + item.total, 0);
-    setFormData((prev) => ({ ...prev, total: newTotal }));
+  const calculateTotals = () => {
+    const amount = formData.amount || 0;
+    const tax = formData.tax || 0;
+    return amount + tax;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     try {
-      const total = items.reduce((sum, item) => sum + item.total, 0);
-      const tax = items.reduce((sum, item) => sum + item.tax, 0);
-      const amount = items.reduce((sum, item) => sum + item.amount, 0);
+      // Enhanced validation
+      if (!formData.expenseNumber.trim()) {
+        alert('يرجى إدخال رقم المصروف');
+        return;
+      }
 
+      if (!formData.date) {
+        alert('يرجى اختيار التاريخ');
+        return;
+      }
+
+      if (formData.amount <= 0) {
+        alert('يرجى إدخال مبلغ المصروف');
+        return;
+      }
+
+      const total = (formData.amount || 0) + (formData.tax || 0);
       const data = {
-        ...formData,
-        date: new Date(formData.date),
+        expenseNumber: formData.expenseNumber.trim(),
+        supplierId: formData.supplierId || null,
+        date: new Date(formData.date + 'T00:00:00.000Z'),
+        category: formData.category || '',
+        description: formData.description || '',
+        amount: parseFloat(formData.amount.toString()),
+        tax: parseFloat(formData.tax.toString()),
         total,
-        tax,
-        amount,
+        status: formData.status,
+        notes: formData.notes?.trim() || null,
+        branch: formData.branch || null,
+        taxNumber: formData.taxNumber?.trim() || null,
+        invoiceNumber: formData.invoiceNumber?.trim() || null,
+        costCenter: formData.costCenter?.trim() || null,
+        accountNumber: formData.accountNumber?.trim() || null,
       };
 
-      const method = editingExpense ? 'PUT' : 'POST';
-      const body = editingExpense ? { id: editingExpense.id, ...data } : data;
+      console.log('Submitting expense:', data);
 
-      const res = await fetch('/api/expenses', {
+      const method = editingExpense ? 'PUT' : 'POST';
+      const url = editingExpense ? `/api/expenses?id=${editingExpense.id}` : '/api/expenses';
+
+      const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(editingExpense ? { id: editingExpense.id, ...data } : data),
       });
 
-      if (!res.ok) throw new Error('فشل في حفظ المصروف');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Expense submission error:', errorData);
+        throw new Error(errorData.error || errorData.message || 'Failed to save expense');
+      }
 
-      resetForm();
-      setIsFormOpen(false);
-      setEditingExpense(null);
+      const result = await response.json();
+      console.log('Expense saved successfully:', result);
+
+      // Only close form and reset if it's a new expense
+      if (!editingExpense) {
+        resetForm();
+        setIsFormOpen(false);
+      } else {
+        // For editing, keep form open but refresh data
+        setEditingExpense(null);
+      }
+
       fetchData();
     } catch (err) {
       console.error('Error submitting expense:', err);
@@ -250,13 +270,17 @@ export default function ExpensesPage() {
       notes: '',
       costCenter: '',
       accountNumber: '',
+      category: '',
+      description: '',
     });
-    setItems([{ accountNumber: '', accountName: '', description: '', amount: 0, tax: 0, total: 0 }]);
   };
 
   const handleNew = () => {
     resetForm();
     setEditingExpense(null);
+    // Generate auto expense number
+    const newExpenseNumber = `EXP-${new Date().getFullYear()}-${String(expenses.length + 1).padStart(4, '0')}`;
+    setFormData(prev => ({ ...prev, expenseNumber: newExpenseNumber }));
     setIsFormOpen(true);
   };
 
@@ -276,25 +300,62 @@ export default function ExpensesPage() {
       notes: expense.notes || '',
       costCenter: expense.costCenter || '',
       accountNumber: expense.accountNumber || '',
+      category: expense.category || '',
+      description: expense.description || '',
     });
     setIsFormOpen(true);
   };
 
   const handleDelete = async (expense: Expense) => {
     if (confirm('هل أنت متأكد من حذف هذا المصروف؟')) {
-      await fetch(`/api/expenses?id=${expense.id}`, { method: 'DELETE' });
-      fetchData();
+      try {
+        const response = await fetch(`/api/expenses?id=${expense.id}`, { 
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || errorData.message || 'Failed to delete expense');
+        }
+        
+        // Close form if deleting the currently edited expense
+        if (editingExpense && editingExpense.id === expense.id) {
+          setIsFormOpen(false);
+          setEditingExpense(null);
+          resetForm();
+        }
+        
+        fetchData();
+      } catch (error: any) {
+        console.error('Delete error:', error);
+        alert(`خطأ في الحذف: ${error.message}`);
+      }
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const form = document.getElementById('expense-form') as HTMLFormElement;
-    if (form) form.requestSubmit();
+    if (form) {
+      try {
+        form.requestSubmit();
+      } catch (error) {
+        console.error('Save error:', error);
+        alert('حدث خطأ أثناء الحفظ');
+      }
+    }
   };
 
   const handleCopy = () => {
     if (editingExpense) {
-      setFormData({ ...formData, expenseNumber: '' });
+      // Create a copy with new expense number and current date
+      const newExpenseNumber = `EXP-${new Date().getFullYear()}-${String(expenses.length + 1).padStart(4, '0')}`;
+      setFormData({ 
+        ...formData, 
+        expenseNumber: newExpenseNumber, 
+        date: new Date().toISOString().split('T')[0],
+        status: 'pending'
+      });
       setEditingExpense(null);
     }
   };
@@ -545,103 +606,80 @@ export default function ExpensesPage() {
               </div>
             </div>
 
-            {/* Row 2 - Totals */}
-            <div className="grid grid-cols-5 gap-4 p-4 border-b border-gray-200 bg-gray-50">
+            {/* Row 2 - Amount Fields */}
+            <div className="grid grid-cols-3 gap-4 p-4 border-b border-gray-200 bg-gray-50">
               <div className="text-center">
-                <label className="block text-sm font-medium text-gray-700 mb-1">المجموع</label>
-                <div className="text-lg font-bold">{formData.total.toFixed(2)}</div>
-              </div>
-              <div className="text-center">
-                <label className="block text-sm font-medium text-gray-700 mb-1">الخصومات</label>
-                <div className="text-lg font-bold text-red-600">0.00</div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">المبلغ</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.amount}
+                  onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-center"
+                />
               </div>
               <div className="text-center">
                 <label className="block text-sm font-medium text-gray-700 mb-1">الضريبة</label>
-                <div className="text-lg font-bold text-green-600">{formData.tax.toFixed(2)}</div>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.tax}
+                  onChange={(e) => setFormData({ ...formData, tax: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-center"
+                />
               </div>
               <div className="text-center">
-                <label className="block text-sm font-medium text-gray-700 mb-1">الحالة</label>
-                <div className="text-lg font-bold">{getStatusLabel(formData.status)}</div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">الإجمالي</label>
+                <div className="text-xl font-bold text-blue-600">{(formData.amount + formData.tax).toFixed(2)}</div>
+              </div>
+            </div>
+
+            {/* Row 3 - Category & Description */}
+            <div className="grid grid-cols-2 gap-4 p-4 border-b border-gray-200">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">التصنيف</label>
+                <input
+                  type="text"
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  placeholder="مثال: مصاريف تشغيلية"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">مركز التكلفة</label>
+                <input
+                  type="text"
+                  value={formData.costCenter}
+                  onChange={(e) => setFormData({ ...formData, costCenter: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
               </div>
             </div>
 
             {/* Description */}
             <div className="p-4 border-b border-gray-200">
-              <label className="block text-sm font-medium text-gray-700 mb-1 text-right">البيان</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1 text-right">البيان / الوصف</label>
               <textarea
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 rows={3}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                placeholder="أدخل وصف المصروف..."
               />
             </div>
 
-            {/* Payments Section Header */}
-            <div className="bg-gray-100 px-4 py-2 border-b border-gray-200 flex items-center gap-2">
-              <div className="w-1 h-4 bg-cyan-500"></div>
-              <span className="font-bold text-gray-700">مراكز التكلفة</span>
-              <CreditCard className="w-4 h-4 text-cyan-500 mr-auto" />
-            </div>
-
-            {/* Items Table */}
-            <div className="p-4">
-              <div className="border border-gray-200 rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-100">
-                    <tr>
-                      <th className="px-2 py-2 border border-gray-300 text-center">م</th>
-                      <th className="px-2 py-2 border border-gray-300 text-center">رقم الحساب</th>
-                      <th className="px-2 py-2 border border-gray-300 text-center">اسم الحساب</th>
-                      <th className="px-2 py-2 border border-gray-300 text-center">مدين</th>
-                      <th className="px-2 py-2 border border-gray-300 text-center">دائن</th>
-                      <th className="px-2 py-2 border border-gray-300 text-center">البيان</th>
-                      <th className="px-2 py-2 border border-gray-300 text-center">مراكز التكلفة</th>
-                      <th className="px-2 py-2 border border-gray-300 text-center"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((item, index) => (
-                      <tr key={index}>
-                        <td className="px-2 py-2 border border-gray-300 text-center">{index + 1}</td>
-                        <td className="px-2 py-2 border border-gray-300">
-                          <input type="text" value={item.accountNumber} onChange={(e) => handleItemChange(index, 'accountNumber', e.target.value)} className="w-full px-1 py-1 border border-gray-300 rounded text-sm" />
-                        </td>
-                        <td className="px-2 py-2 border border-gray-300">
-                          <input type="text" value={item.accountName} onChange={(e) => handleItemChange(index, 'accountName', e.target.value)} className="w-full px-1 py-1 border border-gray-300 rounded text-sm" />
-                        </td>
-                        <td className="px-2 py-2 border border-gray-300">
-                          <input type="number" min="0" step="0.01" value={item.amount} onChange={(e) => handleItemChange(index, 'amount', parseFloat(e.target.value) || 0)} className="w-full px-1 py-1 border border-gray-300 rounded text-sm text-center" />
-                        </td>
-                        <td className="px-2 py-2 border border-gray-300">
-                          <input type="number" min="0" step="0.01" value={item.tax} onChange={(e) => handleItemChange(index, 'tax', parseFloat(e.target.value) || 0)} className="w-full px-1 py-1 border border-gray-300 rounded text-sm text-center" />
-                        </td>
-                        <td className="px-2 py-2 border border-gray-300">
-                          <input type="text" value={item.description} onChange={(e) => handleItemChange(index, 'description', e.target.value)} className="w-full px-1 py-1 border border-gray-300 rounded text-sm" />
-                        </td>
-                        <td className="px-2 py-2 border border-gray-300">
-                          <select className="w-full px-1 py-1 border border-gray-300 rounded text-sm">
-                            <option>اختر...</option>
-                          </select>
-                        </td>
-                        <td className="px-2 py-2 border border-gray-300 text-center">
-                          <button type="button" onClick={() => handleRemoveItem(index)} className="text-red-600 hover:bg-red-50 p-1 rounded"><Trash2 className="w-4 h-4" /></button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="bg-gray-50 font-bold">
-                    <tr>
-                      <td colSpan={3} className="px-2 py-2 border border-gray-300 text-center">الإجمالي</td>
-                      <td className="px-2 py-2 border border-gray-300 text-center">{items.reduce((sum, i) => sum + i.amount, 0).toFixed(2)}</td>
-                      <td className="px-2 py-2 border border-gray-300 text-center">{items.reduce((sum, i) => sum + i.tax, 0).toFixed(2)}</td>
-                      <td colSpan={3} className="px-2 py-2 border border-gray-300"></td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-              <button type="button" onClick={handleAddItem} className="mt-2 flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700">
-                <Plus className="w-4 h-4" /> إضافة بند
-              </button>
+            {/* Notes */}
+            <div className="p-4 border-b border-gray-200">
+              <label className="block text-sm font-medium text-gray-700 mb-1 text-right">ملاحظات إضافية</label>
+              <textarea
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                rows={2}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              />
             </div>
 
             <button type="submit" className="hidden">Submit</button>

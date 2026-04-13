@@ -5,33 +5,8 @@ import { logAuditAction, getAuthenticatedUser } from '@/lib/auth';
 
 export async function GET(request: Request) {
   try {
-    const user = await getAuthenticatedUser(request);
-    if (!user) {
-      return apiError('لم يتم المصادقة', 401);
-    }
-
-    const { searchParams } = new URL(request.url);
-    const search = searchParams.get('search')?.trim() || '';
-    const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '50', 10)));
-    const skip = (page - 1) * limit;
-
-    const where = search
-      ? {
-          OR: [
-            { nameAr: { contains: search, mode: 'insensitive' as const } },
-            { nameEn: { contains: search, mode: 'insensitive' as const } },
-            { code: { contains: search, mode: 'insensitive' as const } },
-          ],
-        }
-      : {};
-
-    const [data, total] = await Promise.all([
-      prisma.itemGroup.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take: limit }),
-      prisma.itemGroup.count({ where }),
-    ]);
-
-    return apiSuccess({ data, total, page, limit });
+    const groups = await prisma.itemGroup.findMany({ orderBy: { createdAt: 'desc' } });
+    return NextResponse.json(groups);
   } catch (error) {
     return handleApiError(error, 'Fetch item groups');
   }

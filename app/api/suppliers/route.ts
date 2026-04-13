@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     const suppliers = await prisma.supplier.findMany({
       orderBy: { createdAt: 'desc' },
     });
-    return apiSuccess(suppliers);
+    return NextResponse.json(suppliers);
   } catch (error) {
     return handleApiError(error, 'Fetch suppliers');
   }

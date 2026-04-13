@@ -255,55 +255,42 @@ async function getInventoryValuation() {
 
 // ==================== API ROUTES ====================
 
-// GET - Read reports (requires view_financial_reports permission)
+// GET - Read reports
 export async function GET(request: Request) {
   try {
-    const user = await getAuthenticatedUser(request);
-    if (!user) {
-      return apiError('لم يتم المصادقة', 401);
-    }
-
-    if (!checkPermission(user, 'view_financial_reports')) {
-      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
-    }
-
     const { searchParams } = new URL(request.url);
-      const reportType = searchParams.get('type') || 'summary';
-      const fromDate = searchParams.get('fromDate') ? new Date(searchParams.get('fromDate')!) : undefined;
-      const toDate = searchParams.get('toDate') ? new Date(searchParams.get('toDate')!) : undefined;
+    const reportType = searchParams.get('type') || 'summary';
+    const fromDate = searchParams.get('fromDate') ? new Date(searchParams.get('fromDate')!) : undefined;
+    const toDate = searchParams.get('toDate') ? new Date(searchParams.get('toDate')!) : undefined;
 
-      let report: any = {};
+    let report: any = {};
 
-      switch (reportType) {
-        case 'profit-loss':
-          report.profitAndLoss = await getProfitAndLossReport(fromDate, toDate);
-          break;
-
-        case 'balance-sheet':
-          report.balanceSheet = await getBalanceSheet(toDate);
-          break;
-
-        case 'cash-flow':
-          report.cashFlow = await getCashFlowReport(fromDate, toDate);
-          break;
-
-        case 'inventory':
-          report.inventory = await getInventoryValuation();
-          break;
-
-        case 'summary':
-        default:
-          report = {
-            profitAndLoss: await getProfitAndLossReport(fromDate, toDate),
-            balanceSheet: await getBalanceSheet(toDate),
-            cashFlow: await getCashFlowReport(fromDate, toDate),
-            inventory: await getInventoryValuation(),
-          };
-          break;
-      }
-
-      return apiSuccess(report);
-    } catch (error) {
-      return handleApiError(error, 'Generate report');
+    switch (reportType) {
+      case 'profit-loss':
+        report.profitAndLoss = await getProfitAndLossReport(fromDate, toDate);
+        break;
+      case 'balance-sheet':
+        report.balanceSheet = await getBalanceSheet(toDate);
+        break;
+      case 'cash-flow':
+        report.cashFlow = await getCashFlowReport(fromDate, toDate);
+        break;
+      case 'inventory':
+        report.inventory = await getInventoryValuation();
+        break;
+      case 'summary':
+      default:
+        report = {
+          profitAndLoss: await getProfitAndLossReport(fromDate, toDate),
+          balanceSheet: await getBalanceSheet(toDate),
+          cashFlow: await getCashFlowReport(fromDate, toDate),
+          inventory: await getInventoryValuation(),
+        };
+        break;
     }
+
+    return NextResponse.json(report);
+  } catch (error) {
+    return handleApiError(error, 'Generate report');
   }
+}

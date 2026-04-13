@@ -96,7 +96,7 @@ export default function WarehousesPage() {
         throw new Error(err.error || `HTTP ${res.status}`);
       }
       const json = await res.json();
-      setWarehouses(Array.isArray(json.data) ? json.data : []);
+      setWarehouses(Array.isArray(json) ? json : (Array.isArray(json.data) ? json.data : []));
     } catch (err) {
       console.error('Error fetching warehouses:', err);
       setError(err instanceof Error ? err.message : 'فشل في تحميل المخازن');

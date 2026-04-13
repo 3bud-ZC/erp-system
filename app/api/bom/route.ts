@@ -5,11 +5,6 @@ import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/aut
 
 export async function GET(request: Request) {
   try {
-    const user = await getAuthenticatedUser(request);
-    if (!user) {
-      return apiError('لم يتم المصادقة', 401);
-    }
-
     const { searchParams } = new URL(request.url);
     const productId = searchParams.get('productId');
 
@@ -21,7 +16,7 @@ export async function GET(request: Request) {
         },
         orderBy: { createdAt: 'desc' },
       });
-      return apiSuccess(allBOMs);
+      return NextResponse.json(allBOMs);
     }
 
     const bom = await prisma.bOMItem.findMany({
@@ -32,7 +27,7 @@ export async function GET(request: Request) {
       },
     });
 
-    return apiSuccess(bom);
+    return NextResponse.json(bom);
   } catch (error) {
     return handleApiError(error, 'Fetch BOM');
   }

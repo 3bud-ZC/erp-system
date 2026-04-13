@@ -150,6 +150,33 @@ export default function CostStudyPage() {
         </button>
       </div>
 
+      {/* Explanation Banner */}
+      <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-xl p-5 shadow-sm">
+        <div className="flex items-start gap-3">
+          <div className="bg-purple-500 text-white p-2 rounded-lg">
+            <BarChart3 className="w-5 h-5" />
+          </div>
+          <div className="flex-1">
+            <p className="text-base font-bold text-purple-900 mb-2">📊 فهم دراسة التكاليف</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-purple-800">
+              <div>
+                <span className="font-semibold">• تكلفة الوحدة:</span> سعر شراء أو إنتاج الوحدة الواحدة
+              </div>
+              <div>
+                <span className="font-semibold">• القيمة الإجمالية:</span> الكمية × تكلفة الوحدة
+              </div>
+              <div>
+                <span className="font-semibold">• النسبة:</span> نسبة قيمة المنتج من إجمالي المخزون
+              </div>
+              <div>
+                <span className="font-semibold">• متوسط التكلفة:</span> إجمالي القيمة ÷ إجمالي الكمية
+              </div>
+            </div>
+            <p className="text-xs text-purple-600 mt-3 font-medium">💡 استخدم هذا التقرير لتحديد المنتجات الأكثر قيمة وتحسين إدارة المخزون</p>
+          </div>
+        </div>
+      </div>
+
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard

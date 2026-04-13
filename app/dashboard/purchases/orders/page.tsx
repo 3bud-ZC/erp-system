@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { fetchApi } from '@/lib/api-client';
 import {
   Plus,
   Search,
@@ -84,14 +85,16 @@ interface PurchaseOrder {
   supplierId?: string;
   supplier?: { nameAr: string };
   date: string;
-  branch: string;
-  warehouse: string;
   total: number;
   status: string;
   notes: string;
-  discountPercent: number;
-  discountAmount: number;
-  tax: number;
+  items?: Array<{
+    productId: string;
+    quantity: number;
+    price: number;
+    total: number;
+    product?: { nameAr: string; code: string; unit: string };
+  }>;
 }
 
 interface Supplier {
@@ -124,17 +127,12 @@ export default function PurchaseOrdersPage() {
     orderNumber: '',
     supplierId: '',
     date: new Date().toISOString().split('T')[0],
-    branch: '',
-    warehouse: '',
     status: 'pending',
     notes: '',
-    discountPercent: 0,
-    discountAmount: 0,
-    tax: 0,
   });
 
   const [items, setItems] = useState([
-    { productId: '', productCode: '', productName: '', unit: '', quantity: 0, price: 0, discount: 0, discountPercent: 0, total: 0 },
+    { productId: '', productName: '', productCode: '', unit: '', quantity: 0, price: 0, total: 0 },
   ]);
 
   useEffect(() => {
@@ -175,81 +173,170 @@ export default function PurchaseOrdersPage() {
   const totalAmount = orders.reduce((sum, order) => sum + order.total, 0);
 
   const handleAddItem = () => {
-    setItems([...items, { productId: '', productCode: '', productName: '', unit: '', quantity: 0, price: 0, discount: 0, discountPercent: 0, total: 0 }]);
+    const newItem = { 
+      productId: '', 
+      productName: '', 
+      productCode: '', 
+      unit: '', 
+      quantity: 0, 
+      price: 0, 
+      total: 0 
+    };
+    setItems([...items, newItem]);
   };
 
   const handleRemoveItem = (index: number) => {
-    setItems(items.filter((_, i) => i !== index));
+    // Don't remove the last item
+    if (items.length > 1) {
+      setItems(items.filter((_, i) => i !== index));
+    } else {
+      // Reset the last item instead of removing it
+      setItems([{ 
+        productId: '', 
+        productName: '', 
+        productCode: '', 
+        unit: '', 
+        quantity: 0, 
+        price: 0, 
+        total: 0 
+      }]);
+    }
   };
 
   const handleItemChange = (index: number, field: string, value: any) => {
     const newItems = [...items];
     newItems[index] = { ...newItems[index], [field]: value };
 
-    if (field === 'quantity' || field === 'price' || field === 'discount' || field === 'discountPercent') {
-      const qty = newItems[index].quantity || 0;
-      const price = newItems[index].price || 0;
-      const disc = newItems[index].discount || 0;
-      const discPercent = newItems[index].discountPercent || 0;
+    // Auto-fill product details when product is selected
+    if (field === 'productId' && value) {
+      const product = products.find((p: any) => p.id === value);
+      if (product) {
+        newItems[index].productName = product.nameAr || '';
+        newItems[index].productCode = product.code || '';
+        newItems[index].unit = product.unit || '';
+        // Also set quantity to 1 if not set
+        if (!newItems[index].quantity || newItems[index].quantity === 0) {
+          newItems[index].quantity = 1;
+        }
+      }
+    } else if (field === 'productId' && !value) {
+      // Clear product details when product is cleared
+      newItems[index].productName = '';
+      newItems[index].productCode = '';
+      newItems[index].unit = '';
+      newItems[index].price = 0;
+      newItems[index].quantity = 0;
+    }
+
+    // Auto-calculate totals
+    if (field === 'quantity' || field === 'price' || field === 'productId') {
+      const qty = Math.max(0, parseFloat(newItems[index].quantity.toString()) || 0);
+      const price = Math.max(0, parseFloat(newItems[index].price.toString()) || 0);
       
-      const subtotal = qty * price;
-      const discountAmount = disc + (subtotal * discPercent / 100);
-      newItems[index].total = subtotal - discountAmount;
+      newItems[index].quantity = qty;
+      newItems[index].price = price;
+      newItems[index].total = qty * price;
     }
 
     setItems(newItems);
   };
 
-  const calculateTotal = () => {
-    const subtotal = items.reduce((sum, item) => sum + item.total, 0);
-    const invoiceDiscount = formData.discountAmount + (subtotal * formData.discountPercent / 100);
-    const taxAmount = (subtotal - invoiceDiscount) * (formData.tax / 100);
-    return subtotal - invoiceDiscount + taxAmount;
-  };
+  const calculateTotal = () => items.reduce((sum, item) => sum + item.total, 0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     try {
+      // Enhanced validation
+      if (!formData.orderNumber.trim()) {
+        alert('يرجى إدخال رقم أمر الشراء');
+        return;
+      }
+
       if (!formData.supplierId) {
         alert('يرجى اختيار مورد');
         return;
       }
 
-      if (items.some(i => !i.productId || i.quantity <= 0)) {
-        alert('يرجى إدخال المنتجات والكميات بشكل صحيح');
+      if (!formData.date) {
+        alert('يرجى اختيار التاريخ');
+        return;
+      }
+
+      // Filter out empty items and validate
+      const validItems = items.filter(i => i.productId && i.quantity > 0);
+      if (validItems.length === 0) {
+        alert('يرجى إدخال منتج واحد على الأقل');
+        return;
+      }
+
+      // Verify supplier is selected
+      if (!formData.supplierId) {
+        alert('يرجى اختيار مورد');
+        return;
+      }
+
+      // Check if products exist
+      const invalidProducts = validItems.filter(item => !products.find(p => p.id === item.productId));
+      if (invalidProducts.length > 0) {
+        alert('بعض المنتجات غير موجودة في النظام');
+        return;
+      }
+
+      // Check for invalid prices
+      if (validItems.some(i => i.price < 0)) {
+        alert('السعر لا يمكن أن يكون سالباً');
         return;
       }
 
       const total = calculateTotal();
+      
+      // Ensure date is valid
+      const orderDate = formData.date ? new Date(formData.date) : new Date();
+      
       const data = {
-        ...formData,
-        date: new Date(formData.date),
+        orderNumber: formData.orderNumber.trim(),
+        supplierId: formData.supplierId,
+        date: orderDate.toISOString(),
+        status: formData.status,
+        notes: formData.notes?.trim() || null,
         total,
-        items: items.map(item => ({
+        items: validItems.map(item => ({
           productId: item.productId,
           quantity: parseFloat(item.quantity.toString()),
-          price: parseFloat(item.price.toString()),
-          discount: item.discount,
-          discountPercent: item.discountPercent,
-          total: item.total,
+          unitPrice: parseFloat(item.price.toString()),
         })),
       };
+
+      console.log('Submitting purchase order:', data);
 
       const method = editingOrder ? 'PUT' : 'POST';
       const url = editingOrder ? `/api/purchase-orders?id=${editingOrder.id}` : '/api/purchase-orders';
 
-      const res = await fetch(url, {
+      const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(editingOrder ? { id: editingOrder.id, ...data } : data),
       });
 
-      if (!res.ok) throw new Error('فشل في حفظ أمر الشراء');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Order submission error:', errorData);
+        throw new Error(errorData.error || errorData.message || 'Failed to save order');
+      }
 
-      resetForm();
-      setIsFormOpen(false);
-      setEditingOrder(null);
+      const result = await response.json();
+      console.log('Order saved successfully:', result);
+
+      // Only close form and reset if it's a new order
+      if (!editingOrder) {
+        resetForm();
+        setIsFormOpen(false);
+      } else {
+        // For editing, keep form open but refresh data
+        setEditingOrder(null);
+      }
+
       fetchData();
     } catch (err) {
       console.error('Error submitting order:', err);
@@ -262,20 +349,18 @@ export default function PurchaseOrdersPage() {
       orderNumber: '',
       supplierId: '',
       date: new Date().toISOString().split('T')[0],
-      branch: '',
-      warehouse: '',
       status: 'pending',
       notes: '',
-      discountPercent: 0,
-      discountAmount: 0,
-      tax: 0,
     });
-    setItems([{ productId: '', productCode: '', productName: '', unit: '', quantity: 0, price: 0, discount: 0, discountPercent: 0, total: 0 }]);
+    setItems([{ productId: '', productName: '', productCode: '', unit: '', quantity: 0, price: 0, total: 0 }]);
   };
 
   const handleNew = () => {
     resetForm();
     setEditingOrder(null);
+    // Generate auto order number
+    const newOrderNumber = `PO-${new Date().getFullYear()}-${String(orders.length + 1).padStart(4, '0')}`;
+    setFormData(prev => ({ ...prev, orderNumber: newOrderNumber }));
     setIsFormOpen(true);
   };
 
@@ -285,33 +370,81 @@ export default function PurchaseOrdersPage() {
       orderNumber: order.orderNumber || '',
       supplierId: order.supplierId || '',
       date: new Date(order.date).toISOString().split('T')[0],
-      branch: order.branch || '',
-      warehouse: order.warehouse || '',
       status: order.status || 'pending',
       notes: order.notes || '',
-      discountPercent: order.discountPercent || 0,
-      discountAmount: order.discountAmount || 0,
-      tax: order.tax || 0,
     });
+    // Populate items when editing
+    if (order.items && order.items.length > 0) {
+      setItems(order.items.map((item: any) => {
+        const product = products.find((p: any) => p.id === item.productId);
+        return {
+          productId: item.productId || '',
+          productName: product?.nameAr || item.product?.nameAr || '',
+          productCode: product?.code || item.product?.code || '',
+          unit: product?.unit || item.product?.unit || '',
+          quantity: item.quantity || 0,
+          price: item.price || item.unitPrice || 0,
+          total: (item.quantity || 0) * (item.price || item.unitPrice || 0),
+        };
+      }));
+    } else {
+      setItems([{ productId: '', productName: '', productCode: '', unit: '', quantity: 0, price: 0, total: 0 }]);
+    }
     setIsFormOpen(true);
   };
 
   const handleDelete = async (order: PurchaseOrder) => {
     if (confirm('هل أنت متأكد من حذف هذا الأمر؟')) {
-      await fetch(`/api/purchase-orders?id=${order.id}`, { method: 'DELETE' });
-      fetchData();
+      try {
+        const response = await fetch(`/api/purchase-orders?id=${order.id}`, { 
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || errorData.message || 'Failed to delete order');
+        }
+        
+        // Close form if deleting the currently edited order
+        if (editingOrder && editingOrder.id === order.id) {
+          setIsFormOpen(false);
+          setEditingOrder(null);
+          resetForm();
+        }
+        
+        fetchData();
+      } catch (error: any) {
+        console.error('Delete error:', error);
+        alert(`خطأ في الحذف: ${error.message}`);
+      }
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const form = document.getElementById('purchase-order-form') as HTMLFormElement;
-    if (form) form.requestSubmit();
+    if (form) {
+      try {
+        form.requestSubmit();
+      } catch (error) {
+        console.error('Save error:', error);
+        alert('حدث خطأ أثناء الحفظ');
+      }
+    }
   };
 
   const handleCopy = () => {
     if (editingOrder) {
-      setFormData({ ...formData, orderNumber: '' });
+      // Create a copy with new order number and current date
+      const newOrderNumber = `PO-${new Date().getFullYear()}-${String(orders.length + 1).padStart(4, '0')}`;
+      setFormData({ 
+        ...formData, 
+        orderNumber: newOrderNumber, 
+        date: new Date().toISOString().split('T')[0],
+        status: 'pending'
+      });
       setEditingOrder(null);
+      // Keep items as they are for copying
     }
   };
 
@@ -426,10 +559,10 @@ export default function PurchaseOrdersPage() {
               <p className="text-gray-500 text-sm mt-1">إدارة أوامر الشراء من الموردين</p>
             </div>
             <div className="flex items-center gap-2">
-              <Link href="/purchases/suppliers" className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium">
+              <Link href="/dashboard/purchases/suppliers" className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium">
                 الموردين
               </Link>
-              <Link href="/purchases/invoices" className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium">
+              <Link href="/dashboard/purchases/invoices" className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium">
                 فواتير الشراء
               </Link>
               <button
@@ -541,77 +674,61 @@ export default function PurchaseOrdersPage() {
 
           {/* Purchase Order Form - Matching Image */}
           <form id="purchase-order-form" onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-            {/* Row 1 - Header Info */}
-            <div className="grid grid-cols-8 gap-4 p-4 border-b border-gray-200">
+            {/* Row 1 - Order Info */}
+            <div className="grid grid-cols-4 gap-4 p-4 border-b border-gray-200">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 text-center">رقم الفاتورة</label>
-                <input type="text" required value={formData.orderNumber} onChange={(e) => setFormData({ ...formData, orderNumber: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                <label className="block text-sm font-medium text-gray-700 mb-1 text-center">رقم الأمر</label>
+                <input type="text" required value={formData.orderNumber} onChange={(e) => setFormData({ ...formData, orderNumber: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-center" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 text-center">التاريخ</label>
-                <input type="datetime-local" required value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                <input type="date" required value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-center" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 text-center">الفرع</label>
-                <select value={formData.branch} onChange={(e) => setFormData({ ...formData, branch: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                  <option value="">اختر...</option>
-                  <option value="main">الرئيسي</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 text-center">الخصم $</label>
-                <input type="number" min="0" step="0.01" value={formData.discountAmount} onChange={(e) => setFormData({ ...formData, discountAmount: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-center" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 text-center">الخصم %</label>
-                <input type="number" min="0" max="100" value={formData.discountPercent} onChange={(e) => setFormData({ ...formData, discountPercent: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-center" />
-              </div>
-              <div className="text-center">
-                <label className="block text-sm font-medium text-gray-700 mb-1">الضريبة</label>
-                <div className="text-lg font-bold text-green-600">{formData.tax.toFixed(2)}</div>
-              </div>
-              <div className="text-center">
-                <label className="block text-sm font-medium text-gray-700 mb-1">الخصومات</label>
-                <div className="text-lg font-bold text-red-600">0.00</div>
-              </div>
-              <div className="text-center">
-                <label className="block text-sm font-medium text-gray-700 mb-1">المجموع</label>
-                <div className="text-lg font-bold">{calculateTotal().toFixed(2)}</div>
-              </div>
-            </div>
-
-            {/* Row 2 - Supplier & Attachments */}
-            <div className="grid grid-cols-2 gap-4 p-4 border-b border-gray-200">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 text-center">الموردين</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1 text-center">المورد</label>
                 <select required value={formData.supplierId} onChange={(e) => setFormData({ ...formData, supplierId: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                  <option value=""></option>
+                  <option value="">اختر المورد...</option>
                   {suppliers.map((s) => (
                     <option key={s.id} value={s.id}>{s.nameAr}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1 text-center flex items-center justify-center gap-2">
-                  <Paperclip className="w-4 h-4" />
-                  AttachFiles
-                </label>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500">No file chosen</span>
-                  <button type="button" className="px-3 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Choose files</button>
-                  <button type="button" className="flex-1 px-3 py-2 border border-cyan-500 text-cyan-600 rounded-lg text-sm hover:bg-cyan-50">المرفقات</button>
-                </div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 text-center">الحالة</label>
+                <select value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                  <option value="pending">معلق</option>
+                  <option value="approved">معتمد</option>
+                  <option value="completed">مكتمل</option>
+                  <option value="cancelled">ملغي</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Row 2 - Totals */}
+            <div className="grid grid-cols-3 gap-4 p-4 border-b border-gray-200 bg-gray-50">
+              <div className="text-center">
+                <label className="block text-sm font-medium text-gray-700 mb-1">المجموع الفرعي</label>
+                <div className="text-lg font-bold">{calculateTotal().toFixed(2)}</div>
+              </div>
+              <div className="text-center">
+                <label className="block text-sm font-medium text-gray-700 mb-1">الحالة</label>
+                <div className="text-lg font-bold">{getStatusLabel(formData.status)}</div>
+              </div>
+              <div className="text-center">
+                <label className="block text-sm font-medium text-gray-700 mb-1">الإجمالي</label>
+                <div className="text-xl font-bold text-blue-600">{calculateTotal().toFixed(2)}</div>
               </div>
             </div>
 
             {/* Description */}
             <div className="p-4 border-b border-gray-200">
-              <label className="block text-sm font-medium text-gray-700 mb-1 text-right">البيان</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1 text-right">البيان / الملاحظات</label>
               <textarea
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                 rows={2}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                placeholder="أدخل بيان أو ملاحظات عن أمر الشراء..."
               />
             </div>
 
@@ -624,12 +741,9 @@ export default function PurchaseOrdersPage() {
                       <th className="px-2 py-2 border border-gray-300 text-center">م</th>
                       <th className="px-2 py-2 border border-gray-300 text-center">ك.الصنف</th>
                       <th className="px-2 py-2 border border-gray-300 text-center">الصنف</th>
-                      <th className="px-2 py-2 border border-gray-300 text-center">الوحدات</th>
+                      <th className="px-2 py-2 border border-gray-300 text-center">الوحدة</th>
                       <th className="px-2 py-2 border border-gray-300 text-center">الكمية</th>
-                      <th className="px-2 py-2 border border-gray-300 text-center">سعر</th>
-                      <th className="px-2 py-2 border border-gray-300 text-center">الخصم</th>
-                      <th className="px-2 py-2 border border-gray-300 text-center">الخصم%</th>
-                      <th className="px-2 py-2 border border-gray-300 text-center">الضريبة</th>
+                      <th className="px-2 py-2 border border-gray-300 text-center">السعر</th>
                       <th className="px-2 py-2 border border-gray-300 text-center">المجموع</th>
                       <th className="px-2 py-2 border border-gray-300 text-center"></th>
                     </tr>
@@ -643,12 +757,39 @@ export default function PurchaseOrdersPage() {
                             value={item.productId}
                             onChange={(e) => {
                               const product = products.find((p: any) => p.id === e.target.value);
-                              handleItemChange(index, 'productId', e.target.value);
-                              if (product) {
-                                handleItemChange(index, 'productCode', (product as any).code);
-                                handleItemChange(index, 'productName', (product as any).nameAr);
-                                handleItemChange(index, 'unit', (product as any).unit);
+                              const newItems = [...items];
+                              const productId = e.target.value;
+                              
+                              if (productId && product) {
+                                // Product selected - fill all details at once
+                                newItems[index] = { 
+                                  ...newItems[index], 
+                                  productId: productId,
+                                  productCode: product.code || '',
+                                  productName: product.nameAr || '',
+                                  unit: product.unit || '',
+                                  quantity: newItems[index].quantity || 1,
+                                  price: newItems[index].price || 0
+                                };
+                              } else {
+                                // Product cleared - reset fields
+                                newItems[index] = { 
+                                  ...newItems[index], 
+                                  productId: '',
+                                  productCode: '',
+                                  productName: '',
+                                  unit: '',
+                                  quantity: 0,
+                                  price: 0
+                                };
                               }
+                              
+                              // Recalculate total
+                              const qty = Math.max(0, parseFloat(newItems[index].quantity.toString()) || 0);
+                              const price = Math.max(0, parseFloat(newItems[index].price.toString()) || 0);
+                              newItems[index].total = qty * price;
+                              
+                              setItems(newItems);
                             }}
                             className="w-full px-1 py-1 border border-gray-300 rounded text-sm"
                           >
@@ -669,15 +810,6 @@ export default function PurchaseOrdersPage() {
                         </td>
                         <td className="px-2 py-2 border border-gray-300">
                           <input type="number" min="0" step="0.01" value={item.price} onChange={(e) => handleItemChange(index, 'price', parseFloat(e.target.value) || 0)} className="w-full px-1 py-1 border border-gray-300 rounded text-sm text-center" />
-                        </td>
-                        <td className="px-2 py-2 border border-gray-300">
-                          <input type="number" min="0" step="0.01" value={item.discount} onChange={(e) => handleItemChange(index, 'discount', parseFloat(e.target.value) || 0)} className="w-full px-1 py-1 border border-gray-300 rounded text-sm text-center" />
-                        </td>
-                        <td className="px-2 py-2 border border-gray-300">
-                          <input type="number" min="0" max="100" value={item.discountPercent} onChange={(e) => handleItemChange(index, 'discountPercent', parseFloat(e.target.value) || 0)} className="w-full px-1 py-1 border border-gray-300 rounded text-sm text-center" />
-                        </td>
-                        <td className="px-2 py-2 border border-gray-300">
-                          <div className="text-center text-sm">0.00</div>
                         </td>
                         <td className="px-2 py-2 border border-gray-300">
                           <div className="text-center font-bold text-sm">{item.total.toFixed(2)}</div>
