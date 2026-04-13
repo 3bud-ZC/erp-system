@@ -6,10 +6,6 @@ import { logAuditAction, getAuthenticatedUser } from '@/lib/auth';
 // GET - Read suppliers
 export async function GET(request: Request) {
   try {
-    const user = await getAuthenticatedUser(request);
-    if (!user) {
-      return apiError('لم يتم المصادقة', 401);
-    }
 
     const suppliers = await prisma.supplier.findMany({
       orderBy: { createdAt: 'desc' },

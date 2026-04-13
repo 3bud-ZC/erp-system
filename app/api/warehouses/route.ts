@@ -5,11 +5,6 @@ import { logAuditAction, getAuthenticatedUser } from '@/lib/auth';
 
 export async function GET(request: Request) {
   try {
-    const user = await getAuthenticatedUser(request);
-    if (!user) {
-      return apiError('لم يتم المصادقة', 401);
-    }
-
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search')?.trim() || '';
     const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
@@ -31,7 +26,7 @@ export async function GET(request: Request) {
       prisma.warehouse.count({ where }),
     ]);
 
-    return apiSuccess({ data, total, page, limit });
+    return apiSuccess({ warehouses: data, total, page, limit });
   } catch (error) {
     return handleApiError(error, 'Fetch warehouses');
   }

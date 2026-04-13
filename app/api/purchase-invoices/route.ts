@@ -8,10 +8,6 @@ import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/aut
 // GET - Read purchase invoices (requires read_purchase_invoice permission)
 export async function GET(request: Request) {
   try {
-    const user = await getAuthenticatedUser(request);
-    if (!user) {
-      return apiError('لم يتم المصادقة', 401);
-    }
 
     const invoices = await prisma.purchaseInvoice.findMany({
       include: {

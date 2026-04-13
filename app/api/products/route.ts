@@ -3,14 +3,9 @@ import { prisma } from '@/lib/db';
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
 
-// GET - Read products (requires read_product permission)
+// GET - Read products
 export async function GET(request: Request) {
   try {
-    const user = await getAuthenticatedUser(request);
-    if (!user) {
-      return apiError('لم يتم المصادقة', 401);
-    }
-
     const products = await prisma.product.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
@@ -20,7 +15,7 @@ export async function GET(request: Request) {
         warehouse: true,
       },
     });
-    return apiSuccess(products);
+    return apiSuccess({ products });
   } catch (error) {
     return handleApiError(error, 'Fetch products');
   }

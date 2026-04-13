@@ -4,22 +4,13 @@ import { createExpenseEntry, postJournalEntry } from '@/lib/accounting';
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
 
-// GET - Read expenses (requires accounting permission)
+// GET - Read expenses
 export async function GET(request: Request) {
   try {
-    const user = await getAuthenticatedUser(request);
-    if (!user) {
-      return apiError('لم يتم المصادقة', 401);
-    }
-
-    if (!checkPermission(user, 'view_accounting')) {
-      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
-    }
-
     const expenses = await prisma.expense.findMany({
       orderBy: { createdAt: 'desc' },
     });
-    return apiSuccess(expenses);
+    return apiSuccess({ expenses });
   } catch (error) {
     return handleApiError(error, 'Fetch expenses');
   }

@@ -6,15 +6,10 @@ import { logAuditAction, getAuthenticatedUser } from '@/lib/auth';
 // GET - Read customers
 export async function GET(request: Request) {
   try {
-    const user = await getAuthenticatedUser(request);
-    if (!user) {
-      return apiError('لم يتم المصادقة', 401);
-    }
-
     const customers = await prisma.customer.findMany({
       orderBy: { createdAt: 'desc' },
     });
-    return apiSuccess(customers);
+    return apiSuccess({ customers });
   } catch (error) {
     return handleApiError(error, 'Fetch customers');
   }
