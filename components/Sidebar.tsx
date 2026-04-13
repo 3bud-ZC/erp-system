@@ -41,16 +41,9 @@ const menuItems: MenuItem[] = [
     href: '/dashboard',
   },
   {
-    title: 'المشتريات',
-    icon: ShoppingCart,
-    href: '/dashboard/purchases',
-    children: [
-      { title: 'الموردين', icon: Users, href: '/dashboard/purchases/suppliers' },
-      { title: 'فواتير شراء', icon: FileText, href: '/dashboard/purchases/invoices' },
-      { title: 'أوامر شراء', icon: FileText, href: '/dashboard/purchases/orders' },
-      { title: 'المصروفات', icon: DollarSign, href: '/dashboard/purchases/expenses' },
-      { title: 'تقارير المشتريات', icon: TrendingUp, href: '/dashboard/purchases/reports' },
-    ],
+    title: 'المخزون',
+    icon: Package,
+    href: '/dashboard/inventory',
   },
   {
     title: 'المبيعات',
@@ -60,19 +53,29 @@ const menuItems: MenuItem[] = [
       { title: 'العملاء', icon: Users, href: '/dashboard/sales/customers' },
       { title: 'فواتير بيع', icon: FileText, href: '/dashboard/sales/invoices' },
       { title: 'أوامر بيع', icon: FileText, href: '/dashboard/sales/orders' },
-      { title: 'تقارير المبيعات', icon: TrendingUp, href: '/dashboard/sales/reports' },
+      { title: 'تقارير المبيعات', icon: BarChart3, href: '/dashboard/sales/reports' },
     ],
   },
   {
-    title: 'إعدادات المخازن',
-    icon: Boxes,
-    href: '/dashboard/inventory',
+    title: 'المشتريات',
+    icon: ShoppingCart,
+    href: '/dashboard/purchases',
     children: [
-      { title: 'المخازن', icon: Home, href: '/dashboard/inventory/warehouses', count: 0 },
-      { title: 'الشركات', icon: Building2, href: '/dashboard/inventory/companies', count: 0 },
-      { title: 'مجموعات الأصناف', icon: Layers, href: '/dashboard/inventory/groups', count: 0 },
-      { title: 'الوحدات', icon: Calculator, href: '/dashboard/inventory/units', count: 0 },
-      { title: 'الأصناف', icon: Package, href: '/dashboard/inventory', count: 0 },
+      { title: 'الموردين', icon: Users, href: '/dashboard/purchases/suppliers' },
+      { title: 'فواتير شراء', icon: FileText, href: '/dashboard/purchases/invoices' },
+      { title: 'أوامر شراء', icon: FileText, href: '/dashboard/purchases/orders' },
+      { title: 'المصروفات', icon: DollarSign, href: '/dashboard/purchases/expenses' },
+      { title: 'تقارير المشتريات', icon: BarChart3, href: '/dashboard/purchases/reports' },
+    ],
+  },
+  {
+    title: 'التصنيع',
+    icon: Factory,
+    href: '/dashboard/manufacturing',
+    children: [
+      { title: 'أوامر إنتاج', icon: FileText, href: '/dashboard/manufacturing/production-orders' },
+      { title: 'عمليات الإنتاج', icon: Settings, href: '/dashboard/manufacturing/operations' },
+      { title: 'دراسة التكاليف', icon: Calculator, href: '/dashboard/manufacturing/cost-study' },
     ],
   },
   {
@@ -84,21 +87,6 @@ const menuItems: MenuItem[] = [
       { title: 'القيود اليومية', icon: FileText, href: '/dashboard/accounting/journal' },
       { title: 'قائمة الدخل', icon: TrendingUp, href: '/dashboard/accounting/profit-loss' },
     ],
-  },
-  {
-    title: 'التصنيع',
-    icon: Factory,
-    href: '/dashboard/manufacturing',
-    children: [
-      { title: 'أوامر إنتاج', icon: FileText, href: '/dashboard/manufacturing/production-orders' },
-      { title: 'عمليات الإنتاج', icon: Settings, href: '/dashboard/manufacturing/operations' },
-      { title: 'دراسة التكاليف', icon: DollarSign, href: '/dashboard/manufacturing/cost-study' },
-    ],
-  },
-  {
-    title: 'إدارة المخزون',
-    icon: Package,
-    href: '/dashboard/warehouse',
   },
 ];
 
@@ -115,48 +103,51 @@ function SidebarItem({ item, level = 0 }: { item: MenuItem; level?: number }) {
 
   if (item.children) {
     return (
-      <div className="mb-1">
+      <div className="mb-2">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 ${
+          className={`group w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-300 transform hover:scale-[1.02] ${
             hasActiveChild 
-              ? 'bg-blue-600 text-white' 
-              : 'hover:bg-blue-700/50 text-white'
+              ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/30' 
+              : 'hover:bg-slate-700/70 text-slate-200 hover:text-white'
           }`}
         >
           <div className="flex items-center gap-3">
-            <item.icon className="w-5 h-5" />
-            <span className="font-medium">{item.title}</span>
+            <div className={`p-1.5 rounded-lg transition-all duration-300 ${
+              hasActiveChild ? 'bg-white/20' : 'group-hover:bg-slate-600/50'
+            }`}>
+              <item.icon className="w-4 h-4" />
+            </div>
+            <span className="font-semibold text-sm">{item.title}</span>
           </div>
           <ChevronRight 
-            className={`w-4 h-4 transition-transform duration-200 ${shouldBeOpen ? 'rotate-90' : ''}`} 
+            className={`w-4 h-4 transition-all duration-300 ${shouldBeOpen ? 'rotate-90' : ''}`} 
           />
         </button>
         
-        {shouldBeOpen && (
-          <div className="mt-1 mr-4">
+        <div className={`overflow-hidden transition-all duration-300 ${shouldBeOpen ? 'max-h-96 opacity-100 mt-2' : 'max-h-0 opacity-0'}`}>
+          <div className="mr-2 space-y-1 border-r-2 border-slate-700/50 pr-2">
             {item.children.map((child, index) => (
               <Link
                 key={index}
                 href={child.href || '#'}
-                className={`flex items-center justify-between px-4 py-2.5 rounded-lg text-sm transition-all duration-200 mb-1 ${
+                className={`group flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all duration-200 transform hover:translate-x-[-4px] ${
                   pathname === child.href
-                    ? 'bg-blue-400/30 text-white'
-                    : 'hover:bg-blue-700/30 text-blue-100'
+                    ? 'bg-gradient-to-r from-blue-500/30 to-blue-600/20 text-white border-r-2 border-blue-400'
+                    : 'hover:bg-slate-700/50 text-slate-300 hover:text-white'
                 }`}
               >
-                <div className="flex items-center gap-3">
-                  <span>{child.title}</span>
-                </div>
+                <child.icon className="w-4 h-4 opacity-70 group-hover:opacity-100 transition-opacity" />
+                <span className="flex-1">{child.title}</span>
                 {child.count !== undefined && (
-                  <span className="text-xs bg-blue-800/50 px-2 py-0.5 rounded">
+                  <span className="text-xs bg-slate-700 px-2 py-0.5 rounded-full">
                     {child.count.toString().padStart(2, '0')}
                   </span>
                 )}
               </Link>
             ))}
           </div>
-        )}
+        </div>
       </div>
     );
   }
@@ -164,14 +155,18 @@ function SidebarItem({ item, level = 0 }: { item: MenuItem; level?: number }) {
   return (
     <Link
       href={item.href || '#'}
-      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 mb-1 ${
+      className={`group flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 transform hover:scale-[1.02] mb-2 ${
         isActive
-          ? 'bg-blue-600 text-white'
-          : 'hover:bg-blue-700/50 text-white'
+          ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/30'
+          : 'hover:bg-slate-700/70 text-slate-200 hover:text-white'
       }`}
     >
-      <item.icon className="w-5 h-5" />
-      <span className="font-medium">{item.title}</span>
+      <div className={`p-1.5 rounded-lg transition-all duration-300 ${
+        isActive ? 'bg-white/20' : 'group-hover:bg-slate-600/50'
+      }`}>
+        <item.icon className="w-4 h-4" />
+      </div>
+      <span className="font-semibold text-sm">{item.title}</span>
     </Link>
   );
 }
@@ -207,30 +202,35 @@ export default function Sidebar() {
         }`}
       >
         {/* Header */}
-        <div className="p-5 border-b border-slate-700">
-          <div className="flex items-center justify-between">
+        <div className="p-5 border-b border-slate-700/50 bg-gradient-to-b from-slate-800/50 to-transparent">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex-1">
-              <h1 className="text-xl font-bold text-white">نظام ERP</h1>
-              <p className="text-sm text-slate-400">مصنع البلاستيك</p>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
+                  <Package className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-lg font-bold text-white">نظام ERP</h1>
+                  <p className="text-xs text-slate-400">مصنع البلاستيك</p>
+                </div>
+              </div>
             </div>
             <button
               onClick={toggleMobile}
-              className="p-2 hover:bg-slate-700 rounded-lg transition-colors lg:hidden"
+              className="p-2 hover:bg-slate-700/70 rounded-lg transition-all duration-200 lg:hidden"
             >
               <X className="w-5 h-5 text-slate-300" />
             </button>
           </div>
           
           {/* Search Bar */}
-          <div className="mt-4">
-            <div className="relative">
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="بحث..."
-                className="w-full pr-10 pl-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
+          <div className="relative group">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-400 transition-colors" />
+            <input
+              type="text"
+              placeholder="بحث سريع..."
+              className="w-full pr-10 pl-4 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/50 focus:bg-slate-700/70 transition-all duration-200"
+            />
           </div>
         </div>
 
@@ -244,10 +244,16 @@ export default function Sidebar() {
         </nav>
 
         {/* Footer */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-700 bg-slate-900">
-          <div className="flex items-center justify-center gap-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            <span className="text-xs text-slate-400">النظام متصل</span>
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-700/50 bg-gradient-to-t from-slate-900 to-transparent backdrop-blur-sm">
+          <div className="flex items-center justify-between px-2">
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                <div className="absolute inset-0 w-2 h-2 bg-green-500 rounded-full animate-ping opacity-75" />
+              </div>
+              <span className="text-xs text-slate-400 font-medium">متصل</span>
+            </div>
+            <span className="text-xs text-slate-500">v1.0.0</span>
           </div>
         </div>
       </aside>
