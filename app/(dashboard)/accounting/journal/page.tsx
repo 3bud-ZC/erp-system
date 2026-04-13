@@ -37,17 +37,14 @@ export default function JournalPage() {
   const loadEntries = async () => {
     try {
       setLoading(true);
-      // Fetch from the journalEntries API (we'd need to create this endpoint)
-      // For now, let's fetch from reports to get accounting data
       const response = await fetch(
-        `/api/reports?type=balance-sheet&fromDate=${dateRange.fromDate}&toDate=${dateRange.toDate}`
+        `/api/journal-entries?fromDate=${dateRange.fromDate}&toDate=${dateRange.toDate}`
       );
-      if (response.ok) {
-        const data = await response.json();
-        // Parse balance sheet data to show transactions
-        // This is a simplified implementation
-        setEntries([]);
+      if (!response.ok) {
+        throw new Error('Failed to fetch journal entries');
       }
+      const json = await response.json();
+      setEntries(Array.isArray(json.data) ? json.data : []);
     } catch (error) {
       console.error('Error loading entries:', error);
     } finally {

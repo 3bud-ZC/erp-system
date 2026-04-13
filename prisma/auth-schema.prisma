@@ -1,0 +1,161 @@
+// ==================== AUTHENTICATION & AUTHORIZATION MODELS ====================
+
+/**
+ * User model for authentication
+ * Stores user credentials and profile information
+ */
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String    // bcrypt hashed password
+  isActive      Boolean   @default(true)
+  lastLogin     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Relations
+  roles         UserRole[]
+  sessions      Session[]
+  auditLogs     AuditLog[]
+}
+
+/**
+ * Role model for defining user roles
+ * Examples: Admin, Manager, Accountant, Inventory Manager, Sales Representative
+ */
+model Role {
+  id            String    @id @default(cuid())
+  code          String    @unique
+  nameAr        String    @unique
+  nameEn        String?
+  description   String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Relations
+  users         UserRole[]
+  permissions   RolePermission[]
+}
+
+/**
+ * Junction table for User-Role relationship (Many-to-Many)
+ */
+model UserRole {
+  id            String    @id @default(cuid())
+  userId        String
+  roleId        String
+  assignedAt    DateTime  @default(now())
+  
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role          Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+}
+
+/**
+ * Permission model for defining granular access control
+ * Examples: create_invoice, edit_product, view_reports, delete_user
+ */
+model Permission {
+  id            String    @id @default(cuid())
+  code          String    @unique
+  nameAr        String    @unique
+  nameEn        String?
+  description   String?
+  module        String    // inventory, sales, purchases, manufacturing, accounting
+  action        String    // create, read, update, delete
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Relations
+  roles         RolePermission[]
+}
+
+/**
+ * Junction table for Role-Permission relationship (Many-to-Many)
+ */
+model RolePermission {
+  id            String    @id @default(cuid())
+  roleId        String
+  permissionId  String
+  grantedAt     DateTime  @default(now())
+  
+  role          Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission    Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+}
+
+/**
+ * Session model for tracking user sessions
+ * Used for session management and security
+ */
+model Session {
+  id            String    @id @default(cuid())
+  userId        String
+  token         String    @unique
+  expiresAt     DateTime
+  isActive      Boolean   @default(true)
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime  @default(now())
+  
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([token])
+}
+
+/**
+ * AuditLog model for tracking user actions
+ * Provides a complete audit trail of all important operations
+ */
+model AuditLog {
+  id            String    @id @default(cuid())
+  userId        String
+  action        String    // CREATE, UPDATE, DELETE, LOGIN, LOGOUT
+  module        String    // inventory, sales, purchases, manufacturing, accounting
+  entityType    String    // Product, Invoice, Order, etc.
+  entityId      String?
+  changes       String?   // JSON string of before/after values
+  ipAddress     String?
+  userAgent     String?
+  status        String    @default("success") // success, failure
+  errorMessage  String?
+  createdAt     DateTime  @default(now())
+  
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([module])
+  @@index([entityType])
+  @@index([createdAt])
+}
+
+/**
+ * Notification model for system notifications
+ * Stores notifications for users about inventory, financial alerts, etc.
+ */
+model Notification {
+  id            String    @id @default(cuid())
+  userId        String?   // null for system-wide notifications
+  type          String    // LOW_STOCK, INVOICE_DUE, PAYMENT_RECEIVED, ERROR
+  title         String
+  message       String
+  relatedModule String?   // inventory, sales, purchases, accounting
+  relatedId     String?   // ID of the related entity
+  isRead        Boolean   @default(false)
+  readAt        DateTime?
+  createdAt     DateTime  @default(now())
+  
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
