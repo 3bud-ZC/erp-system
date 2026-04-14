@@ -78,7 +78,9 @@ export default function CustomersPage() {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch('/api/customers');
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const res = await fetch('/api/customers', { headers });
       if (!res.ok) throw new Error('فشل في تحميل العملاء');
       const data = await res.json();
       setCustomers(data || []);

@@ -77,7 +77,9 @@ export default function SuppliersPage() {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch('/api/suppliers');
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const res = await fetch('/api/suppliers', { headers });
       if (!res.ok) throw new Error('فشل في تحميل الموردين');
       const data = await res.json();
       setSuppliers(data || []);

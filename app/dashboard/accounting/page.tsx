@@ -10,7 +10,9 @@ export default function AccountingPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/journal-entries')
+    const token = localStorage.getItem('token');
+    const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+    fetch('/api/journal-entries', { headers })
       .then((r) => (r.ok ? r.json() : []))
       .then((d) => { setEntries(Array.isArray(d) ? d : []); })
       .catch(() => setEntries([]))

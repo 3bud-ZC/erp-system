@@ -36,9 +36,11 @@ export default function ProductionOrdersPage() {
   const loadData = async () => {
     try {
       setLoading(true);
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
       const [ordersRes, productsRes] = await Promise.all([
-        fetch('/api/production-orders'),
-        fetch('/api/products'),
+        fetch('/api/production-orders', { headers }),
+        fetch('/api/products', { headers }),
       ]);
 
       if (ordersRes.ok) setOrders(await ordersRes.json());
