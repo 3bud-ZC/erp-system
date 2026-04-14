@@ -7,10 +7,15 @@ import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/aut
 // GET - Read expenses
 export async function GET(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     const expenses = await prisma.expense.findMany({
       orderBy: { createdAt: 'desc' },
     });
-    return NextResponse.json(expenses);
+    return apiSuccess(expenses, 'Expenses fetched successfully');
   } catch (error) {
     return handleApiError(error, 'Fetch expenses');
   }
@@ -19,15 +24,14 @@ export async function GET(request: Request) {
 // POST - Create expense (requires accounting permission)
 export async function POST(request: Request) {
   try {
-    // TEMPORARY: Bypass authentication for testing
-    // const user = await getAuthenticatedUser(request);
-    // if (!user) {
-    //   return apiError('لم يتم المصادقة', 401);
-    // }
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
 
-    // if (!checkPermission(user, 'manage_accounts')) {
-    //   return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
-    // }
+    if (!checkPermission(user, 'manage_accounts')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
 
     const body = await request.json();
       const { expenseType } = body;
@@ -51,14 +55,14 @@ export async function POST(request: Request) {
         },
       });
 
-      // TEMPORARY: Skip journal entry creation for testing
-      // const journalEntry = await createExpenseEntry(expense.id, expense.amount, expenseType || 'Operating');
-      // if (journalEntry) {
-      //   await postJournalEntry(journalEntry.id);
-      // }
+      // Create and post accounting journal entry (DR Expense / CR Cash)
+      const journalEntry = await createExpenseEntry(expense.id, expense.amount, expenseType || 'other');
+      if (journalEntry) {
+        await postJournalEntry(journalEntry.id);
+      }
 
       await logAuditAction(
-        'test-user-id',
+        user.id,
         'CREATE',
         'accounting',
         'Expense',
@@ -77,15 +81,14 @@ export async function POST(request: Request) {
 // PUT - Update expense (requires accounting permission)
 export async function PUT(request: Request) {
   try {
-    // TEMPORARY: Bypass authentication for testing
-    // const user = await getAuthenticatedUser(request);
-    // if (!user) {
-    //   return apiError('لم يتم المصادقة', 401);
-    // }
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
 
-    // if (!checkPermission(user, 'manage_accounts')) {
-    //   return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
-    // }
+    if (!checkPermission(user, 'manage_accounts')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
 
     const body = await request.json();
       const { id, expenseType } = body;
@@ -110,14 +113,12 @@ export async function PUT(request: Request) {
         },
       });
 
-      // TEMPORARY: Skip journal entry creation for testing
-      // const journalEntry = await createExpenseEntry(expense.id, expense.amount, expenseType || 'Operating');
-      // if (journalEntry) {
-      //   await postJournalEntry(journalEntry.id);
-      // }
+      // NOTE: Journal entry update not implemented — updating an expense requires
+      // reversing the original entry and creating a new one to avoid double-counting.
+      // This is a known limitation; expenses should be deleted and re-created for now.
 
       await logAuditAction(
-        'test-user-id',
+        user.id,
         'UPDATE',
         'accounting',
         'Expense',
@@ -136,15 +137,14 @@ export async function PUT(request: Request) {
 // DELETE - Delete expense (requires accounting permission)
 export async function DELETE(request: Request) {
   try {
-    // TEMPORARY: Bypass authentication for testing
-    // const user = await getAuthenticatedUser(request);
-    // if (!user) {
-    //   return apiError('لم يتم المصادقة', 401);
-    // }
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
 
-    // if (!checkPermission(user, 'manage_accounts')) {
-    //   return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
-    // }
+    if (!checkPermission(user, 'manage_accounts')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
 
     const { searchParams } = new URL(request.url);
       const id = searchParams.get('id');
@@ -158,7 +158,7 @@ export async function DELETE(request: Request) {
       });
 
       await logAuditAction(
-        'test-user-id',
+        user.id,
         'DELETE',
         'accounting',
         'Expense',

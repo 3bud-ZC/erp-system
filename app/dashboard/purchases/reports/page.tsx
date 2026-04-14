@@ -65,9 +65,10 @@ export default function PurchaseReportsPage() {
       let invoices: any[] = [];
       let suppliers: any[] = [];
 
+      const extract = (d: any): any[] => Array.isArray(d) ? d : (Array.isArray(d?.data) ? d.data : []);
       await Promise.allSettled([
-        fetch('/api/purchase-invoices').then(r => r.ok ? r.json() : []).then(d => { invoices = Array.isArray(d) ? d : []; }),
-        fetch('/api/suppliers').then(r => r.ok ? r.json() : []).then(d => { suppliers = Array.isArray(d) ? d : []; }),
+        fetch('/api/purchase-invoices').then(r => r.ok ? r.json() : []).then(d => { invoices = extract(d); }),
+        fetch('/api/suppliers').then(r => r.ok ? r.json() : []).then(d => { suppliers = extract(d); }),
       ]);
 
       const startDate = new Date(dateRange.fromDate);

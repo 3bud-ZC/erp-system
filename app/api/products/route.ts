@@ -10,6 +10,11 @@ import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/aut
 // GET - Read products
 export async function GET(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     const products = await prisma.product.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
@@ -19,7 +24,7 @@ export async function GET(request: Request) {
         warehouse: true,
       },
     });
-    return NextResponse.json(products);
+    return apiSuccess(products, 'Products fetched successfully');
   } catch (error) {
     return handleApiError(error, 'Fetch products');
   }
@@ -38,8 +43,46 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
+
+    // Validate required fields and field types
+    const { code, nameAr, nameEn, type, unitId, price, cost, stock, minStock, warehouseId, itemGroupId, companyId } = body;
+    if (!code || typeof code !== 'string' || !code.trim()) {
+      return apiError('كود المنتج مطلوب', 400);
+    }
+    if (!nameAr || typeof nameAr !== 'string' || !nameAr.trim()) {
+      return apiError('اسم المنتج بالعربية مطلوب', 400);
+    }
+    if (price !== undefined && (typeof price !== 'number' || price < 0)) {
+      return apiError('السعر يجب أن يكون رقماً موجباً أو صفراً', 400);
+    }
+    if (cost !== undefined && (typeof cost !== 'number' || cost < 0)) {
+      return apiError('التكلفة يجب أن تكون رقماً موجباً أو صفراً', 400);
+    }
+    if (stock !== undefined && (typeof stock !== 'number' || stock < 0)) {
+      return apiError('المخزون يجب أن يكون رقماً موجباً أو صفراً', 400);
+    }
+    if (minStock !== undefined && (typeof minStock !== 'number' || minStock < 0)) {
+      return apiError('الحد الأدنى للمخزون يجب أن يكون رقماً موجباً أو صفراً', 400);
+    }
+
+    // Whitelist allowed fields — prevent injection of unexpected Prisma fields
+    const productData: Record<string, any> = {
+      code: code.trim(),
+      nameAr: nameAr.trim(),
+      ...(nameEn && { nameEn: String(nameEn).trim() }),
+      ...(type && { type: String(type) }),
+      ...(price !== undefined && { price: Number(price) }),
+      ...(cost !== undefined && { cost: Number(cost) }),
+      ...(stock !== undefined && { stock: Number(stock) }),
+      ...(minStock !== undefined && { minStock: Number(minStock) }),
+      ...(unitId && { unitId: String(unitId) }),
+      ...(warehouseId && { warehouseId: String(warehouseId) }),
+      ...(itemGroupId && { itemGroupId: String(itemGroupId) }),
+      ...(companyId && { companyId: String(companyId) }),
+    };
+
     const product = await prisma.product.create({
-      data: body,
+      data: productData,
     });
 
     // Log audit action

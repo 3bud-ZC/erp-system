@@ -14,6 +14,10 @@ import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/aut
 // GET - Read production orders (requires read_production_order permission)
 export async function GET(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
 
     const orders = await prisma.productionOrder.findMany({
       include: {
@@ -27,7 +31,7 @@ export async function GET(request: Request) {
       },
       orderBy: { createdAt: 'desc' },
     });
-    return NextResponse.json(orders);
+    return apiSuccess(orders, 'Production orders fetched successfully');
   } catch (error) {
     return handleApiError(error, 'Fetch production orders');
   }

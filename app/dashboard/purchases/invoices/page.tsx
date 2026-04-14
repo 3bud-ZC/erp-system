@@ -147,9 +147,13 @@ export default function PurchaseInvoicesPage() {
         throw new Error('فشل في تحميل البيانات');
       }
 
-      setInvoices(await invoicesRes.json());
-      setSuppliers(await suppliersRes.json());
-      setProducts(await productsRes.json());
+      const invoicesJson = await invoicesRes.json();
+      const suppliersJson = await suppliersRes.json();
+      const productsJson = await productsRes.json();
+      // APIs return { success, data } wrapper — extract .data, fall back to raw array
+      setInvoices(Array.isArray(invoicesJson) ? invoicesJson : (invoicesJson.data ?? []));
+      setSuppliers(Array.isArray(suppliersJson) ? suppliersJson : (suppliersJson.data ?? []));
+      setProducts(Array.isArray(productsJson) ? productsJson : (productsJson.data ?? []));
     } catch (err) {
       console.error('Error fetching data:', err);
       setError(err instanceof Error ? err.message : 'خطأ في تحميل البيانات');
@@ -352,7 +356,7 @@ export default function PurchaseInvoicesPage() {
       supplierId: invoice.supplierId || '',
       date: new Date(invoice.date).toISOString().split('T')[0],
       status: invoice.status,
-      notes: '',
+      notes: invoice.notes || '',
     });
     if (invoice.items && invoice.items.length > 0) {
       setItems(invoice.items.map((item) => {

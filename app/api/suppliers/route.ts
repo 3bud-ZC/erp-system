@@ -1,16 +1,20 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
-import { logAuditAction, getAuthenticatedUser } from '@/lib/auth';
+import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
 
 // GET - Read suppliers
 export async function GET(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
 
     const suppliers = await prisma.supplier.findMany({
       orderBy: { createdAt: 'desc' },
     });
-    return NextResponse.json(suppliers);
+    return apiSuccess(suppliers, 'Suppliers fetched successfully');
   } catch (error) {
     return handleApiError(error, 'Fetch suppliers');
   }
@@ -22,6 +26,10 @@ export async function POST(request: Request) {
     const user = await getAuthenticatedUser(request);
     if (!user) {
       return apiError('لم يتم المصادقة', 401);
+    }
+
+    if (!checkPermission(user, 'create_purchase_invoice')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
 
     const body = await request.json();

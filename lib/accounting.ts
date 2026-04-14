@@ -167,9 +167,16 @@ export async function postJournalEntry(entryId: string): Promise<any> {
       },
     });
 
-    // Update account balances
+    // Update account balances using correct sign convention per account type:
+    //   Debit-normal (Asset, Expense):          balance increases with debits
+    //   Credit-normal (Liability, Equity, Revenue): balance increases with credits
     for (const line of journalEntry.lines) {
-      const balanceChange = Number(line.debit) - Number(line.credit);
+      const accountType = (line as any).account?.type ?? '';
+      const isCreditNormal = ['Liability', 'Equity', 'Revenue'].includes(accountType);
+      const balanceChange = isCreditNormal
+        ? Number(line.credit) - Number(line.debit)
+        : Number(line.debit) - Number(line.credit);
+
       await prisma.account.update({
         where: { code: line.accountCode },
         data: {
@@ -191,29 +198,61 @@ export async function postJournalEntry(entryId: string): Promise<any> {
 /**
  * Generate journal entry for a sales invoice
  * Sales invoice booking:
- *   DR Receivables/Cash     CR Sales Revenue
+ *   DR Receivables (1020)    CR Sales Revenue (4010)   — for the sale price
+ *   DR COGS (5010)           CR Inventory (1030)        — for the cost of goods sold
  */
 export async function createSalesInvoiceEntry(invoiceId: string, totalAmount: number): Promise<any> {
   try {
+    // Fetch invoice items with product costs to calculate COGS
+    const invoiceItems = await prisma.salesInvoiceItem.findMany({
+      where: { salesInvoiceId: invoiceId },
+      include: { product: { select: { cost: true } } },
+    });
+
+    const totalCOGS = invoiceItems.reduce((sum, item) => {
+      const cost = item.product?.cost ?? 0;
+      return sum + item.quantity * cost;
+    }, 0);
+
+    const lines: JournalEntryInput['lines'] = [
+      {
+        accountCode: '1020', // Receivables
+        debit: totalAmount,
+        credit: 0,
+        description: 'المستحقات من العملاء',
+      },
+      {
+        accountCode: '4010', // Sales Revenue
+        debit: 0,
+        credit: totalAmount,
+        description: 'إيرادات المبيعات',
+      },
+    ];
+
+    // Only add COGS entry if there is a measurable cost
+    if (totalCOGS > 0) {
+      lines.push(
+        {
+          accountCode: '5010', // COGS
+          debit: totalCOGS,
+          credit: 0,
+          description: 'تكلفة البضاعة المباعة',
+        },
+        {
+          accountCode: '1030', // Inventory
+          debit: 0,
+          credit: totalCOGS,
+          description: 'تخفيض المخزون عند البيع',
+        }
+      );
+    }
+
     const entry: JournalEntryInput = {
       entryDate: new Date(),
       description: `فاتورة بيع #${invoiceId}`,
       referenceType: 'SalesInvoice',
       referenceId: invoiceId,
-      lines: [
-        {
-          accountCode: '1020', // Receivables
-          debit: totalAmount,
-          credit: 0,
-          description: 'المستحقات من العملاء',
-        },
-        {
-          accountCode: '4010', // Sales Revenue
-          debit: 0,
-          credit: totalAmount,
-          description: 'إيرادات المبيعات',
-        },
-      ],
+      lines,
     };
 
     return await createJournalEntry(entry);

@@ -125,9 +125,13 @@ export default function SalesInvoicesPage() {
         throw new Error('فشل في تحميل البيانات');
       }
 
-      setInvoices(await invoicesRes.json());
-      setCustomers(await customersRes.json());
-      setProducts(await productsRes.json());
+      const invoicesJson = await invoicesRes.json();
+      const customersJson = await customersRes.json();
+      const productsJson = await productsRes.json();
+      // APIs return { success, data } wrapper — extract .data, fall back to raw array
+      setInvoices(Array.isArray(invoicesJson) ? invoicesJson : (invoicesJson.data ?? []));
+      setCustomers(Array.isArray(customersJson) ? customersJson : (customersJson.data ?? []));
+      setProducts(Array.isArray(productsJson) ? productsJson : (productsJson.data ?? []));
     } catch (err) {
       console.error('Error fetching data:', err);
       setError(err instanceof Error ? err.message : 'خطأ في تحميل البيانات');
@@ -357,18 +361,24 @@ export default function SalesInvoicesPage() {
     if (invoice.items && invoice.items.length > 0) {
       setItems(invoice.items.map((item) => {
         const product = products.find((p: any) => p.id === item.productId);
+        const qty = item.quantity || 0;
+        const storedTotal = item.total || 0;
+        // Use the effective per-unit price (total / quantity) so that any
+        // discount or tax originally applied is preserved in recalculations.
+        // discount/tax fields are not persisted in the DB schema.
+        const effectivePrice = qty > 0 ? storedTotal / qty : (item.price || 0);
         return {
           productId: item.productId || '',
           productName: product?.nameAr || '',
           productCode: product?.code || '',
           unit: product?.unit || '',
-          quantity: item.quantity || 0,
-          price: item.price || 0,
+          quantity: qty,
+          price: effectivePrice,
           discount: 0,
           discountPercent: 0,
           tax: 0,
           netTax: 0,
-          total: item.total || 0,
+          total: storedTotal,
         };
       }));
     } else {

@@ -1,0 +1,15 @@
+{
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "npm start",
+    "healthcheckPath": "/api/health",
+    "healthcheckTimeout": 100,
+    "restartPolicyType": "ON_FAILURE"
+  },
+  "env": {
+    "NODE_ENV": "production",
+    "SKIP_ENV_VALIDATION": "1"
+  }
+}

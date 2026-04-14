@@ -65,11 +65,12 @@ export default function SalesReportsPage() {
       let expenses: any[] = [];
       let products: any[] = [];
 
+      const extract = (d: any): any[] => Array.isArray(d) ? d : (Array.isArray(d?.data) ? d.data : []);
       await Promise.allSettled([
-        fetch('/api/sales-invoices').then(r => r.ok ? r.json() : []).then(d => { salesInvoices = Array.isArray(d) ? d : []; }),
-        fetch('/api/purchase-invoices').then(r => r.ok ? r.json() : []).then(d => { purchaseInvoices = Array.isArray(d) ? d : []; }),
-        fetch('/api/expenses').then(r => r.ok ? r.json() : []).then(d => { expenses = Array.isArray(d) ? d : []; }),
-        fetch('/api/products').then(r => r.ok ? r.json() : []).then(d => { products = Array.isArray(d) ? d : []; }),
+        fetch('/api/sales-invoices').then(r => r.ok ? r.json() : []).then(d => { salesInvoices = extract(d); }),
+        fetch('/api/purchase-invoices').then(r => r.ok ? r.json() : []).then(d => { purchaseInvoices = extract(d); }),
+        fetch('/api/expenses').then(r => r.ok ? r.json() : []).then(d => { expenses = extract(d); }),
+        fetch('/api/products').then(r => r.ok ? r.json() : []).then(d => { products = extract(d); }),
       ]);
 
       // Parse dates for filtering
