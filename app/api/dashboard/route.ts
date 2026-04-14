@@ -8,34 +8,38 @@ import { getAuthenticatedUser } from '@/lib/auth';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+// Safe aggregate query with fallback
+async function safeAggregate(
+  modelName: 'salesInvoice' | 'purchaseInvoice' | 'expense',
+  sumField: string,
+  startDate: Date,
+  endDate: Date
+): Promise<number> {
+  try {
+    const model = prisma[modelName] as any;
+    const result = await model.aggregate({
+      _sum: { [sumField]: true },
+      where: {
+        createdAt: { gte: startDate, lte: endDate },
+      },
+    });
+    return Number(result._sum[sumField]) || 0;
+  } catch (error: any) {
+    if (error.code === 'P2021') {
+      console.warn(`Table ${modelName} not found, returning 0`);
+      return 0;
+    }
+    throw error;
+  }
+}
+
 // Helper: Calculate totals for a given date range
 async function getFinancialData(startDate: Date, endDate: Date) {
-  const salesData = await prisma.salesInvoice.aggregate({
-    _sum: { total: true },
-    where: {
-      createdAt: { gte: startDate, lte: endDate },
-    },
-  });
+  const sales = await safeAggregate('salesInvoice', 'total', startDate, endDate);
+  const purchases = await safeAggregate('purchaseInvoice', 'total', startDate, endDate);
+  const expenses = await safeAggregate('expense', 'amount', startDate, endDate);
 
-  const purchasesData = await prisma.purchaseInvoice.aggregate({
-    _sum: { total: true },
-    where: {
-      createdAt: { gte: startDate, lte: endDate },
-    },
-  });
-
-  const expensesData = await prisma.expense.aggregate({
-    _sum: { amount: true },
-    where: {
-      createdAt: { gte: startDate, lte: endDate },
-    },
-  });
-
-  return {
-    sales: Number(salesData._sum.total) || 0,
-    purchases: Number(purchasesData._sum.total) || 0,
-    expenses: Number(expensesData._sum.amount) || 0,
-  };
+  return { sales, purchases, expenses };
 }
 
 // Helper: Get monthly data for charts (last 6 months)
@@ -61,13 +65,30 @@ async function getMonthlyChartData() {
   return { labels: months, sales, purchases };
 }
 
+// Safe find many with fallback
+async function safeFindMany<T>(
+  modelName: 'product' | 'salesInvoice' | 'purchaseInvoice',
+  args?: any
+): Promise<T[]> {
+  try {
+    const model = prisma[modelName] as any;
+    return await model.findMany(args);
+  } catch (error: any) {
+    if (error.code === 'P2021') {
+      console.warn(`Table ${modelName} not found, returning empty array`);
+      return [];
+    }
+    throw error;
+  }
+}
+
 // Helper: Get inventory breakdown by type
 async function getInventoryBreakdown() {
-  const products = await prisma.product.findMany();
-  
-  const rawMaterials = products.filter(p => p.type === 'raw').length;
-  const finishedGoods = products.filter(p => p.type === 'finished').length;
-  const packaging = products.filter(p => p.type === 'packaging').length;
+  const products = await safeFindMany('product');
+
+  const rawMaterials = products.filter((p: any) => p.type === 'raw').length;
+  const finishedGoods = products.filter((p: any) => p.type === 'finished').length;
+  const packaging = products.filter((p: any) => p.type === 'packaging').length;
 
   return { rawMaterials, finishedGoods, packaging };
 }
@@ -76,43 +97,55 @@ async function getInventoryBreakdown() {
 async function getRecentActivities() {
   const activities: any[] = [];
 
-  // Recent sales invoices
-  const salesInvoices = await prisma.salesInvoice.findMany({
-    take: 3,
-    orderBy: { createdAt: 'desc' },
-    include: { customer: true },
-  });
-
-  salesInvoices.forEach(invoice => {
-    activities.push({
-      id: `sale-${invoice.id}`,
-      type: 'sale',
-      title: `فاتورة بيع #${invoice.invoiceNumber || invoice.id.slice(-6)}`,
-      description: invoice.customer?.nameAr || 'عميل غير معروف',
-      amount: invoice.total,
-      date: new Date(invoice.createdAt).toLocaleDateString('ar-EG'),
-      status: invoice.status === 'completed' ? 'completed' : 'pending',
+  try {
+    // Recent sales invoices
+    const salesInvoices = await prisma.salesInvoice.findMany({
+      take: 3,
+      orderBy: { createdAt: 'desc' },
+      include: { customer: true },
     });
-  });
 
-  // Recent purchase invoices
-  const purchaseInvoices = await prisma.purchaseInvoice.findMany({
-    take: 3,
-    orderBy: { createdAt: 'desc' },
-    include: { supplier: true },
-  });
-
-  purchaseInvoices.forEach(invoice => {
-    activities.push({
-      id: `purchase-${invoice.id}`,
-      type: 'purchase',
-      title: `فاتورة شراء #${invoice.invoiceNumber || invoice.id.slice(-6)}`,
-      description: invoice.supplier?.nameAr || 'مورد غير معروف',
-      amount: invoice.total,
-      date: new Date(invoice.createdAt).toLocaleDateString('ar-EG'),
-      status: invoice.status === 'completed' ? 'completed' : 'pending',
+    salesInvoices.forEach(invoice => {
+      activities.push({
+        id: `sale-${invoice.id}`,
+        type: 'sale',
+        title: `فاتورة بيع #${invoice.invoiceNumber || invoice.id.slice(-6)}`,
+        description: invoice.customer?.nameAr || 'عميل غير معروف',
+        amount: invoice.total,
+        date: new Date(invoice.createdAt).toLocaleDateString('ar-EG'),
+        status: invoice.status === 'completed' ? 'completed' : 'pending',
+      });
     });
-  });
+  } catch (e: any) {
+    if (e.code !== 'P2021') {
+      console.error('Error fetching sales invoices:', e.message);
+    }
+  }
+
+  try {
+    // Recent purchase invoices
+    const purchaseInvoices = await prisma.purchaseInvoice.findMany({
+      take: 3,
+      orderBy: { createdAt: 'desc' },
+      include: { supplier: true },
+    });
+
+    purchaseInvoices.forEach(invoice => {
+      activities.push({
+        id: `purchase-${invoice.id}`,
+        type: 'purchase',
+        title: `فاتورة شراء #${invoice.invoiceNumber || invoice.id.slice(-6)}`,
+        description: invoice.supplier?.nameAr || 'مورد غير معروف',
+        amount: invoice.total,
+        date: new Date(invoice.createdAt).toLocaleDateString('ar-EG'),
+        status: invoice.status === 'completed' ? 'completed' : 'pending',
+      });
+    });
+  } catch (e: any) {
+    if (e.code !== 'P2021') {
+      console.error('Error fetching purchase invoices:', e.message);
+    }
+  }
 
   // Sort by date descending and limit to 5
   return activities
@@ -152,18 +185,16 @@ export async function GET(request: Request) {
     };
 
     // FIX: Count low-stock products by comparing stock to minStock field (not hardcoded 10)
-    const lowStockProducts = await prisma.product.findMany({
-      where: {},
-    });
+    const lowStockProducts = await safeFindMany('product');
 
     const lowStockFilteredCount = lowStockProducts.filter(
-      (p) => p.stock <= (p.minStock || 10)
+      (p: any) => p.stock <= (p.minStock || 10)
     ).length;
 
     const lowStockDetails = lowStockProducts
-      .filter((p) => p.stock <= (p.minStock || 10))
+      .filter((p: any) => p.stock <= (p.minStock || 10))
       .slice(0, 5)
-      .map((p) => ({
+      .map((p: any) => ({
         id: p.id,
         code: p.code,
         nameAr: p.nameAr,
@@ -181,8 +212,8 @@ export async function GET(request: Request) {
     }
 
     // Get total inventory value and count
-    const inventory = await prisma.product.findMany();
-    const totalInventoryValue = inventory.reduce((sum, p) => sum + p.stock * p.cost, 0);
+    const inventory = await safeFindMany('product');
+    const totalInventoryValue = inventory.reduce((sum: number, p: any) => sum + p.stock * p.cost, 0);
     const totalProducts = inventory.length;
 
     // Get chart data
