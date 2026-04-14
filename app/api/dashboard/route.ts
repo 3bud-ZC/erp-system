@@ -122,6 +122,17 @@ async function getRecentActivities() {
 
 export async function GET(request: Request) {
   try {
+    console.log('Dashboard API called');
+    
+    // Test database connection
+    try {
+      const testQuery = await prisma.$queryRaw`SELECT 1`;
+      console.log('Database connection OK');
+    } catch (dbError: any) {
+      console.error('Database connection failed:', dbError.message);
+      return apiError('Database connection failed: ' + dbError.message, 500);
+    }
+    
     // Get current month data
     const now = new Date();
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
