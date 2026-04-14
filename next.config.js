@@ -34,8 +34,20 @@ const nextConfig = {
         tls: false,
       };
     }
+    
+    // Fix module resolution
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': '.',
+      '@/lib': './lib',
+      '@/components': './components',
+    };
+    
     return config;
   },
+  
+  // Transpile packages for better compatibility
+  transpilePackages: [],
 };
 
 module.exports = nextConfig;

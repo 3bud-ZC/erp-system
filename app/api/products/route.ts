@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     }
 
     // Whitelist allowed fields — prevent injection of unexpected Prisma fields
-    const productData: Record<string, any> = {
+    const productData = {
       code: code.trim(),
       nameAr: nameAr.trim(),
       ...(nameEn && { nameEn: String(nameEn).trim() }),
