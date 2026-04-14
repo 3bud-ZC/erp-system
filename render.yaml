@@ -9,20 +9,13 @@ services:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
-        fromDatabase:
-          name: erp-db
-          property: connectionString
+        value: postgresql://erp_user:LfBcocsK7Nxkl31CHAD7dWyOsKLaaE4v@dpg-d7eponn7f7vs73db2ugg-a.oregon-postgres.render.com/erp_database_r1s1
       - key: JWT_SECRET
         generateValue: true
       - key: NEXTAUTH_SECRET
         generateValue: true
       - key: NEXTAUTH_URL
-        value: https://erp-system.onrender.com
+        value: https://erp-system-1-15en.onrender.com
       - key: NEXT_PUBLIC_API_URL
-        value: https://erp-system.onrender.com/api
+        value: https://erp-system-1-15en.onrender.com/api
 
-databases:
-  - name: erp-db
-    plan: free
-    databaseName: erp_database
-    user: erp_user
