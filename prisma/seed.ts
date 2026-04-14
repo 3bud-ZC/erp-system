@@ -382,6 +382,16 @@ async function main() {
   console.log('- 2 فاتورة شراء');
   console.log('- 3 فواتير بيع');
   console.log('- 4 مصروفات');
+
+  // إضافة بيانات المصادقة (Admin user)
+  console.log('\n🔐 إضافة بيانات المصادقة...');
+  try {
+    const { execSync } = require('child_process');
+    execSync('npx tsx prisma/seed-auth.ts', { stdio: 'inherit' });
+    console.log('✅ تم إضافة بيانات المصادقة بنجاح!');
+  } catch (error) {
+    console.log('⚠️ لم يتم إضافة بيانات المصادقة (قد تكون موجودة مسبقاً)');
+  }
 }
 
 main()
