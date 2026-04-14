@@ -130,7 +130,16 @@ export default function DashboardPage() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/dashboard');
+      setError(null);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      
+      const response = await fetch('/api/dashboard', {
+        signal: controller.signal,
+        cache: 'no-store'
+      });
+      clearTimeout(timeoutId);
+      
       if (!response.ok) throw new Error('فشل في تحميل البيانات');
       const result = await response.json();
       
@@ -177,6 +186,13 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchDashboardData();
+    
+    // Auto-refresh every 5 minutes
+    const interval = setInterval(() => {
+      fetchDashboardData();
+    }, 300000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) {

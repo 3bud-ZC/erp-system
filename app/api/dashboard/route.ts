@@ -4,6 +4,10 @@ import { calculateProfitAndLoss } from '@/lib/accounting';
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { getAuthenticatedUser } from '@/lib/auth';
 
+// Disable caching for dashboard data
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // Helper: Calculate totals for a given date range
 async function getFinancialData(startDate: Date, endDate: Date) {
   const salesData = await prisma.salesInvoice.aggregate({

@@ -75,30 +75,34 @@ export default function InventoryPage() {
       let productsData = [];
       let warehousesData = [];
       
-      try {
-        const prodRes = await fetch('/api/products');
-        if (prodRes.ok) {
-          const result = await prodRes.json();
-          // Handle wrapped response format {success: true, data: [...]}
-          productsData = result.data || result;
-        } else {
-          console.warn('Products API failed:', prodRes.status);
-        }
-      } catch (err) {
-        console.warn('Products API error:', err);
-      }
+      // Load data in parallel with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
       
       try {
-        const whRes = await fetch('/api/warehouses');
+        const [prodRes, whRes] = await Promise.all([
+          fetch('/api/products', { signal: controller.signal, cache: 'no-store' }),
+          fetch('/api/warehouses', { signal: controller.signal, cache: 'no-store' })
+        ]);
+        
+        clearTimeout(timeoutId);
+        
+        if (prodRes.ok) {
+          const result = await prodRes.json();
+          productsData = result.data || result;
+        }
+        
         if (whRes.ok) {
           const result = await whRes.json();
-          // Handle wrapped response format {success: true, data: [...]}
           warehousesData = result.data || result;
-        } else {
-          console.warn('Warehouses API failed:', whRes.status);
         }
-      } catch (err) {
-        console.warn('Warehouses API error:', err);
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        if (err?.name === 'AbortError') {
+          setError('انتهت مهلة التحميل. يرجى المحاولة مرة أخرى.');
+          return;
+        }
+        console.warn('API error:', err);
       }
       
       // Set data even if partial
