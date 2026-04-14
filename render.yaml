@@ -11,9 +11,9 @@ services:
       - key: DATABASE_URL
         value: postgresql://erp_user:LfBcocsK7Nxkl31CHAD7dWyOsKLaaE4v@dpg-d7eponn7f7vs73db2ugg-a.oregon-postgres.render.com/erp_database_r1s1
       - key: JWT_SECRET
-        generateValue: true
+        value: 3d402fbbe3b416d9f1ea65ac45cf5fb882df130c8b560eeaf35c80368456b228fbfff94d8a0b4c309f14e7437ea7f7bfea632b02986c51e561b990fe5b352e81
       - key: NEXTAUTH_SECRET
-        generateValue: true
+        value: 91e69c722acb1ddf08a50b766a4cd0ff688a083e3d8c2ec671e87d83dc5f93f76acfdc316a31c87926b1d8c9f88571bd8bdfb466860c6e3f476b480b2cbef14e
       - key: NEXTAUTH_URL
         value: https://erp-system-btoq.onrender.com
       - key: NEXT_PUBLIC_API_URL
