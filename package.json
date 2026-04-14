@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma db push --accept-data-loss && node scripts/railway-init.js && next build",
+    "build": "prisma generate && next build",
     "vercel-build": "prisma generate && prisma db push && node scripts/deploy-demo.js && next build",
     "railway-build": "prisma generate && npx prisma db push --accept-data-loss && node scripts/railway-init.js && next build",
     "build:analyze": "ANALYZE=true next build",
