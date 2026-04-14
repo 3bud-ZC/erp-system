@@ -182,6 +182,46 @@ async function main() {
     }
     console.log(`✅ Created ${roles.length} roles with permissions`);
 
+    // Create default admin user
+    console.log('👤 Creating admin user...');
+    const adminRole = await prisma.role.findUnique({
+      where: { code: 'admin' },
+    });
+
+    if (adminRole) {
+      const hashedPassword = await import('bcryptjs').then((bcrypt) =>
+        bcrypt.hash('admin12345', 10)
+      );
+
+      const adminUser = await prisma.user.upsert({
+        where: { email: 'admin@example.com' },
+        update: {},
+        create: {
+          email: 'admin@example.com',
+          name: 'مدير النظام',
+          password: hashedPassword,
+          isActive: true,
+        },
+      });
+
+      // Assign admin role to user
+      await prisma.userRole.upsert({
+        where: {
+          userId_roleId: {
+            userId: adminUser.id,
+            roleId: adminRole.id,
+          },
+        },
+        update: {},
+        create: {
+          userId: adminUser.id,
+          roleId: adminRole.id,
+        },
+      });
+
+      console.log('✅ Admin user created: admin@example.com / admin12345');
+    }
+
     console.log('✨ Authentication data seeding completed successfully!');
   } catch (error) {
     console.error('❌ Error seeding authentication data:', error);
