@@ -1,22 +1,84 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-// Login disabled - direct access to dashboard
+// Auto-login with demo user
 export default function LoginPage() {
   const router = useRouter();
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    // Redirect to dashboard immediately (no auth required)
-    router.replace('/dashboard');
+    const autoLogin = async () => {
+      try {
+        // Try to login with demo user
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: 'demo@erp-system.com',
+            password: 'demo12345',
+          }),
+        });
+
+        if (!response.ok) {
+          // If demo user doesn't exist, try admin user
+          const adminResponse = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              email: 'admin@example.com',
+              password: 'admin12345',
+            }),
+          });
+
+          if (!adminResponse.ok) {
+            throw new Error('فشل في تسجيل الدخول');
+          }
+
+          const adminData = await adminResponse.json();
+          if (adminData.token) {
+            localStorage.setItem('token', adminData.token);
+            router.replace('/dashboard');
+            return;
+          }
+        }
+
+        const data = await response.json();
+        
+        if (data.token) {
+          // Store token in localStorage
+          localStorage.setItem('token', data.token);
+          // Redirect to dashboard
+          router.replace('/dashboard');
+        } else {
+          throw new Error('لم يتم استلام رمز التوثيق');
+        }
+      } catch (err) {
+        console.error('Auto-login error:', err);
+        setError('فشل في تسجيل الدخول التلقائي. جاري تحويلك للداشبورد بدون بيانات...');
+        // Still redirect to dashboard after 3 seconds even if login fails
+        setTimeout(() => {
+          router.replace('/dashboard');
+        }, 3000);
+      }
+    };
+
+    autoLogin();
   }, [router]);
 
   return (
-    <div className="flex items-center justify-center min-h-screen">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-        <p className="mt-4 text-gray-600">جاري تحويلك للداشبورد...</p>
+    <div className="flex items-center justify-center min-h-screen bg-gray-50">
+      <div className="text-center bg-white p-8 rounded-xl shadow-lg">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <p className="text-gray-600 mb-2">جاري تسجيل الدخول...</p>
+        {error && (
+          <p className="text-orange-500 text-sm mt-2">{error}</p>
+        )}
       </div>
     </div>
   );

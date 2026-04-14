@@ -1,6 +1,7 @@
 /**
  * API Client Utility
  * Provides safe API calls with proper error handling and data extraction
+ * Includes authentication token from localStorage
  */
 
 export interface ApiResponse<T = any> {
@@ -11,16 +12,29 @@ export interface ApiResponse<T = any> {
 }
 
 /**
+ * Get auth token from localStorage (client-side only)
+ */
+function getAuthToken(): string | null {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('token');
+  }
+  return null;
+}
+
+/**
  * Safely fetch data from API
  * Handles both wrapped ({success, data}) and unwrapped responses
- * Auth disabled - direct access
+ * Automatically includes auth token from localStorage
  */
 export async function fetchApi<T = any>(
   url: string,
   options: RequestInit = {}
 ): Promise<T> {
+  const token = getAuthToken();
+  
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
+    ...(token && { 'Authorization': `Bearer ${token}` }),
     ...options.headers,
   };
 

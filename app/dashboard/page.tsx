@@ -134,9 +134,15 @@ export default function DashboardPage() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
       
+      // Get auth token from localStorage
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      
       const response = await fetch('/api/dashboard', {
         signal: controller.signal,
-        cache: 'no-store'
+        cache: 'no-store',
+        headers: {
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
       });
       clearTimeout(timeoutId);
       

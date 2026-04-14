@@ -80,9 +80,21 @@ export default function InventoryPage() {
       const timeoutId = setTimeout(() => controller.abort(), 8000);
       
       try {
+        // Get auth token from localStorage
+        const token = localStorage.getItem('token');
+        const authHeaders: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+        
         const [prodRes, whRes] = await Promise.all([
-          fetch('/api/products', { signal: controller.signal, cache: 'no-store' }),
-          fetch('/api/warehouses', { signal: controller.signal, cache: 'no-store' })
+          fetch('/api/products', { 
+            signal: controller.signal, 
+            cache: 'no-store',
+            headers: authHeaders
+          }),
+          fetch('/api/warehouses', { 
+            signal: controller.signal, 
+            cache: 'no-store',
+            headers: authHeaders
+          })
         ]);
         
         clearTimeout(timeoutId);
