@@ -8,7 +8,7 @@ export async function GET(request: Request) {
     const customers = await prisma.customer.findMany({
       orderBy: { createdAt: 'desc' },
     });
-    return NextResponse.json(customers);
+    return apiSuccess(customers, 'Customers fetched successfully');
   } catch (error) {
     return handleApiError(error, 'Fetch customers');
   }
