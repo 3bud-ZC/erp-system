@@ -58,13 +58,13 @@ export default function LoginPage() {
         } else {
           throw new Error('لم يتم استلام رمز التوثيق');
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Auto-login error:', err);
-        setError('فشل في تسجيل الدخول التلقائي. جاري تحويلك للداشبورد بدون بيانات...');
-        // Still redirect to dashboard after 3 seconds even if login fails
+        setError('المستخدم غير موجود. جاري إعداد النظام...');
+        // Redirect to setup page to create demo user
         setTimeout(() => {
-          router.replace('/dashboard');
-        }, 3000);
+          router.replace('/setup');
+        }, 2000);
       }
     };
 

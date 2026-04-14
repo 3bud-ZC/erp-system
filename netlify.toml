@@ -1,0 +1,10 @@
+[build]
+  command = "npm ci && npx prisma generate && npx prisma db push && node scripts/deploy-demo.js && npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "18"
+  NPM_VERSION = "9"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
