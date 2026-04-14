@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { apiSuccess, apiError, handleApiError } from '@/lib/api-response';
 
 /**
  * Sales Orders API
@@ -20,10 +21,10 @@ export async function GET() {
       },
       orderBy: { createdAt: 'desc' },
     });
-    return NextResponse.json(orders);
+    return apiSuccess(orders, 'Orders fetched successfully');
   } catch (error) {
     console.error('Error fetching sales orders:', error);
-    return NextResponse.json({ error: 'Failed to fetch sales orders' }, { status: 500 });
+    return handleApiError(error, 'Failed to fetch sales orders');
   }
 }
 
