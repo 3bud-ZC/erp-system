@@ -11,18 +11,16 @@ export interface ApiResponse<T = any> {
 }
 
 /**
- * Safely fetch data from API with authentication
+ * Safely fetch data from API
  * Handles both wrapped ({success, data}) and unwrapped responses
+ * Auth disabled - direct access
  */
 export async function fetchApi<T = any>(
   url: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-  
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
-    ...(token && { Authorization: `Bearer ${token}` }),
     ...options.headers,
   };
 

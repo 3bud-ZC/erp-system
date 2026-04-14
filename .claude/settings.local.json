@@ -3,7 +3,10 @@
     "allow": [
       "Bash(npx prisma:*)",
       "Bash(tasklist)",
-      "mcp__Claude_Preview__preview_start"
+      "mcp__Claude_Preview__preview_start",
+      "Bash(GIT_TRACE=1 git -C \"C:/Users/3bud/Desktop/pop\" add render.yaml)",
+      "Bash(git -C C:/Users/3bud/Desktop/pop commit -m 'Fix render.yaml: set explicit JWT_SECRET and NEXTAUTH_SECRET values for stable auth:*)",
+      "Bash(git -C \"C:/Users/3bud/Desktop/pop\" push origin master)"
     ]
   }
 }
