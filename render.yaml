@@ -15,7 +15,7 @@ services:
       - key: NEXTAUTH_SECRET
         generateValue: true
       - key: NEXTAUTH_URL
-        value: https://erp-system-1-15en.onrender.com
+        value: https://erp-system-btoq.onrender.com
       - key: NEXT_PUBLIC_API_URL
-        value: https://erp-system-1-15en.onrender.com/api
+        value: https://erp-system-btoq.onrender.com/api
 
