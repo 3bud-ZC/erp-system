@@ -20,7 +20,7 @@ export async function GET(request: Request) {
       },
       orderBy: { createdAt: 'desc' },
     });
-    return NextResponse.json(invoices);
+    return apiSuccess(invoices, 'Sales invoices fetched successfully');
   } catch (error) {
     return handleApiError(error, 'Fetch sales invoices');
   }

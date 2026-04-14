@@ -26,7 +26,7 @@ export async function GET(request: Request) {
       prisma.warehouse.count({ where }),
     ]);
 
-    return NextResponse.json(data);
+    return apiSuccess(data, 'Warehouses fetched successfully');
   } catch (error) {
     return handleApiError(error, 'Fetch warehouses');
   }

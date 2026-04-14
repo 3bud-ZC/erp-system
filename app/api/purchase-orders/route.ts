@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { apiSuccess, apiError, handleApiError } from '@/lib/api-response';
 
 /**
  * Purchase Orders API
@@ -20,10 +21,10 @@ export async function GET() {
       },
       orderBy: { createdAt: 'desc' },
     });
-    return NextResponse.json(orders);
+    return apiSuccess(orders, 'Purchase orders fetched successfully');
   } catch (error) {
     console.error('Error fetching purchase orders:', error);
-    return NextResponse.json({ error: 'Failed to fetch purchase orders' }, { status: 500 });
+    return handleApiError(error, 'Fetch purchase orders');
   }
 }
 
@@ -34,15 +35,15 @@ export async function POST(request: Request) {
 
     // Validate required fields
     if (!supplierId) {
-      return NextResponse.json({ error: 'Supplier ID is required' }, { status: 400 });
+      return apiError('Supplier ID is required', 400);
     }
 
     if (!items || items.length === 0) {
-      return NextResponse.json({ error: 'At least one item is required' }, { status: 400 });
+      return apiError('At least one item is required', 400);
     }
 
     if (!date) {
-      return NextResponse.json({ error: 'Date is required' }, { status: 400 });
+      return apiError('Date is required', 400);
     }
 
     // Verify supplier exists
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
     });
 
     if (!supplier) {
-      return NextResponse.json({ error: 'Supplier not found' }, { status: 404 });
+      return apiError('Supplier not found', 404);
     }
 
     // Check for duplicate order number
@@ -60,7 +61,7 @@ export async function POST(request: Request) {
         where: { orderNumber },
       });
       if (existing) {
-        return NextResponse.json({ error: `Order number ${orderNumber} already exists` }, { status: 400 });
+        return apiError(`Order number ${orderNumber} already exists`, 400);
       }
     }
 
@@ -99,12 +100,10 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json(order);
+    return apiSuccess(order, 'Purchase order created successfully');
   } catch (error: any) {
     console.error('Error creating purchase order:', error);
-    // Return more detailed error message
-    const errorMessage = error.message || error.meta?.cause || 'Failed to create purchase order';
-    return NextResponse.json({ error: errorMessage, details: error.meta }, { status: 500 });
+    return handleApiError(error, 'Create purchase order');
   }
 }
 
@@ -114,11 +113,11 @@ export async function PUT(request: Request) {
     const { id, items, orderNumber, date, status, notes, total, supplierId } = body;
 
     if (!id) {
-      return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
+      return apiError('Order ID is required', 400);
     }
 
     if (!date) {
-      return NextResponse.json({ error: 'Date is required' }, { status: 400 });
+      return apiError('Date is required', 400);
     }
 
     // Verify order exists
@@ -128,7 +127,7 @@ export async function PUT(request: Request) {
     });
 
     if (!existingOrder) {
-      return NextResponse.json({ error: 'Purchase order not found' }, { status: 404 });
+      return apiError('Purchase order not found', 404);
     }
 
     // Check for duplicate order number (if changed)
@@ -137,7 +136,7 @@ export async function PUT(request: Request) {
         where: { orderNumber },
       });
       if (existing) {
-        return NextResponse.json({ error: `Order number ${orderNumber} already exists` }, { status: 400 });
+        return apiError(`Order number ${orderNumber} already exists`, 400);
       }
     }
 
@@ -180,11 +179,10 @@ export async function PUT(request: Request) {
       },
     });
 
-    return NextResponse.json(order);
+    return apiSuccess(order, 'Purchase order updated successfully');
   } catch (error: any) {
     console.error('Error updating purchase order:', error);
-    const errorMessage = error.message || error.meta?.cause || 'Failed to update purchase order';
-    return NextResponse.json({ error: errorMessage, details: error.meta }, { status: 500 });
+    return handleApiError(error, 'Update purchase order');
   }
 }
 
@@ -194,16 +192,16 @@ export async function DELETE(request: Request) {
     const id = searchParams.get('id');
 
     if (!id) {
-      return NextResponse.json({ error: 'ID is required' }, { status: 400 });
+      return apiError('ID is required', 400);
     }
 
     await prisma.purchaseOrder.delete({
       where: { id },
     });
 
-    return NextResponse.json({ success: true });
+    return apiSuccess({ id }, 'Purchase order deleted successfully');
   } catch (error) {
     console.error('Error deleting purchase order:', error);
-    return NextResponse.json({ error: 'Failed to delete purchase order' }, { status: 500 });
+    return handleApiError(error, 'Delete purchase order');
   }
 }

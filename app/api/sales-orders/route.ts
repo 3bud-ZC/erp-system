@@ -35,15 +35,15 @@ export async function POST(request: Request) {
 
     // Validate required fields
     if (!customerId) {
-      return NextResponse.json({ error: 'Customer ID is required' }, { status: 400 });
+      return apiError('Customer ID is required', 400);
     }
 
     if (!items || items.length === 0) {
-      return NextResponse.json({ error: 'At least one item is required' }, { status: 400 });
+      return apiError('At least one item is required', 400);
     }
 
     if (!date) {
-      return NextResponse.json({ error: 'Date is required' }, { status: 400 });
+      return apiError('Date is required', 400);
     }
 
     // Verify customer exists
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     });
 
     if (!customer) {
-      return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+      return apiError('Customer not found', 404);
     }
 
     // Check for duplicate order number
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
         where: { orderNumber },
       });
       if (existing) {
-        return NextResponse.json({ error: `Order number ${orderNumber} already exists` }, { status: 400 });
+        return apiError(`Order number ${orderNumber} already exists`, 400);
       }
     }
 
@@ -95,11 +95,10 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json(order);
+    return apiSuccess(order, 'Sales order created successfully');
   } catch (error: any) {
     console.error('Error creating sales order:', error);
-    const errorMessage = error.message || error.meta?.cause || 'Failed to create sales order';
-    return NextResponse.json({ error: errorMessage, details: error.meta }, { status: 500 });
+    return handleApiError(error, 'Create sales order');
   }
 }
 
@@ -109,11 +108,11 @@ export async function PUT(request: Request) {
     const { id, items, orderNumber, date, status, notes, total, customerId } = body;
 
     if (!id) {
-      return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
+      return apiError('Order ID is required', 400);
     }
 
     if (!date) {
-      return NextResponse.json({ error: 'Date is required' }, { status: 400 });
+      return apiError('Date is required', 400);
     }
 
     // Verify order exists
@@ -123,7 +122,7 @@ export async function PUT(request: Request) {
     });
 
     if (!existingOrder) {
-      return NextResponse.json({ error: 'Sales order not found' }, { status: 404 });
+      return apiError('Sales order not found', 404);
     }
 
     // Check for duplicate order number (if changed)
@@ -132,7 +131,7 @@ export async function PUT(request: Request) {
         where: { orderNumber },
       });
       if (existing) {
-        return NextResponse.json({ error: `Order number ${orderNumber} already exists` }, { status: 400 });
+        return apiError(`Order number ${orderNumber} already exists`, 400);
       }
     }
 
@@ -170,11 +169,10 @@ export async function PUT(request: Request) {
       },
     });
 
-    return NextResponse.json(order);
+    return apiSuccess(order, 'Sales order updated successfully');
   } catch (error: any) {
     console.error('Error updating sales order:', error);
-    const errorMessage = error.message || error.meta?.cause || 'Failed to update sales order';
-    return NextResponse.json({ error: errorMessage, details: error.meta }, { status: 500 });
+    return handleApiError(error, 'Update sales order');
   }
 }
 
@@ -184,7 +182,7 @@ export async function DELETE(request: Request) {
     const id = searchParams.get('id');
 
     if (!id) {
-      return NextResponse.json({ error: 'ID is required' }, { status: 400 });
+      return apiError('ID is required', 400);
     }
 
     // Delete items first, then order
@@ -197,10 +195,9 @@ export async function DELETE(request: Request) {
       }),
     ]);
 
-    return NextResponse.json({ success: true });
+    return apiSuccess({ id }, 'Sales order deleted successfully');
   } catch (error: any) {
     console.error('Error deleting sales order:', error);
-    const errorMessage = error.message || error.meta?.cause || 'Failed to delete sales order';
-    return NextResponse.json({ error: errorMessage, details: error.meta }, { status: 500 });
+    return handleApiError(error, 'Delete sales order');
   }
 }
