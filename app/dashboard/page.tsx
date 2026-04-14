@@ -134,31 +134,34 @@ export default function DashboardPage() {
       if (!response.ok) throw new Error('فشل في تحميل البيانات');
       const result = await response.json();
       
+      // Handle wrapped response format {success: true, data: {...}}
+      const apiData = result.data || result;
+      
       // Ensure safe defaults for all arrays and objects
       const dashboardData: DashboardData = {
-        totalSales: result.totalSales || 0,
-        totalPurchases: result.totalPurchases || 0,
-        totalExpenses: result.totalExpenses || 0,
-        salesTrend: result.salesTrend || 0,
-        purchasesTrend: result.purchasesTrend || 0,
-        expensesTrend: result.expensesTrend || 0,
-        grossProfit: result.grossProfit || 0,
-        netProfit: result.netProfit || 0,
-        profitMargin: result.profitMargin || 0,
-        lowStockProducts: result.lowStockProducts || 0,
-        totalProducts: result.totalProducts || 0,
-        totalInventoryValue: result.totalInventoryValue || 0,
-        recentActivities: result.recentActivities || [],
-        alerts: result.alerts || [],
+        totalSales: apiData.totalSales || 0,
+        totalPurchases: apiData.totalPurchases || 0,
+        totalExpenses: apiData.totalExpenses || 0,
+        salesTrend: apiData.salesTrend || 0,
+        purchasesTrend: apiData.purchasesTrend || 0,
+        expensesTrend: apiData.expensesTrend || 0,
+        grossProfit: apiData.grossProfit || 0,
+        netProfit: apiData.netProfit || 0,
+        profitMargin: apiData.profitMargin || 0,
+        lowStockProducts: apiData.lowStockProducts || 0,
+        totalProducts: apiData.totalProducts || 0,
+        totalInventoryValue: apiData.totalInventoryValue || 0,
+        recentActivities: apiData.recentActivities || [],
+        alerts: apiData.alerts || [],
         chartData: {
-          labels: result.chartData?.labels || [],
-          sales: result.chartData?.sales || [],
-          purchases: result.chartData?.purchases || [],
+          labels: apiData.chartData?.labels || [],
+          sales: apiData.chartData?.sales || [],
+          purchases: apiData.chartData?.purchases || [],
         },
         inventoryData: {
-          rawMaterials: result.inventoryData?.rawMaterials || 0,
-          finishedGoods: result.inventoryData?.finishedGoods || 0,
-          packaging: result.inventoryData?.packaging || 0,
+          rawMaterials: apiData.inventoryData?.rawMaterials || 0,
+          finishedGoods: apiData.inventoryData?.finishedGoods || 0,
+          packaging: apiData.inventoryData?.packaging || 0,
         },
       };
       

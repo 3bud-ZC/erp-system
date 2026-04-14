@@ -78,7 +78,9 @@ export default function InventoryPage() {
       try {
         const prodRes = await fetch('/api/products');
         if (prodRes.ok) {
-          productsData = await prodRes.json();
+          const result = await prodRes.json();
+          // Handle wrapped response format {success: true, data: [...]}
+          productsData = result.data || result;
         } else {
           console.warn('Products API failed:', prodRes.status);
         }
@@ -89,7 +91,9 @@ export default function InventoryPage() {
       try {
         const whRes = await fetch('/api/warehouses');
         if (whRes.ok) {
-          warehousesData = await whRes.json();
+          const result = await whRes.json();
+          // Handle wrapped response format {success: true, data: [...]}
+          warehousesData = result.data || result;
         } else {
           console.warn('Warehouses API failed:', whRes.status);
         }

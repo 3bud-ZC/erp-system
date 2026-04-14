@@ -193,7 +193,7 @@ export async function GET(request: Request) {
       });
     }
 
-    return NextResponse.json({
+    return apiSuccess({
       // Current month totals
       totalSales: currentData.sales,
       totalPurchases: currentData.purchases,
@@ -223,7 +223,7 @@ export async function GET(request: Request) {
       // Activities and alerts
       recentActivities,
       alerts,
-    });
+    }, 'Dashboard data fetched successfully');
   } catch (error) {
     console.error('Error fetching dashboard data:', error);
     return handleApiError(error, 'Fetch dashboard data');
