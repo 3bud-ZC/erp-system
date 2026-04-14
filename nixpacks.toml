@@ -3,7 +3,7 @@ cmds = [
     "npm ci",
     "npx prisma generate",
     "npx prisma db push --accept-data-loss",
-    "node scripts/deploy-demo.js",
+    "node scripts/railway-init.js",
     "npm run build"
 ]
 
