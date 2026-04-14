@@ -3,7 +3,7 @@ services:
     name: erp-system
     runtime: node
     plan: free
-    buildCommand: npm ci && npx prisma generate && npx prisma db push && node scripts/deploy-demo.js && npm run build
+    buildCommand: echo "=== Starting Build ===" && npm ci && echo "=== Generating Prisma Client ===" && npx prisma generate && echo "=== Pushing Schema to Database ===" && npx prisma db push --accept-data-loss && echo "=== Seeding Database ===" && npx prisma db seed && echo "=== Creating Demo User ===" && node scripts/deploy-demo.js && echo "=== Building Next.js ===" && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV
