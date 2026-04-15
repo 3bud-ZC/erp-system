@@ -29,7 +29,7 @@ export async function GET() {
     ];
 
     for (const permCode of permissions) {
-      const module = permCode.includes('dashboard') ? 'dashboard' :
+      const moduleName = permCode.includes('dashboard') ? 'dashboard' :
                     permCode.includes('product') || permCode.includes('warehouse') ? 'inventory' :
                     permCode.includes('customer') || permCode.includes('sales') ? 'sales' :
                     permCode.includes('supplier') || permCode.includes('purchase') ? 'purchases' :
@@ -47,7 +47,7 @@ export async function GET() {
           nameAr: permCode,
           nameEn: permCode,
           description: `Permission for ${permCode}`,
-          module,
+          module: moduleName,
           action,
         },
       });
