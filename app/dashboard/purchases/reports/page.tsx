@@ -61,11 +61,16 @@ export default function PurchaseReportsPage() {
       let invoices: any[] = [];
       let suppliers: any[] = [];
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      
       const extract = (d: any): any[] => Array.isArray(d) ? d : (Array.isArray(d?.data) ? d.data : []);
       await Promise.allSettled([
-        fetch('/api/purchase-invoices').then(r => r.ok ? r.json() : []).then(d => { invoices = extract(d); }),
-        fetch('/api/suppliers').then(r => r.ok ? r.json() : []).then(d => { suppliers = extract(d); }),
+        fetch('/api/purchase-invoices', { signal: controller.signal, cache: 'no-store' }).then(r => r.ok ? r.json() : []).then(d => { invoices = extract(d); }),
+        fetch('/api/suppliers', { signal: controller.signal, cache: 'no-store' }).then(r => r.ok ? r.json() : []).then(d => { suppliers = extract(d); }),
       ]);
+      
+      clearTimeout(timeoutId);
 
       const startDate = new Date(dateRange.fromDate);
       const endDate = new Date(dateRange.toDate);
@@ -114,9 +119,13 @@ export default function PurchaseReportsPage() {
         .map(([month, total]) => ({ month, total }));
 
       setReportData({ totalPurchases, averageOrderValue, totalInvoices, topSuppliers, monthlyTrends, categoryBreakdown: [] });
-    } catch (err) {
-      console.error('Error generating report:', err);
-      setError(err instanceof Error ? err.message : 'فشل في إنشاء التقرير');
+    } catch (error: any) {
+      console.error('Error generating report:', error);
+      if (error.name === 'AbortError') {
+        setError('استغرق تحميل البيانات وقتاً طويلاً. يرجى المحاولة مرة أخرى.');
+      } else {
+        setError('فشل في تحميل بيانات التقرير');
+      }
     } finally {
       setLoading(false);
     }
