@@ -5,7 +5,7 @@ nixpacksConfigPath = "nixpacks.toml"
 [deploy]
 startCommand = "node scripts/railway-start.js"
 healthcheckPath = "/api/health"
-healthcheckTimeout = 300
+healthcheckTimeout = 600
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
 

@@ -50,7 +50,8 @@ try {
 
   // Start the app
   console.log('🚀 Starting Next.js app...\n');
-  execSync('npm start', {
+  const port = process.env.PORT || 3000;
+  execSync(`npx next start -p ${port}`, {
     stdio: 'inherit',
     cwd: process.cwd()
   });
