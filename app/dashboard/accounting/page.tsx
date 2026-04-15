@@ -1,161 +1,417 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { BookOpen, TrendingUp, TrendingDown, FileText, ArrowUpRight, RefreshCw } from 'lucide-react';
-import { formatCurrency } from '@/lib/format';
+import EnhancedTable from '@/components/EnhancedTable';
+import EnhancedModal from '@/components/EnhancedModal';
+import { Plus, Trash2, Edit, BookOpen, AlertTriangle, HelpCircle } from 'lucide-react';
+import { fetchApi, getAuthHeadersOnly } from '@/lib/api-client';
 
-export default function AccountingPage() {
-  const [entries, setEntries] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+interface Account {
+  id: string;
+  code: string;
+  nameAr: string;
+  nameEn?: string;
+  type: string;
+  parentId?: string;
+  parent?: { nameAr: string };
+  balance: number;
+  isActive: boolean;
+}
 
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
-    fetch('/api/journal-entries', { headers })
-      .then((r) => (r.ok ? r.json() : []))
-      .then((d) => { setEntries(Array.isArray(d) ? d : []); })
-      .catch(() => setEntries([]))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const last30 = entries.filter((e) => {
-    const d = new Date(e.date || e.createdAt);
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 30);
-    return d >= cutoff;
+export default function ChartOfAccountsPage() {
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+  
+  const [formData, setFormData] = useState({
+    code: '',
+    nameAr: '',
+    nameEn: '',
+    type: 'asset',
+    parentId: '',
   });
 
-  const totalDebit = last30.reduce((sum, e) => {
-    const lineDebit = e.lines?.reduce((s: number, l: any) => s + (l.debit || 0), 0) || 0;
-    return sum + lineDebit;
-  }, 0);
+  useEffect(() => {
+    fetchData();
+  }, []);
 
-  const totalCredit = last30.reduce((sum, e) => {
-    const lineCredit = e.lines?.reduce((s: number, l: any) => s + (l.credit || 0), 0) || 0;
-    return sum + lineCredit;
-  }, 0);
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const headers = getAuthHeadersOnly();
+      const res = await fetch('/api/accounts', { headers });
+
+      if (res.ok) {
+        const data = await res.json();
+        setAccounts(data.data || data);
+      }
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.code || !formData.nameAr || !formData.type) {
+      setError('يرجى ملء جميع الحقول المطلوبة');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const method = editingAccount ? 'PUT' : 'POST';
+      const body = {
+        ...(editingAccount ? { id: editingAccount.id } : {}),
+        ...formData,
+        parentId: formData.parentId || null,
+      };
+      
+      await fetchApi('/api/accounts', {
+        method,
+        body: JSON.stringify(body),
+      });
+
+      setIsModalOpen(false);
+      resetForm();
+      setEditingAccount(null);
+      await fetchData();
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save account');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEdit = (account: Account) => {
+    setEditingAccount(account);
+    setFormData({
+      code: account.code,
+      nameAr: account.nameAr,
+      nameEn: account.nameEn || '',
+      type: account.type,
+      parentId: account.parentId || '',
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = async (account: Account) => {
+    if (!confirm('هل أنت متأكد من حذف هذا الحساب؟')) return;
+    
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const res = await fetch(`/api/accounts?id=${account.id}`, { 
+        method: 'DELETE',
+        headers
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || 'فشل حذف الحساب');
+      }
+      await fetchData();
+    } catch (err) {
+      console.error('Error deleting account:', err);
+      setError(err instanceof Error ? err.message : 'فشل حذف الحساب');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      code: '',
+      nameAr: '',
+      nameEn: '',
+      type: 'asset',
+      parentId: '',
+    });
+    setError(null);
+  };
+
+  const getAccountTypeLabel = (type: string) => {
+    const types: Record<string, string> = {
+      asset: 'أصول',
+      liability: 'خصوم',
+      equity: 'حقوق ملكية',
+      revenue: 'إيرادات',
+      expense: 'مصروفات',
+    };
+    return types[type] || type;
+  };
+
+  const getAccountTypeColor = (type: string) => {
+    const colors: Record<string, string> = {
+      asset: 'bg-blue-100 text-blue-700',
+      liability: 'bg-red-100 text-red-700',
+      equity: 'bg-purple-100 text-purple-700',
+      revenue: 'bg-green-100 text-green-700',
+      expense: 'bg-orange-100 text-orange-700',
+    };
+    return colors[type] || 'bg-gray-100 text-gray-700';
+  };
+
+  const columns = [
+    { key: 'code', label: 'الكود', className: 'font-medium' },
+    { key: 'nameAr', label: 'الاسم بالعربي', className: 'font-medium' },
+    { key: 'nameEn', label: 'الاسم بالإنجليزي' },
+    {
+      key: 'type',
+      label: 'النوع',
+      render: (value: string) => (
+        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getAccountTypeColor(value)}`}>
+          {getAccountTypeLabel(value)}
+        </span>
+      ),
+    },
+    {
+      key: 'parent',
+      label: 'الحساب الأب',
+      render: (value: any) => value?.nameAr || '-',
+    },
+    {
+      key: 'balance',
+      label: 'الرصيد',
+      render: (value: number) => `${value.toFixed(2)} ج.م`,
+    },
+    {
+      key: 'isActive',
+      label: 'الحالة',
+      render: (value: boolean) => (
+        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+          value ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+        }`}>
+          {value ? 'نشط' : 'غير نشط'}
+        </span>
+      ),
+    },
+    {
+      key: 'actions',
+      label: 'الإجراءات',
+      render: (_: any, row: Account) => (
+        <div className="flex gap-2 items-center">
+          <button
+            onClick={() => handleEdit(row)}
+            className="text-blue-600 hover:text-blue-800 transition-colors"
+            title="تعديل"
+          >
+            <Edit className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => handleDelete(row)}
+            className="text-red-600 hover:text-red-800 transition-colors"
+            title="حذف"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  const accountsByType = {
+    asset: accounts.filter(a => a.type === 'asset'),
+    liability: accounts.filter(a => a.type === 'liability'),
+    equity: accounts.filter(a => a.type === 'equity'),
+    revenue: accounts.filter(a => a.type === 'revenue'),
+    expense: accounts.filter(a => a.type === 'expense'),
+  };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">المحاسبة</h1>
-        <p className="text-gray-500 text-sm mt-1">نظرة عامة على القيود المحاسبية</p>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-gray-500 text-sm">قيود آخر 30 يوم</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">
-                {loading ? <RefreshCw className="w-5 h-5 animate-spin" /> : last30.length}
-              </p>
-            </div>
-            <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
-              <FileText className="w-5 h-5 text-white" />
-            </div>
-          </div>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">دليل الحسابات</h1>
+          <p className="text-gray-600 mt-1">إدارة الحسابات المحاسبية</p>
         </div>
-
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-gray-500 text-sm">إجمالي المدين</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">
-                {loading ? '...' : formatCurrency(totalDebit)}
-              </p>
-            </div>
-            <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-white" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-gray-500 text-sm">إجمالي الدائن</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">
-                {loading ? '...' : formatCurrency(totalCredit)}
-              </p>
-            </div>
-            <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
-              <TrendingDown className="w-5 h-5 text-white" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Quick Links */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Link
-          href="/dashboard/accounting/journal"
-          className="flex items-center gap-3 bg-purple-600 text-white rounded-xl p-5 hover:bg-purple-700 transition-colors"
+        <button
+          onClick={() => {
+            resetForm();
+            setEditingAccount(null);
+            setIsModalOpen(true);
+          }}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
         >
-          <BookOpen className="w-6 h-6" />
-          <div className="flex-1">
-            <p className="font-bold">دفتر القيود اليومية</p>
-            <p className="text-sm text-purple-200">عرض وإدارة القيود المحاسبية</p>
-          </div>
-          <ArrowUpRight className="w-5 h-5" />
-        </Link>
-
-        <Link
-          href="/dashboard/sales/reports"
-          className="flex items-center gap-3 bg-blue-600 text-white rounded-xl p-5 hover:bg-blue-700 transition-colors"
-        >
-          <TrendingUp className="w-6 h-6" />
-          <div className="flex-1">
-            <p className="font-bold">تقارير المبيعات والمشتريات</p>
-            <p className="text-sm text-blue-200">ملخص الأداء المالي</p>
-          </div>
-          <ArrowUpRight className="w-5 h-5" />
-        </Link>
+          <Plus className="w-5 h-5" />
+          حساب جديد
+        </button>
       </div>
 
-      {/* Recent Entries */}
-      {!loading && last30.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">آخر القيود (30 يوم)</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-right">
-              <thead className="border-b border-gray-200">
-                <tr>
-                  <th className="py-2 px-3 font-semibold text-gray-700">رقم القيد</th>
-                  <th className="py-2 px-3 font-semibold text-gray-700">التاريخ</th>
-                  <th className="py-2 px-3 font-semibold text-gray-700">الوصف</th>
-                  <th className="py-2 px-3 font-semibold text-gray-700">الحالة</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {last30.slice(0, 10).map((entry) => (
-                  <tr key={entry.id} className="hover:bg-gray-50">
-                    <td className="py-2 px-3 font-medium">{entry.entryNumber || entry.id?.slice(0, 8)}</td>
-                    <td className="py-2 px-3 text-gray-600">
-                      {new Date(entry.date || entry.createdAt).toLocaleDateString('ar-EG')}
-                    </td>
-                    <td className="py-2 px-3 text-gray-600">{entry.description || '-'}</td>
-                    <td className="py-2 px-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        entry.status === 'posted' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
-                      }`}>
-                        {entry.status === 'posted' ? 'مرحّل' : 'مسودة'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* Explanation Banner */}
+      <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-5">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+            <HelpCircle className="w-5 h-5 text-green-600" />
           </div>
-          <div className="mt-3 text-center">
-            <Link href="/dashboard/accounting/journal" className="text-sm text-purple-600 hover:underline">
-              عرض جميع القيود &larr;
-            </Link>
+          <div>
+            <h3 className="font-bold text-green-900 mb-2">ما هو دليل الحسابات؟</h3>
+            <p className="text-sm text-green-800 leading-relaxed mb-2">
+              دليل الحسابات هو قائمة منظمة بجميع الحسابات المحاسبية المستخدمة في الشركة. يتم تصنيفها إلى:
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-green-700 mt-2">
+              <div>• <strong>الأصول (Assets):</strong> ما تملكه الشركة (نقدية، مخزون، معدات)</div>
+              <div>• <strong>الخصوم (Liabilities):</strong> ما على الشركة من التزامات (قروض، موردين)</div>
+              <div>• <strong>حقوق الملكية (Equity):</strong> رأس المال والأرباح المحتجزة</div>
+              <div>• <strong>الإيرادات (Revenue):</strong> دخل الشركة من المبيعات والخدمات</div>
+              <div>• <strong>المصروفات (Expenses):</strong> تكاليف تشغيل الشركة</div>
+            </div>
+            <p className="text-xs text-green-600 mt-3 font-medium">
+              💡 المعادلة المحاسبية: الأصول = الخصوم + حقوق الملكية
+            </p>
           </div>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <p className="text-blue-700 text-sm">الأصول</p>
+          <p className="text-2xl font-bold text-blue-800">{accountsByType.asset.length}</p>
+        </div>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+          <p className="text-red-700 text-sm">الخصوم</p>
+          <p className="text-2xl font-bold text-red-800">{accountsByType.liability.length}</p>
+        </div>
+        <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+          <p className="text-purple-700 text-sm">حقوق الملكية</p>
+          <p className="text-2xl font-bold text-purple-800">{accountsByType.equity.length}</p>
+        </div>
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+          <p className="text-green-700 text-sm">الإيرادات</p>
+          <p className="text-2xl font-bold text-green-800">{accountsByType.revenue.length}</p>
+        </div>
+        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+          <p className="text-orange-700 text-sm">المصروفات</p>
+          <p className="text-2xl font-bold text-orange-800">{accountsByType.expense.length}</p>
+        </div>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-600 flex items-center gap-2">
+          <AlertTriangle className="w-5 h-5" />
+          {error}
         </div>
       )}
+
+      {accounts.length === 0 ? (
+        <div className="text-center py-12 bg-gray-50 rounded-lg">
+          <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+          <p className="text-gray-500">لا توجد حسابات</p>
+          <p className="text-sm text-gray-400 mt-1">أضف حساب جديد للبدء</p>
+        </div>
+      ) : (
+        <EnhancedTable columns={columns} data={accounts} />
+      )}
+
+      <EnhancedModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          resetForm();
+          setEditingAccount(null);
+        }}
+        title={editingAccount ? 'تعديل حساب' : 'إضافة حساب جديد'}
+        size="lg"
+      >
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">الكود *</label>
+              <input
+                type="text"
+                required
+                value={formData.code}
+                onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                placeholder="مثال: 1010"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">النوع *</label>
+              <select
+                required
+                value={formData.type}
+                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="asset">أصول</option>
+                <option value="liability">خصوم</option>
+                <option value="equity">حقوق ملكية</option>
+                <option value="revenue">إيرادات</option>
+                <option value="expense">مصروفات</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">الاسم بالعربي *</label>
+              <input
+                type="text"
+                required
+                value={formData.nameAr}
+                onChange={(e) => setFormData({ ...formData, nameAr: e.target.value })}
+                placeholder="مثال: النقدية بالصندوق"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">الاسم بالإنجليزي</label>
+              <input
+                type="text"
+                value={formData.nameEn}
+                onChange={(e) => setFormData({ ...formData, nameEn: e.target.value })}
+                placeholder="Cash on Hand"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">الحساب الأب (اختياري)</label>
+              <select
+                value={formData.parentId}
+                onChange={(e) => setFormData({ ...formData, parentId: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">لا يوجد</option>
+                {accounts
+                  .filter(a => a.type === formData.type && (!editingAccount || a.id !== editingAccount.id))
+                  .map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.code} - {account.nameAr}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex gap-2 justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                setIsModalOpen(false);
+                resetForm();
+                setEditingAccount(null);
+              }}
+              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              إلغاء
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+            >
+              {loading ? 'جاري الحفظ...' : 'حفظ'}
+            </button>
+          </div>
+        </form>
+      </EnhancedModal>
     </div>
   );
 }
