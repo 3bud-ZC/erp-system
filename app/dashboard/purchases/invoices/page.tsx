@@ -300,9 +300,13 @@ export default function PurchaseInvoicesPage() {
       const method = editingInvoice ? 'PUT' : 'POST';
       const body = editingInvoice ? { id: editingInvoice.id, ...data } : data;
 
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const response = await fetch('/api/purchase-invoices', {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(body),
       });
 
