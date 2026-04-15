@@ -177,7 +177,7 @@ export default function PurchaseOrdersPage() {
     try {
       const orderNumber = editingOrder ? editingOrder.orderNumber : generateOrderNumber();
       
-      const response = await fetch('/api/sales-orders', {
+      const response = await fetch('/api/purchase-orders', {
         method: editingOrder ? 'PUT' : 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -199,15 +199,15 @@ export default function PurchaseOrdersPage() {
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'فشل في حفظ أمر البيع');
+        throw new Error(errorData.message || 'فشل في حفظ أمر الشراء');
       }
       
-      alert(editingOrder ? 'تم تحديث أمر البيع بنجاح!' : 'تم إنشاء أمر البيع بنجاح!');
+      alert(editingOrder ? 'تم تحديث أمر الشراء بنجاح!' : 'تم إنشاء أمر الشراء بنجاح!');
       resetForm();
       loadData();
     } catch (error: any) {
       console.error('Error saving order:', error);
-      alert(error.message || 'حدث خطأ أثناء حفظ أمر البيع');
+      alert(error.message || 'حدث خطأ أثناء حفظ أمر الشراء');
     }
   };
 
@@ -233,7 +233,7 @@ export default function PurchaseOrdersPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('هل أنت متأكد من حذف أمر البيع؟')) return;
+    if (!confirm('هل أنت متأكد من حذف أمر الشراء؟')) return;
     
     try {
       const response = await fetch(`/api/purchase-orders?id=${id}`, {
@@ -242,7 +242,7 @@ export default function PurchaseOrdersPage() {
       });
 
       if (response.ok) {
-        alert('تم حذف أمر البيع بنجاح!');
+        alert('تم حذف أمر الشراء بنجاح!');
         loadData();
       } else {
         const error = await response.json();
@@ -535,7 +535,6 @@ export default function PurchaseOrdersPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
                     المورد <span className="text-red-500">*</span>
                   </label>
                   <select
