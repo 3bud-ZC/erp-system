@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+
+// Disable caching for real-time data
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 import { validateStockAvailability, decrementStockInTransaction, incrementStockInTransaction } from '@/lib/inventory';
 import {
   createManufacturingEntry,
