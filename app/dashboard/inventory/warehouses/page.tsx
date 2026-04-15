@@ -91,8 +91,16 @@ export default function WarehousesPage() {
     try {
       setLoading(true);
       setError(null);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
       
-      const res = await fetch('/api/warehouses', { headers: getAuthHeadersOnly() });
+      const res = await fetch('/api/warehouses', { 
+        headers: getAuthHeadersOnly(),
+        signal: controller.signal,
+        cache: 'no-store'
+      });
+      
+      clearTimeout(timeoutId);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.message || err.error || `HTTP ${res.status}`);
@@ -101,9 +109,14 @@ export default function WarehousesPage() {
       // Handle wrapped response { success: true, data: [...] }
       const data = json.data || json;
       setWarehouses(Array.isArray(data) ? data : (Array.isArray(data.data) ? data.data : []));
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching warehouses:', err);
-      setError(err instanceof Error ? err.message : 'فشل في تحميل المخازن');
+      if (err.name === 'AbortError') {
+        setError('استغرق تحميل البيانات وقتاً طويلاً. يرجى المحاولة مرة أخرى.');
+      } else {
+        setError(err instanceof Error ? err.message : 'فشل في تحميل البيانات');
+      }
+      setWarehouses([]);
     } finally {
       setLoading(false);
     }
