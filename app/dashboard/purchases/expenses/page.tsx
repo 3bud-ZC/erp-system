@@ -409,7 +409,7 @@ export default function ExpensesPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isFormOpen, editingExpense, formData]);
+  }, [isFormOpen, editingExpense, formData, handleSave, handleCopy, handleDeleteCurrent]);
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {

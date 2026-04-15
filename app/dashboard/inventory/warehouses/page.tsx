@@ -256,7 +256,7 @@ export default function WarehousesPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isFormOpen, editingWarehouse, formData]);
+  }, [isFormOpen, editingWarehouse, formData, handleSave, handleCopy, handleDeleteCurrent]);
 
   if (loading) {
     return (

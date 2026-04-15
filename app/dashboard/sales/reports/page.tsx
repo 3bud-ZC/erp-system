@@ -51,10 +51,6 @@ export default function SalesReportsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    generateReport();
-  }, [dateRange]);
-
   const generateReport = async () => {
     try {
       setLoading(true);
@@ -136,6 +132,10 @@ export default function SalesReportsPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    generateReport();
+  }, [dateRange]);
 
   if (loading) {
     return (

@@ -24,15 +24,12 @@ interface JournalEntry {
 export default function JournalPage() {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState({
     fromDate: new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0],
     toDate: new Date().toISOString().split('T')[0],
   });
-
-  useEffect(() => {
-    loadEntries();
-  }, [dateRange]);
 
   const loadEntries = async () => {
     try {
@@ -43,14 +40,19 @@ export default function JournalPage() {
       if (!response.ok) {
         throw new Error('Failed to fetch journal entries');
       }
-      const json = await response.json();
-      setEntries(Array.isArray(json.entries) ? json.entries : (Array.isArray(json.data) ? json.data : []));
-    } catch (error) {
-      console.error('Error loading entries:', error);
+      const data = await response.json();
+      setEntries(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load entries');
+      setEntries([]);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadEntries();
+  }, [dateRange]);
 
   if (loading) {
     return (

@@ -52,6 +52,14 @@ export default function NotificationToast({
   const config = typeConfig[type];
   const Icon = config.icon;
 
+  const handleClose = () => {
+    setIsExiting(true);
+    setTimeout(() => {
+      setIsVisible(false);
+      onClose?.();
+    }, 300);
+  };
+
   useEffect(() => {
     // Entrance animation
     setIsVisible(true);
@@ -62,15 +70,7 @@ export default function NotificationToast({
     }, duration);
 
     return () => clearTimeout(timer);
-  }, [duration]);
-
-  const handleClose = () => {
-    setIsExiting(true);
-    setTimeout(() => {
-      setIsVisible(false);
-      onClose?.();
-    }, 300);
-  };
+  }, [duration, handleClose]);
 
   if (!isVisible) return null;
 

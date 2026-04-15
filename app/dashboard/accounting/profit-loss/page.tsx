@@ -58,10 +58,6 @@ export default function ProfitLossPage() {
     toDate: new Date().toISOString().split('T')[0],
   });
 
-  useEffect(() => {
-    loadReport();
-  }, [dateRange]);
-
   const loadReport = async () => {
     try {
       setLoading(true);
@@ -85,6 +81,10 @@ export default function ProfitLossPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadReport();
+  }, [dateRange]);
 
   if (loading) {
     return (

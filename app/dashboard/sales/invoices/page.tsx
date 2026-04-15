@@ -498,7 +498,7 @@ export default function SalesInvoicesPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isFormOpen, editingInvoice, formData]);
+  }, [isFormOpen, editingInvoice, formData, handleSave, handleCopy, handleDeleteCurrent]);
 
   const totals = calculateTotals();
 

@@ -497,7 +497,7 @@ export default function PurchaseOrdersPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isFormOpen, editingOrder, formData]);
+  }, [isFormOpen, editingOrder, formData, handleSave, handleCopy, handleDeleteCurrent]);
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
