@@ -351,19 +351,19 @@ export default function JournalEntriesPage() {
         <div className="bg-green-50 border border-green-200 rounded-xl p-4">
           <p className="text-green-700 text-sm">قيود مرحّلة</p>
           <p className="text-2xl font-bold text-green-800">
-            {entries.filter(e => e.isPosted).length}
+            {Array.isArray(entries) ? entries.filter(e => e.isPosted).length : 0}
           </p>
         </div>
         <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
           <p className="text-yellow-700 text-sm">مسودات</p>
           <p className="text-2xl font-bold text-yellow-800">
-            {entries.filter(e => !e.isPosted).length}
+            {Array.isArray(entries) ? entries.filter(e => !e.isPosted).length : 0}
           </p>
         </div>
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
           <p className="text-blue-700 text-sm">هذا الشهر</p>
           <p className="text-2xl font-bold text-blue-800">
-            {entries.filter(e => new Date(e.date).getMonth() === new Date().getMonth()).length}
+            {Array.isArray(entries) ? entries.filter(e => new Date(e.date).getMonth() === new Date().getMonth()).length : 0}
           </p>
         </div>
       </div>

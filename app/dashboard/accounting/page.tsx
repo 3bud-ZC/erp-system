@@ -40,17 +40,33 @@ export default function ChartOfAccountsPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
+      setError(null);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+      
       const headers = getAuthHeadersOnly();
-      const res = await fetch('/api/accounts', { headers });
+      const res = await fetch('/api/accounts', { 
+        headers,
+        signal: controller.signal 
+      });
+      
+      clearTimeout(timeoutId);
 
       if (res.ok) {
         const data = await res.json();
-        setAccounts(data.data || data);
+        setAccounts(Array.isArray(data) ? data : (data.data || []));
+      } else {
+        setAccounts([]);
       }
       setError(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load data');
+      if (err.name === 'AbortError') {
+        setError('استغرق تحميل البيانات وقتاً طويلاً. يرجى المحاولة مرة أخرى.');
+      } else {
+        setError(err instanceof Error ? err.message : 'فشل في تحميل البيانات');
+      }
+      setAccounts([]);
     } finally {
       setLoading(false);
     }
@@ -218,12 +234,23 @@ export default function ChartOfAccountsPage() {
   ];
 
   const accountsByType = {
-    asset: accounts.filter(a => a.type === 'asset'),
-    liability: accounts.filter(a => a.type === 'liability'),
-    equity: accounts.filter(a => a.type === 'equity'),
-    revenue: accounts.filter(a => a.type === 'revenue'),
-    expense: accounts.filter(a => a.type === 'expense'),
+    asset: Array.isArray(accounts) ? accounts.filter(a => a.type === 'asset') : [],
+    liability: Array.isArray(accounts) ? accounts.filter(a => a.type === 'liability') : [],
+    equity: Array.isArray(accounts) ? accounts.filter(a => a.type === 'equity') : [],
+    revenue: Array.isArray(accounts) ? accounts.filter(a => a.type === 'revenue') : [],
+    expense: Array.isArray(accounts) ? accounts.filter(a => a.type === 'expense') : [],
   };
+
+  if (loading && accounts.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">جاري تحميل دليل الحسابات...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -379,7 +406,7 @@ export default function ChartOfAccountsPage() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">لا يوجد</option>
-                {accounts
+                {Array.isArray(accounts) && accounts
                   .filter(a => a.type === formData.type && (!editingAccount || a.id !== editingAccount.id))
                   .map((account) => (
                     <option key={account.id} value={account.id}>
