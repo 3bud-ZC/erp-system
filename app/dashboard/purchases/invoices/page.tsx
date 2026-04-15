@@ -386,9 +386,13 @@ export default function PurchaseInvoicesPage() {
   const handleDelete = async (invoice: Invoice) => {
     if (confirm('هل أنت متأكد من حذف هذه الفاتورة؟')) {
       try {
+        const token = localStorage.getItem('token');
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        
         const response = await fetch(`/api/purchase-invoices?id=${invoice.id}`, { 
           method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' }
+          headers
         });
         
         if (!response.ok) {
