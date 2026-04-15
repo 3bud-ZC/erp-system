@@ -60,7 +60,7 @@ export async function POST(request: Request) {
     });
 
     if (!product) {
-      return apiError('Product not found', 404);
+      return apiError('المنتج النهائي غير موجود', 404);
     }
 
     const material = await prisma.product.findUnique({
@@ -68,11 +68,11 @@ export async function POST(request: Request) {
     });
 
     if (!material) {
-      return apiError('Material product not found', 404);
+      return apiError('المادة الخام غير موجودة', 404);
     }
 
     if (productId === materialId) {
-      return apiError('A product cannot be its own raw material', 400);
+      return apiError('المنتج لا يمكن أن يكون مادة خام لنفسه', 400);
     }
 
     const existing = await prisma.bOMItem.findFirst({
@@ -181,7 +181,7 @@ export async function DELETE(request: Request) {
     const id = searchParams.get('id');
 
     if (!id) {
-      return handleApiError(new Error('ID is required'), 'Delete BOM item');
+      return apiError('معرف عنصر BOM مطلوب', 400);
     }
 
     await prisma.bOMItem.delete({

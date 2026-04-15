@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit, Package } from 'lucide-react';
+import { Plus, Trash2, Package, AlertCircle } from 'lucide-react';
 import { getAuthHeadersOnly, getAuthHeaders } from '@/lib/api-client';
 
 interface BOMItem {
@@ -15,8 +15,10 @@ interface BOMItem {
 
 export default function ManufacturingOperationsPage() {
   const [bomItems, setBomItems] = useState<BOMItem[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);  // Finished products only
+  const [rawMaterials, setRawMaterials] = useState<any[]>([]);  // Raw materials only
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     productId: '',
@@ -31,13 +33,15 @@ export default function ManufacturingOperationsPage() {
   const loadData = async () => {
     try {
       setLoading(true);
+      setError(null);
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
       
       const headers = getAuthHeadersOnly();
-      const [bomRes, productsRes] = await Promise.all([
+      const [bomRes, productsRes, rawMaterialsRes] = await Promise.all([
         fetch('/api/bom', { headers, signal: controller.signal, cache: 'no-store' }),
-        fetch('/api/products', { headers, signal: controller.signal, cache: 'no-store' }),
+        fetch('/api/products?type=product', { headers, signal: controller.signal, cache: 'no-store' }),
+        fetch('/api/raw-materials', { headers, signal: controller.signal, cache: 'no-store' }),
       ]);
       
       clearTimeout(timeoutId);
@@ -55,13 +59,23 @@ export default function ManufacturingOperationsPage() {
       } else {
         setProducts([]);
       }
+      
+      if (rawMaterialsRes.ok) {
+        const data = await rawMaterialsRes.json();
+        setRawMaterials(Array.isArray(data) ? data : (data.data || []));
+      } else {
+        setRawMaterials([]);
+      }
     } catch (error: any) {
       console.error('Error loading data:', error);
       if (error.name === 'AbortError') {
-        alert('استغرق تحميل البيانات وقتاً طويلاً. يرجى المحاولة مرة أخرى.');
+        setError('استغرق تحميل البيانات وقتاً طويلاً. يرجى المحاولة مرة أخرى.');
+      } else {
+        setError('حدث خطأ أثناء تحميل البيانات');
       }
       setBomItems([]);
       setProducts([]);
+      setRawMaterials([]);
     } finally {
       setLoading(false);
     }
@@ -69,7 +83,24 @@ export default function ManufacturingOperationsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!formData.productId || !formData.materialId) {
+      alert('يرجى اختيار المنتج النهائي والمادة الخام');
+      return;
+    }
+    
+    if (formData.quantity <= 0) {
+      alert('الكمية يجب أن تكون أكبر من صفر');
+      return;
+    }
+    
+    if (formData.productId === formData.materialId) {
+      alert('المنتج لا يمكن أن يكون مادة خام لنفسه');
+      return;
+    }
+    
     try {
+      setLoading(true);
       const response = await fetch('/api/bom', {
         method: 'POST',
         headers: getAuthHeaders(),
@@ -80,24 +111,38 @@ export default function ManufacturingOperationsPage() {
         setFormData({ productId: '', materialId: '', quantity: 1 });
         setShowForm(false);
         loadData();
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        alert(errorData.message || 'حدث خطأ أثناء الحفظ');
       }
     } catch (error) {
       console.error('Error saving BOM item:', error);
+      alert('حدث خطأ أثناء الحفظ');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('حذف هذا العنصر من BOM؟')) return;
+    if (!confirm('هل أنت متأكد من حذف هذا العنصر من BOM؟')) return;
     try {
+      setLoading(true);
       const response = await fetch(`/api/bom?id=${id}`, {
         method: 'DELETE',
+        headers: getAuthHeadersOnly(),
       });
 
       if (response.ok) {
         loadData();
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        alert(errorData.message || 'حدث خطأ أثناء الحذف');
       }
     } catch (error) {
       console.error('Error deleting BOM item:', error);
+      alert('حدث خطأ أثناء الحذف');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -118,12 +163,20 @@ export default function ManufacturingOperationsPage() {
         <h1 className="text-3xl font-bold">إدارة المنتجات والمواد الخام (BOM)</h1>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+          disabled={loading}
+          className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
         >
           <Plus className="w-5 h-5" />
           إضافة عنصر BOM
         </button>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+          <p className="text-red-800">{error}</p>
+        </div>
+      )}
 
       {showForm && (
         <div className="bg-white rounded-lg shadow p-6">
@@ -156,7 +209,7 @@ export default function ManufacturingOperationsPage() {
                   className="w-full border rounded-lg px-3 py-2"
                 >
                   <option value="">اختر مادة خام</option>
-                  {products.map((p) => (
+                  {rawMaterials.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.nameAr}
                     </option>
@@ -178,13 +231,18 @@ export default function ManufacturingOperationsPage() {
             </div>
 
             <div className="flex gap-2">
-              <button type="submit" className="bg-green-600 text-white px-4 py-2 rounded-lg">
-                حفظ
+              <button 
+                type="submit" 
+                disabled={loading}
+                className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                {loading ? 'جاري الحفظ...' : 'حفظ'}
               </button>
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg"
+                disabled={loading}
+                className="bg-gray-300 hover:bg-gray-400 disabled:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition-colors"
               >
                 إلغاء
               </button>
@@ -218,7 +276,9 @@ export default function ManufacturingOperationsPage() {
                   <td className="px-6 py-3">
                     <button
                       onClick={() => handleDelete(item.id)}
-                      className="text-red-600 hover:text-red-900 text-sm"
+                      disabled={loading}
+                      className="text-red-600 hover:text-red-800 disabled:text-red-300 text-sm transition-colors"
+                      title="حذف"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
