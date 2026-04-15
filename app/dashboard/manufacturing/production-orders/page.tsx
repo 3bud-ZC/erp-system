@@ -14,6 +14,7 @@ import {
   PlayCircle,
   CheckCircle2,
   AlertCircle,
+  Factory,
 } from 'lucide-react';
 
 interface ProductionOrder {
@@ -25,11 +26,21 @@ interface ProductionOrder {
   status: 'pending' | 'in_progress' | 'completed';
   date: string;
   createdAt: string;
+  productionLineId?: string;
+  productionLine?: { name: string; code: string };
+}
+
+interface ProductionLine {
+  id: string;
+  code: string;
+  name: string;
+  status: string;
 }
 
 export default function ProductionOrdersPage() {
   const [orders, setOrders] = useState<ProductionOrder[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [productionLines, setProductionLines] = useState<ProductionLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -37,6 +48,7 @@ export default function ProductionOrdersPage() {
     productId: '',
     quantity: 0,
     date: new Date().toISOString().split('T')[0],
+    productionLineId: '',
   });
 
   useEffect(() => {
@@ -50,9 +62,10 @@ export default function ProductionOrdersPage() {
       const timeoutId = setTimeout(() => controller.abort(), 30000);
       
       const headers = getAuthHeadersOnly();
-      const [ordersRes, productsRes] = await Promise.all([
+      const [ordersRes, productsRes, linesRes] = await Promise.all([
         fetch('/api/production-orders', { headers, signal: controller.signal, cache: 'no-store' }),
         fetch('/api/products?type=product', { headers, signal: controller.signal, cache: 'no-store' }),
+        fetch('/api/production-lines?status=active', { headers, signal: controller.signal, cache: 'no-store' }),
       ]);
       
       clearTimeout(timeoutId);
@@ -70,6 +83,13 @@ export default function ProductionOrdersPage() {
       } else {
         setProducts([]);
       }
+
+      if (linesRes.ok) {
+        const data = await linesRes.json();
+        setProductionLines(Array.isArray(data) ? data : (data.data || []));
+      } else {
+        setProductionLines([]);
+      }
     } catch (error: any) {
       console.error('Error loading data:', error);
       if (error.name === 'AbortError') {
@@ -77,6 +97,7 @@ export default function ProductionOrdersPage() {
       }
       setOrders([]);
       setProducts([]);
+      setProductionLines([]);
     } finally {
       setLoading(false);
     }
@@ -103,6 +124,7 @@ export default function ProductionOrdersPage() {
           productId: formData.productId,
           quantity: Number(formData.quantity),
           date: new Date(formData.date).toISOString(),
+          productionLineId: formData.productionLineId || undefined,
         }),
       });
       
@@ -166,6 +188,7 @@ export default function ProductionOrdersPage() {
       productId: '',
       quantity: 0,
       date: new Date().toISOString().split('T')[0],
+      productionLineId: '',
     });
     setIsModalOpen(false);
   };
@@ -283,6 +306,7 @@ export default function ProductionOrdersPage() {
             <tr>
               <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">رقم الأمر</th>
               <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">المنتج</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">خط الإنتاج</th>
               <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">الكمية</th>
               <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">التاريخ</th>
               <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">الحالة</th>
@@ -292,7 +316,7 @@ export default function ProductionOrdersPage() {
           <tbody className="divide-y divide-gray-200">
             {filteredOrders.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                   <Package className="w-12 h-12 mx-auto mb-2 text-gray-400" />
                   لا توجد أوامر إنتاج
                 </td>
@@ -303,6 +327,16 @@ export default function ProductionOrdersPage() {
                   <td className="px-4 py-3 text-sm text-gray-900">{order.orderNumber}</td>
                   <td className="px-4 py-3 text-sm text-gray-900">
                     {order.product?.nameAr} <span className="text-gray-500">({order.product?.code})</span>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-900">
+                    {order.productionLine ? (
+                      <span className="inline-flex items-center gap-1 text-blue-600">
+                        <Factory className="w-3 h-3" />
+                        {order.productionLine.name}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-900">{order.quantity}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">
@@ -393,6 +427,27 @@ export default function ProductionOrdersPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  خط الإنتاج
+                </label>
+                <select
+                  value={formData.productionLineId}
+                  onChange={(e) => setFormData({ ...formData, productionLineId: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">اختر خط إنتاج (اختياري)</option>
+                  {productionLines.map((line) => (
+                    <option key={line.id} value={line.id}>
+                      {line.code} - {line.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  اختياري - يمكن تحديد خط الإنتاج لاحقاً
+                </p>
               </div>
 
               <div>

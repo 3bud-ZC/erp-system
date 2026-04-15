@@ -30,6 +30,7 @@ export async function GET(request: Request) {
     const orders = await prisma.productionOrder.findMany({
       include: {
         product: true,
+        productionLine: true,
         items: {
           include: {
             product: true,
@@ -128,6 +129,7 @@ export async function POST(request: Request) {
           include: {
             items: true,
             product: true,
+            productionLine: true,
           },
         });
 
