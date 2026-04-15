@@ -170,19 +170,28 @@ export async function DELETE(request: Request) {
       return handleApiError(new Error('ID is required'), 'Delete product');
     }
 
-    // Check if product is used in any sales orders, purchase orders, or invoices
-    const [salesOrderItems, purchaseOrderItems, salesInvoiceItems, purchaseInvoiceItems] = await Promise.all([
+    // Check if product is used in any sales orders, purchase orders, invoices, stock movements, or production
+    const [salesOrderItems, purchaseOrderItems, salesInvoiceItems, purchaseInvoiceItems, stockMovements, productionOrders] = await Promise.all([
       prisma.salesOrderItem.count({ where: { productId: id } }),
       prisma.purchaseOrderItem.count({ where: { productId: id } }),
       prisma.salesInvoiceItem.count({ where: { productId: id } }),
       prisma.purchaseInvoiceItem.count({ where: { productId: id } }),
+      prisma.stockMovement.count({ where: { productId: id } }),
+      prisma.productionOrder.count({ where: { productId: id } }),
     ]);
 
-    const totalUsage = salesOrderItems + purchaseOrderItems + salesInvoiceItems + purchaseInvoiceItems;
+    const totalUsage = salesOrderItems + purchaseOrderItems + salesInvoiceItems + purchaseInvoiceItems + stockMovements + productionOrders;
 
     if (totalUsage > 0) {
       return apiError(
-        `لا يمكن حذف المنتج لأنه مستخدم في ${totalUsage} سجل (أوامر بيع: ${salesOrderItems}, أوامر شراء: ${purchaseOrderItems}, فواتير بيع: ${salesInvoiceItems}, فواتير شراء: ${purchaseInvoiceItems}). يرجى حذف السجلات المرتبطة أولاً أو إلغاء تفعيل المنتج بدلاً من الحذف.`,
+        `لا يمكن حذف المنتج لأنه مستخدم في ${totalUsage} سجل:\n` +
+        `- أوامر بيع: ${salesOrderItems}\n` +
+        `- أوامر شراء: ${purchaseOrderItems}\n` +
+        `- فواتير بيع: ${salesInvoiceItems}\n` +
+        `- فواتير شراء: ${purchaseInvoiceItems}\n` +
+        `- حركات مخزن: ${stockMovements}\n` +
+        `- أوامر إنتاج: ${productionOrders}\n` +
+        `يرجى حذف السجلات المرتبطة أولاً أو إلغاء تفعيل المنتج بدلاً من الحذف.`,
         409
       );
     }
