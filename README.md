@@ -1,24 +1,20 @@
-# 🏢 نظام ERP متكامل | Complete ERP System
+# 🏢 نظام ERP متكامل | ERP System
 
 <div align="center">
 
-![Status](https://img.shields.io/badge/Status-Production%20Ready-success?style=flat-square)
-![Version](https://img.shields.io/badge/Version-2.0.0-blue?style=flat-square)
-![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
-![Next.js](https://img.shields.io/badge/Next.js-14.2-black?style=flat-square&logo=next.js)
+![Next.js](https://img.shields.io/badge/Next.js-14-black?style=flat-square&logo=next.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?style=flat-square&logo=typescript)
 ![Prisma](https://img.shields.io/badge/Prisma-5.0-2D3748?style=flat-square&logo=prisma)
 ![TailwindCSS](https://img.shields.io/badge/Tailwind-3.4-38B2AC?style=flat-square&logo=tailwind-css)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?style=flat-square&logo=postgresql)
-[![Deploy](https://img.shields.io/badge/Deploy-Render-46E3B7?style=flat-square&logo=render)]()
 
-**نظام ERP احترافي ومفتوح المصدر - جاهز للإنتاج**
+**نظام ERP احترافي - جاهز للإنتاج**
 
-**Open-Source Enterprise Resource Planning System - Production Ready**
+**Production-Ready ERP System**
 
-Enterprise-grade ERP with full Arabic/English RTL support, JWT authentication, RBAC authorization, and real-time financial reporting.
+نظام متكامل لإدارة المخزون والمبيعات والمشتريات والتصنيع والمحاسبة
 
-[🌐 Live Demo](https://erp-system-btoq.onrender.com) | [📖 Documentation](#-documentation) | [🚀 Quick Start](#-quick-start)
+Integrated system for inventory, sales, purchases, manufacturing, and accounting
 
 </div>
 
@@ -32,35 +28,14 @@ A fully integrated ERP system built with modern technologies to manage all enter
 
 ### ✨ المميزات الرئيسية | Key Features
 
-| Module | Features | Status |
-|--------|----------|--------|
-| 📊 **Dashboard** | Real-time KPIs, charts, low-stock alerts | ✅ Complete |
-| 📦 **Inventory** | Product management, stock tracking, movements | ✅ Complete |
-| 🛒 **Sales** | Invoices, orders, customers, analytics | ✅ Complete |
-| 🏭 **Purchases** | Invoices, orders, suppliers, expenses | ✅ Complete |
-| 🔧 **Manufacturing** | BOM, production orders, WIP tracking | ✅ Complete |
-| 💰 **Accounting** | Double-entry GL, P&L, Balance Sheet, Cash Flow | ✅ Complete |
-| 🔐 **Security** | JWT Auth, RBAC, Audit logging | ✅ Complete |
-| 📈 **Reports** | Financial reports, inventory valuation | ✅ Complete |
-
----
-
-## 🌐 التجربة المباشرة | Live Demo
-
-**🔗 [erp-system-btoq.onrender.com](https://erp-system-btoq.onrender.com)**
-
-> النظام متاح للتجربة مباشرة بدون تسجيل دخول
-> 
-> System available for immediate testing without login
-
-### What's Included
-- 📊 **Dashboard** - Real-time KPIs and financial summary
-- 📦 **Inventory Management** - Product management with stock tracking
-- 🛒 **Sales Module** - Invoices, orders, and customer management
-- 🏭 **Purchase Module** - Invoices, orders, and supplier management
-- 🔧 **Manufacturing** - Production orders with Bill of Materials (BOM)
-- 💰 **Accounting** - Double-entry GL, P&L statements, balance sheets
-- 📈 **Reports** - Real-time financial reports and analytics
+| الموديول | الوصف | Module |
+|----------|-------|--------|
+| 📊 **Dashboard** | مؤشرات الأداء والتقارير | KPIs & Reports |
+| 📦 **المخزون** | إدارة المنتجات والمخزون | Inventory Management |
+| 🛒 **المبيعات** | فواتير وأوامر وعملاء | Sales & Customers |
+| 🏭 **المشتريات** | فواتير وأوامر وموردين | Purchases & Suppliers |
+| 🔧 **التصنيع** | أوامر إنتاج وقوائم مواد | Manufacturing & BOM |
+| 💰 **المحاسبة** | قيود يومية وتقارير | Accounting & Reports |
 
 ---
 
@@ -163,37 +138,18 @@ Start: npm start
 
 ---
 
-## 📸 لقطات الشاشة | Screenshots
-
-### لوحة التحكم | Dashboard
-![Dashboard](dashboard.png)
-
-### المخزون | Inventory
-![Inventory](inventory.png)
-
-### المبيعات | Sales
-![Sales Invoices](sales-invoices.png)
-
-### المشتريات | Purchases
-![Purchase Invoices](purchase-invoices.png)
-
-### المحاسبة | Accounting
-![Accounting Journal](accounting-journal.png)
-
----
-
 ## 🏗️ البنية التقنية | Architecture
 
-### 🛠️ التقنيات المستخدمة | Tech Stack
+### 🛠️ التقنيات | Tech Stack
 
 | Layer | Technology |
 |-------|------------|
-| **Frontend** | Next.js 14.2, React 18, TypeScript 5.0 |
-| **Styling** | TailwindCSS 3.4, Lucide Icons |
-| **Backend** | Next.js API Routes, Node.js 18+ |
-| **Database** | PostgreSQL (Production), Prisma ORM |
-| **Deployment** | Render.com (Free Tier) |
-| **Language** | Arabic/English (RTL Support) |
+| **Frontend** | Next.js 14, React 18, TypeScript |
+| **Styling** | TailwindCSS, Lucide Icons |
+| **Backend** | Next.js API Routes |
+| **Database** | PostgreSQL, Prisma ORM |
+| **Auth** | JWT, bcryptjs |
+| **Language** | Arabic (RTL)
 
 ### Project Structure
 ```
@@ -320,39 +276,6 @@ When Sales Invoice Created:
 
 ---
 
-## 🧪 Testing
-
-### Full Workflow (Copy & Paste)
-```bash
-# 1. Add product to Inventory
-# Navigate to http://localhost:3000/inventory
-# Add "Coffee" (100 units, $50/unit)
-
-# 2. Add supplier
-# Navigate to http://localhost:3000/purchases/suppliers
-# Add "Brazil Coffee Co"
-
-# 3. Create purchase
-# Navigate to http://localhost:3000/purchases/invoices
-# Buy 100 units from supplier
-# Verify: Stock becomes 100
-
-# 4. Add customer
-# Navigate to http://localhost:3000/sales/customers
-# Add "Cafe Downtown"
-
-# 5. Create sales
-# Navigate to http://localhost:3000/sales/invoices
-# Sell 30 units to customer
-# Verify: Stock decreases to 70
-
-# 6. Check accounting
-# Navigate to http://localhost:3000/accounting
-# Verify P&L and Balance Sheet
-```
-
----
-
 ## 📈 Reports (Real-time from GL)
 
 All reports are calculated from actual transactions:
@@ -389,44 +312,29 @@ npx prisma migrate deploy
 
 ## 📚 Documentation
 
-- **[HANDOFF_DOCUMENT.md](./HANDOFF_DOCUMENT.md)** - Complete technical guide (914 lines)
-- **[ERP_COMPLETION_REPORT.md](./ERP_COMPLETION_REPORT.md)** - Implementation details
-- **[DEMO_READY.md](./DEMO_READY.md)** - Demo setup
 - **[prisma/schema.prisma](./prisma/schema.prisma)** - Database schema
+- **[prisma/README.md](./prisma/README.md)** - Database seeding guide
 
 ---
 
-## 🔒 Security & Compliance
+## 🔒 Security
 
-### Implemented ✅
-- **JWT Authentication** - Secure token-based auth with 7-day expiry
-- **RBAC Authorization** - Role-based access control with granular permissions
-- **Audit Logging** - Complete action trail (user, timestamp, IP, changes)
-- **Input Validation** - Type-safe validation on all endpoints
-- **Atomic Transactions** - Database consistency with Prisma $transaction
-- **Stock Validation** - Prevents negative inventory at database level
+- **JWT Authentication** - Token-based auth
+- **RBAC Authorization** - Role-based permissions
+- **Input Validation** - Type-safe endpoints
+- **Atomic Transactions** - Database consistency
 - **Type Safety** - Full TypeScript coverage
-- **FK Constraints** - Referential integrity on all relations
-
-### Production Checklist 🛡️
-- [x] Authentication implemented
-- [x] Authorization (RBAC) enforced
-- [x] Audit logging active
-- [x] Database transactions atomic
-- [x] API responses standardized
-- [ ] HTTPS/SSL enabled (platform responsibility)
-- [ ] Rate limiting configured (add middleware)
 
 ---
 
-## 🛠️ Development
+## 🛠️ Development Commands
 
 ```bash
-npm run dev       # Start dev server
-npm run build     # Build for production
-npm start         # Start production server
-npx tsc --noEmit  # Type check
-npx prisma studio # Open database UI
+npm run dev       # Development server
+npm run build     # Production build
+npm start         # Production server
+npm run seed      # Clean database
+npx prisma studio # Database UI
 ```
 
 ---
@@ -467,54 +375,9 @@ MIT License - Open source and free to use
 
 ---
 
-## 🎯 الملخص | Summary
-
 <div align="center">
 
-### ✅ ERP V2.0 - Production Hardened
-
-| Metric | Value |
-|--------|-------|
-| **Pages** | 34 React pages |
-| **API Endpoints** | 24 REST endpoints, 90+ operations |
-| **Database Models** | 14 entities with full relations |
-| **Auth System** | JWT + RBAC with 30+ permissions |
-| **Test Coverage** | Production audited, 94.5% score |
-| **Language Support** | Arabic (RTL) + English |
-| **Database** | SQLite (dev) / PostgreSQL (prod) |
-| **Deployment** | Docker-ready, Vercel, Render |
-
----
-
-### 🏆 Key Achievements
-
-- ✅ **Enterprise Security** - JWT auth, RBAC, audit trails
-- ✅ **Financial Integrity** - Double-entry accounting, atomic transactions
-- ✅ **Real-time Reporting** - P&L, Balance Sheet, Cash Flow
-- ✅ **Manufacturing Ready** - BOM, WIP tracking, cost analysis
-- ✅ **Zero Data Loss** - All operations atomic with rollback
-- ✅ **Production Scaled** - Tested and hardened for enterprise use
-
----
-
-### 🚀 Quick Start
-
-```bash
-# Clone & Run
-npx create-erp-app my-erp
-cd my-erp && npm run dev
-
-# Or deploy instantly
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/3bud-ZC/erp-system)
-```
-
-**🌐 [Live Demo](https://erp-system-btoq.onrender.com)**
-
----
-
-**Built for enterprises. Open for everyone.**
-
-**صُنع للمؤسسات. مفتوح للجميع.**
+**صُنع بإتقان | Crafted with precision**
 
 </div>
 
@@ -523,7 +386,5 @@ cd my-erp && npm run dev
 <div align="center">
 
 Made with ❤️ by [3bud-ZC](https://github.com/3bud-ZC)
-
-⭐ إذا أعجبك المشروع، لا تنسى النجمة! | If you like this project, don't forget to star it!
 
 </div>
