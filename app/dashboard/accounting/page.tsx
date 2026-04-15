@@ -42,12 +42,13 @@ export default function ChartOfAccountsPage() {
       setLoading(true);
       setError(null);
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout (increased)
       
       const headers = getAuthHeadersOnly();
       const res = await fetch('/api/accounts', { 
         headers,
-        signal: controller.signal 
+        signal: controller.signal,
+        cache: 'no-store'
       });
       
       clearTimeout(timeoutId);

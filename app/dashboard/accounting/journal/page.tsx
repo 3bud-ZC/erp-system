@@ -59,17 +59,17 @@ export default function JournalEntriesPage() {
     fetchData();
   }, []);
 
-  const fetchData = async () => {
+  const fetchData = async (retryCount = 0) => {
     try {
       setLoading(true);
       setError(null);
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout (increased)
       
       const headers = getAuthHeadersOnly();
       const [entriesRes, accountsRes] = await Promise.all([
-        fetch('/api/journal-entries', { headers, signal: controller.signal }),
-        fetch('/api/accounts', { headers, signal: controller.signal }),
+        fetch('/api/journal-entries', { headers, signal: controller.signal, cache: 'no-store' }),
+        fetch('/api/accounts', { headers, signal: controller.signal, cache: 'no-store' }),
       ]);
       
       clearTimeout(timeoutId);
@@ -308,17 +308,28 @@ export default function JournalEntriesPage() {
           <h1 className="text-2xl font-bold text-gray-900">القيود اليومية</h1>
           <p className="text-gray-600 mt-1">تسجيل العمليات المالية اليومية</p>
         </div>
-        <button
-          onClick={() => {
-            resetForm();
-            setEditingEntry(null);
-            setIsModalOpen(true);
-          }}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-        >
-          <Plus className="w-5 h-5" />
-          قيد يومي جديد
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => fetchData()}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            title="تحديث"
+          >
+            <Calendar className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+            تحديث
+          </button>
+          <button
+            onClick={() => {
+              resetForm();
+              setEditingEntry(null);
+              setIsModalOpen(true);
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            <Plus className="w-5 h-5" />
+            قيد يومي جديد
+          </button>
+        </div>
       </div>
 
       {/* Explanation Banner */}
