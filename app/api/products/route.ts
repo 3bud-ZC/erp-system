@@ -66,9 +66,10 @@ export async function POST(request: Request) {
     }
 
     // Whitelist allowed fields — prevent injection of unexpected Prisma fields
-    const productData = {
+    const productData: any = {
       code: code.trim(),
       nameAr: nameAr.trim(),
+      unit: body.unit?.toString()?.trim() || 'piece', // Required field with default
       ...(nameEn && { nameEn: String(nameEn).trim() }),
       ...(type && { type: String(type) }),
       ...(price !== undefined && { price: Number(price) }),

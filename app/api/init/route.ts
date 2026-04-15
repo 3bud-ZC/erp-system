@@ -27,21 +27,38 @@ export async function GET() {
 
     // Create all permissions
     const permissions = [
-      'view_dashboard', 'view_products', 'create_product', 'update_product', 'delete_product',
+      // Dashboard
+      'view_dashboard',
+      // Products & Inventory
+      'view_products', 'create_product', 'update_product', 'delete_product',
+      // Warehouses
       'view_warehouses', 'create_warehouse', 'update_warehouse', 'delete_warehouse',
+      // Customers
       'view_customers', 'create_customer', 'update_customer', 'delete_customer',
+      // Suppliers
       'view_suppliers', 'create_supplier', 'update_supplier', 'delete_supplier',
-      'view_sales', 'view_purchases', 'view_reports', 'view_accounting', 'view_manufacturing'
+      // Sales Invoices
+      'view_sales', 'read_sales_invoice', 'create_sales_invoice', 'update_sales_invoice', 'delete_sales_invoice',
+      // Purchase Invoices
+      'view_purchases', 'read_purchase_invoice', 'create_purchase_invoice', 'update_purchase_invoice', 'delete_purchase_invoice',
+      // Production Orders
+      'view_manufacturing', 'read_production_order', 'create_production_order', 'update_production_order', 'delete_production_order',
+      // Accounting
+      'view_accounting', 'manage_accounts',
+      // Reports
+      'view_reports', 'view_financial_reports',
     ];
 
     for (const permCode of permissions) {
       const moduleName = permCode.includes('dashboard') ? 'dashboard' :
                     permCode.includes('product') || permCode.includes('warehouse') ? 'inventory' :
-                    permCode.includes('customer') || permCode.includes('sales') ? 'sales' :
-                    permCode.includes('supplier') || permCode.includes('purchase') ? 'purchases' :
-                    permCode.includes('report') ? 'reports' :
-                    permCode.includes('accounting') ? 'accounting' :
-                    permCode.includes('manufacturing') ? 'manufacturing' : 'general';
+                    permCode.includes('customer') ? 'sales' :
+                    permCode.includes('sales') ? 'sales' :
+                    permCode.includes('supplier') ? 'purchases' :
+                    permCode.includes('purchase') ? 'purchases' :
+                    permCode.includes('production') || permCode.includes('manufacturing') ? 'manufacturing' :
+                    permCode.includes('report') || permCode.includes('financial') ? 'reports' :
+                    permCode.includes('accounting') || permCode.includes('account') ? 'accounting' : 'general';
       
       const action = permCode.includes('create') ? 'create' :
                     permCode.includes('update') ? 'update' :

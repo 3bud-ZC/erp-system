@@ -51,7 +51,7 @@ export async function POST(request: Request) {
       return apiError('لم يتم المصادقة', 401);
     }
 
-    if (!checkPermission(user, 'create_product')) {
+    if (!checkPermission(user, 'create_warehouse')) {
       return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
 
@@ -101,7 +101,7 @@ export async function PUT(request: Request) {
       return apiError('لم يتم المصادقة', 401);
     }
 
-    if (!checkPermission(user, 'update_product')) {
+    if (!checkPermission(user, 'update_warehouse')) {
       return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
 
@@ -159,7 +159,7 @@ export async function DELETE(request: Request) {
       return apiError('لم يتم المصادقة', 401);
     }
 
-    if (!checkPermission(user, 'delete_product')) {
+    if (!checkPermission(user, 'delete_warehouse')) {
       return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
 
