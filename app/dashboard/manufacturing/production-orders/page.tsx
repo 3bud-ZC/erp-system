@@ -9,11 +9,13 @@ interface ProductionOrder {
   id: string;
   orderNumber: string;
   productId: string;
-  product: { nameAr: string; code: string };
+  product: { nameAr: string; code: string; bom?: any[] };
   quantity: number;
   status: string;
   date: string;
-  workInProgress: { totalCost: number; status: string } | null;
+  laborCost?: number;
+  overheadCost?: number;
+  workInProgress: { totalCost: number; materialCost: number; laborCost: number; overheadCost: number; status: string } | null;
 }
 
 export default function ProductionOrdersPage() {
@@ -62,16 +64,46 @@ export default function ProductionOrdersPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!formData.productId) {
+      alert('يرجى اختيار منتج');
+      return;
+    }
+    
+    if (formData.quantity <= 0) {
+      alert('يرجى إدخال كمية صحيحة');
+      return;
+    }
+    
     try {
-      await fetchApi('/api/production-orders', {
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      
+      const response = await fetch('/api/production-orders', {
         method: 'POST',
-        body: JSON.stringify(formData),
+        headers,
+        body: JSON.stringify({
+          productId: formData.productId,
+          quantity: Number(formData.quantity),
+          laborCost: Number(formData.laborCost) || 0,
+          overheadCost: Number(formData.overheadCost) || 0,
+          date: new Date(formData.date).toISOString(),
+        }),
       });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'فشل في إنشاء أمر الإنتاج');
+      }
+      
+      alert('تم إنشاء أمر الإنتاج بنجاح!');
       setFormData({ productId: '', quantity: 0, laborCost: 0, overheadCost: 0, date: new Date().toISOString().split('T')[0] });
       setShowForm(false);
       loadData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating order:', error);
+      alert(error.message || 'حدث خطأ أثناء إنشاء أمر الإنتاج');
     }
   };
 
@@ -259,10 +291,45 @@ export default function ProductionOrdersPage() {
                   <p className="text-sm text-gray-600 mt-1">
                     الكمية: {order.quantity} | التاريخ: {new Date(order.date).toLocaleDateString('ar-SA')}
                   </p>
+                  
+                  {/* BOM Display */}
+                  {order.product.bom && order.product.bom.length > 0 && (
+                    <div className="mt-2 p-2 bg-gray-50 rounded text-xs">
+                      <p className="font-semibold text-gray-700 mb-1">📦 المواد الخام المطلوبة:</p>
+                      <div className="space-y-1">
+                        {order.product.bom.map((item: any, idx: number) => (
+                          <div key={idx} className="flex justify-between text-gray-600">
+                            <span>• {item.material?.nameAr || 'مادة'}</span>
+                            <span className="font-medium">{(item.quantity * order.quantity).toFixed(2)} {item.material?.unit || 'وحدة'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Cost Breakdown */}
                   {order.workInProgress && (
-                    <p className="text-sm text-blue-600 mt-1">
-                      التكلفة الإجمالية: {order.workInProgress.totalCost.toFixed(2)} ج.م
-                    </p>
+                    <div className="mt-2 p-2 bg-blue-50 rounded text-xs">
+                      <p className="font-semibold text-blue-800 mb-1">💰 تفاصيل التكلفة:</p>
+                      <div className="space-y-1 text-blue-700">
+                        <div className="flex justify-between">
+                          <span>تكلفة المواد:</span>
+                          <span className="font-medium">{order.workInProgress.materialCost?.toFixed(2) || '0.00'} ج.م</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>تكلفة العمالة:</span>
+                          <span className="font-medium">{order.workInProgress.laborCost?.toFixed(2) || '0.00'} ج.م</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>النفقات العامة:</span>
+                          <span className="font-medium">{order.workInProgress.overheadCost?.toFixed(2) || '0.00'} ج.م</span>
+                        </div>
+                        <div className="flex justify-between border-t border-blue-200 pt-1 font-bold">
+                          <span>الإجمالي:</span>
+                          <span>{order.workInProgress.totalCost.toFixed(2)} ج.م</span>
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
 
