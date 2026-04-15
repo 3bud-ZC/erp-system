@@ -235,9 +235,13 @@ export default function ExpensesPage() {
       const method = editingExpense ? 'PUT' : 'POST';
       const url = editingExpense ? `/api/expenses?id=${editingExpense.id}` : '/api/expenses';
 
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(editingExpense ? { id: editingExpense.id, ...data } : data),
       });
 
@@ -319,9 +323,13 @@ export default function ExpensesPage() {
 
   const handleDelete = async (id: string) => {
     try {
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      
       const response = await fetch(`/api/expenses?id=${id}`, { 
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' }
+        headers
       });
       
       if (!response.ok) {
