@@ -32,16 +32,20 @@ try {
     console.log('⚠️ Schema push may have warnings, continuing...\n');
   }
 
-  // Initialize database
-  console.log('🌱 Running database initialization...\n');
-  try {
-    execSync('node scripts/railway-init.js', {
-      stdio: 'inherit',
-      cwd: process.cwd()
-    });
-    console.log('✅ Database initialized\n');
-  } catch (e) {
-    console.log('⚠️ Init may have warnings, continuing...\n');
+  // Skip initialization if SKIP_INIT is set (for faster restarts)
+  if (process.env.SKIP_INIT !== 'true') {
+    console.log('🌱 Running database initialization...\n');
+    try {
+      execSync('node scripts/railway-init.js', {
+        stdio: 'inherit',
+        cwd: process.cwd()
+      });
+      console.log('✅ Database initialized\n');
+    } catch (e) {
+      console.log('⚠️ Init may have warnings, continuing...\n');
+    }
+  } else {
+    console.log('⏭️ Skipping initialization (SKIP_INIT=true)\n');
   }
 
   // Start the app
