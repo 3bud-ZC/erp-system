@@ -101,7 +101,7 @@ export async function POST(request: Request) {
       const validation = await validateStockAvailability(rawMaterialsNeeded);
       if (!validation.valid) {
         return apiError(
-          'Insufficient raw materials for production',
+          'المواد الخام غير كافية للإنتاج',
           400,
           { details: validation.errors }
         );
