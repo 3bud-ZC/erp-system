@@ -148,7 +148,7 @@ export default function InventoryPage() {
     try {
       // Validate required fields
       if (!productForm.code.trim() || !productForm.nameAr.trim()) {
-        alert('Please fill in required fields (Code and Arabic Name)');
+        alert('يرجى ملء الحقول المطلوبة (الكود والاسم بالعربي)');
         return;
       }
 
@@ -191,13 +191,13 @@ export default function InventoryPage() {
       loadData();
     } catch (err) {
       console.error('Save product error:', err);
-      const message = err instanceof Error ? err.message : 'Error saving product';
+      const message = err instanceof Error ? err.message : 'خطأ في حفظ المنتج';
       alert(message);
     }
   };
 
   const deleteProduct = async (p: Product) => {
-    if (!confirm(`Are you sure you want to delete "${p.nameAr}"?`)) return;
+    if (!confirm(`هل أنت متأكد من حذف المنتج "${p.nameAr}"؟`)) return;
     try {
       const res = await fetch(`/api/products?id=${p.id}`, { 
         method: 'DELETE', 
@@ -207,14 +207,14 @@ export default function InventoryPage() {
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         console.error('Delete product error:', errorData);
-        throw new Error(errorData.error || errorData.message || 'Failed to delete product');
+        throw new Error(errorData.error || errorData.message || 'فشل في حذف المنتج');
       }
       
       console.log('Product deleted successfully');
       loadData();
     } catch (err) {
       console.error('Delete product error:', err);
-      const message = err instanceof Error ? err.message : 'Error deleting product';
+      const message = err instanceof Error ? err.message : 'خطأ في حذف المنتج';
       alert(message);
     }
   };

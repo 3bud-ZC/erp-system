@@ -183,15 +183,16 @@ export async function DELETE(request: Request) {
     const totalUsage = salesOrderItems + purchaseOrderItems + salesInvoiceItems + purchaseInvoiceItems + stockMovements + productionOrders;
 
     if (totalUsage > 0) {
+      const lines = [];
+      if (salesOrderItems > 0) lines.push(`- أوامر بيع: ${salesOrderItems}`);
+      if (purchaseOrderItems > 0) lines.push(`- أوامر شراء: ${purchaseOrderItems}`);
+      if (salesInvoiceItems > 0) lines.push(`- فواتير بيع: ${salesInvoiceItems}`);
+      if (purchaseInvoiceItems > 0) lines.push(`- فواتير شراء: ${purchaseInvoiceItems}`);
+      if (stockMovements > 0) lines.push(`- حركات مخزن: ${stockMovements}`);
+      if (productionOrders > 0) lines.push(`- أوامر إنتاج: ${productionOrders}`);
+      
       return apiError(
-        `لا يمكن حذف المنتج لأنه مستخدم في ${totalUsage} سجل:\n` +
-        `- أوامر بيع: ${salesOrderItems}\n` +
-        `- أوامر شراء: ${purchaseOrderItems}\n` +
-        `- فواتير بيع: ${salesInvoiceItems}\n` +
-        `- فواتير شراء: ${purchaseInvoiceItems}\n` +
-        `- حركات مخزن: ${stockMovements}\n` +
-        `- أوامر إنتاج: ${productionOrders}\n` +
-        `يرجى حذف السجلات المرتبطة أولاً أو إلغاء تفعيل المنتج بدلاً من الحذف.`,
+        `لا يمكن حذف المنتج لأنه مستخدم في ${totalUsage} سجل:\n${lines.join('\n')}\n\nيرجى حذف السجلات المرتبطة أولاً أو إلغاء تفعيل المنتج بدلاً من الحذف.`,
         409
       );
     }
