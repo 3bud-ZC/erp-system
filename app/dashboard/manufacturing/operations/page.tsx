@@ -30,22 +30,38 @@ export default function ManufacturingOperationsPage() {
 
   const loadData = async () => {
     try {
+      setLoading(true);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+      
       const headers = getAuthHeadersOnly();
       const [bomRes, productsRes] = await Promise.all([
-        fetch('/api/bom', { headers }),
-        fetch('/api/products', { headers }),
+        fetch('/api/bom', { headers, signal: controller.signal, cache: 'no-store' }),
+        fetch('/api/products', { headers, signal: controller.signal, cache: 'no-store' }),
       ]);
+      
+      clearTimeout(timeoutId);
 
       if (bomRes.ok) {
         const data = await bomRes.json();
-        setBomItems(data.data || data);
+        setBomItems(Array.isArray(data) ? data : (data.data || []));
+      } else {
+        setBomItems([]);
       }
+      
       if (productsRes.ok) {
         const data = await productsRes.json();
-        setProducts(data.data || data);
+        setProducts(Array.isArray(data) ? data : (data.data || []));
+      } else {
+        setProducts([]);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading data:', error);
+      if (error.name === 'AbortError') {
+        alert('استغرق تحميل البيانات وقتاً طويلاً. يرجى المحاولة مرة أخرى.');
+      }
+      setBomItems([]);
+      setProducts([]);
     } finally {
       setLoading(false);
     }
@@ -85,8 +101,15 @@ export default function ManufacturingOperationsPage() {
     }
   };
 
-  if (loading) {
-    return <div className="p-6 text-center">جاري التحميل...</div>;
+  if (loading && bomItems.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">جاري تحميل عمليات الإنتاج...</p>
+        </div>
+      </div>
+    );
   }
 
   return (

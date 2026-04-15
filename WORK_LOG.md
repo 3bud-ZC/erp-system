@@ -751,6 +751,7 @@ DELETE /api/accounts?id=xxx                 - حذف حساب
 | 15 أبريل 2026 | 4:17 مساءً | إنشاء ملف التتبع الشامل | ✅ مكتمل |
 | 15 أبريل 2026 | 4:25 مساءً | إضافة قسم المواد الخام في Sidebar | ✅ مكتمل |
 | 15 أبريل 2026 | 4:25 مساءً | تحسين صفحة أوامر الإنتاج (timeout + error handling) | ✅ مكتمل |
+| 15 أبريل 2026 | 4:30 مساءً | تحسين صفحة عمليات الإنتاج (timeout + error handling) | ✅ مكتمل |
 
 ---
 
@@ -849,4 +850,58 @@ if (loading && orders.length === 0) {
 
 ---
 
-**آخر تحديث:** 15 أبريل 2026 - 4:25 مساءً
+#### **3. تحسين صفحة عمليات الإنتاج (BOM)**
+**الملف:** `app/dashboard/manufacturing/operations/page.tsx`
+
+**المشاكل المكتشفة:**
+```
+❌ لا يوجد timeout للـ API calls
+❌ لا يوجد cache control
+❌ Array safety checks مفقودة
+❌ Loading state بسيط جداً
+❌ لا يوجد setLoading(true) في بداية loadData
+```
+
+**التحسينات المطبقة:**
+```typescript
+// 1. إضافة Timeout (30s)
+const controller = new AbortController();
+const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+// 2. إضافة Cache Control
+fetch('/api/bom', { 
+  headers, 
+  signal: controller.signal, 
+  cache: 'no-store' 
+})
+
+// 3. Array Safety Checks
+setBomItems(Array.isArray(data) ? data : (data.data || []));
+
+// 4. Better Error Handling
+if (error.name === 'AbortError') {
+  alert('استغرق تحميل البيانات وقتاً طويلاً. يرجى المحاولة مرة أخرى.');
+}
+
+// 5. Improved Loading State
+if (loading && bomItems.length === 0) {
+  return <LoadingSpinner message="جاري تحميل عمليات الإنتاج..." />;
+}
+
+// 6. إضافة setLoading(true) في بداية loadData
+setLoading(true);
+```
+
+**النتيجة:**
+```
+✅ Timeout: 30 ثانية
+✅ Cache control: no-store
+✅ Array safety: Array.isArray() checks
+✅ Error handling: رسائل واضحة
+✅ Loading state: spinner محسّن
+✅ Loading يبدأ صح من أول loadData
+```
+
+---
+
+**آخر تحديث:** 15 أبريل 2026 - 4:30 مساءً
