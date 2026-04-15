@@ -14,8 +14,8 @@
     "lint:fix": "next lint --fix",
     "type-check": "tsc --noEmit",
     "postinstall": "prisma generate",
-    "seed": "node prisma/seed.js",
-    "seed:ts": "tsx prisma/seed.ts",
+    "seed": "tsx prisma/seed.ts",
+    "seed:clean": "tsx prisma/seed-clean.ts",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
@@ -24,7 +24,7 @@
     "serve": "next build && next start"
   },
   "prisma": {
-    "seed": "node prisma/seed.js"
+    "seed": "tsx prisma/seed.ts"
   },
   "engines": {
     "node": ">=18.0.0",
