@@ -1,804 +1,716 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
-import { fetchApi } from '@/lib/api-client';
+import { useState, useEffect } from 'react';
+import { getAuthHeaders, getAuthHeadersOnly } from '@/lib/api-client';
 import {
   Plus,
-  Trash2,
-  FileText,
-  RefreshCw,
-  AlertTriangle,
   Search,
-  Filter,
-  Download,
-  Calendar,
-  User,
-  ArrowUpDown,
   Edit,
-  Save,
-  Copy,
-  Trash,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
+  Trash2,
+  RefreshCw,
+  X,
+  Package,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  FileText,
+  User,
+  Calendar,
+  DollarSign,
+  ShoppingCart,
 } from 'lucide-react';
-import { formatCurrency } from '@/lib/format';
 
-interface Invoice {
+interface PurchaseInvoice {
   id: string;
   invoiceNumber: string;
   supplierId: string;
-  supplier: { nameAr: string };
+  supplier: { nameAr: string; code: string };
   date: string;
+  status: 'pending' | 'paid' | 'partial' | 'unpaid' | 'cancelled';
   total: number;
-  status: string;
   notes?: string;
-  items?: Array<{ productId: string; quantity: number; price: number; total: number }>;
+  items: OrderItem[];
+  createdAt: string;
 }
 
-interface Supplier {
-  id: string;
-  nameAr: string;
-}
-
-interface Product {
-  id: string;
-  nameAr: string;
-  code: string;
-  unit?: string;
-  price?: number;
-}
-
-// Toolbar Button Component
-function ToolbarButton({ label, shortcut, icon: Icon, color, onClick }: any) {
-  const colorClasses: Record<string, string> = {
-    blue: 'bg-blue-500 hover:bg-blue-600',
-    green: 'bg-emerald-500 hover:bg-emerald-600',
-    red: 'bg-red-500 hover:bg-red-600',
-    gray: 'bg-gray-500 hover:bg-gray-600',
-  };
-
-  return (
-    <button
-      onClick={onClick}
-      className={`${colorClasses[color]} text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm font-medium`}
-    >
-      {Icon && <Icon className="w-4 h-4" />}
-      <span>{label}</span>
-      {shortcut && <span className="text-xs opacity-75">{shortcut}</span>}
-    </button>
-  );
-}
-
-// Navigation Button
-function NavButton({ icon: Icon, onClick, disabled }: any) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-3 py-2 rounded-lg transition-colors"
-    >
-      <Icon className="w-4 h-4" />
-    </button>
-  );
-}
-
-// Stats Card Component
-function StatCard({ title, value, subtitle, icon: Icon, color }: any) {
-  return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-gray-500 text-sm font-medium">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-          {subtitle && <p className="text-gray-400 text-xs mt-1">{subtitle}</p>}
-        </div>
-        <div className={`w-10 h-10 ${color} rounded-lg flex items-center justify-center`}>
-          <Icon className="w-5 h-5 text-white" />
-        </div>
-      </div>
-    </div>
-  );
+interface OrderItem {
+  id?: string;
+  productId: string;
+  product?: { nameAr: string; code: string };
+  quantity: number;
+  price: number;
+  total: number;
 }
 
 export default function PurchaseInvoicesPage() {
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [invoices, setInvoices] = useState<PurchaseInvoice[]>([]);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'completed' | 'cancelled'>('all');
-
-  // Form states
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
-
-  const [formData, setFormData] = useState({
-    invoiceNumber: '',
+  const [editingInvoice, setEditingInvoice] = useState<PurchaseInvoice | null>(null);
+  
+  const [formData, setFormData] = useState<{
+    supplierId: string;
+    date: string;
+    status: 'pending' | 'paid' | 'partial' | 'unpaid' | 'cancelled';
+    notes: string;
+  }>({
     supplierId: '',
     date: new Date().toISOString().split('T')[0],
     status: 'pending',
     notes: '',
   });
-
-  const [items, setItems] = useState([
-    { productId: '', productName: '', productCode: '', unit: '', quantity: 0, price: 0, total: 0 },
+  
+  const [items, setItems] = useState<OrderItem[]>([
+    { productId: '', quantity: 1, price: 0, total: 0 },
   ]);
 
+  // Auto-generate invoice number
+  const generateInvoiceNumber = () => {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    return `PINV-${year}${month}${day}-${random}`;
+  };
+
   useEffect(() => {
-    fetchData();
+    loadData();
   }, []);
 
-  const fetchData = async () => {
+  const loadData = async () => {
     try {
       setLoading(true);
-      setError(null);
-      const token = localStorage.getItem('token');
-      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
-      const [invoicesRes, suppliersRes, productsRes] = await Promise.all([
-        fetch('/api/purchase-invoices', { headers }),
-        fetch('/api/suppliers', { headers }),
-        fetch('/api/products', { headers }),
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      
+      const headers = getAuthHeadersOnly();
+      const [ordersRes, customersRes, productsRes] = await Promise.all([
+        fetch('/api/purchase-invoices', { headers, signal: controller.signal, cache: 'no-store' }),
+        fetch('/api/suppliers', { headers, signal: controller.signal, cache: 'no-store' }),
+        fetch('/api/products?type=product', { headers, signal: controller.signal, cache: 'no-store' }),
       ]);
+      
+      clearTimeout(timeoutId);
 
-      if (!invoicesRes.ok || !suppliersRes.ok || !productsRes.ok) {
-        throw new Error('فشل في تحميل البيانات');
+      if (ordersRes.ok) {
+        const data = await ordersRes.json();
+        setInvoices(Array.isArray(data) ? data : (data.data || []));
+      } else {
+        setInvoices([]);
       }
-
-      const invoicesJson = await invoicesRes.json();
-      const suppliersJson = await suppliersRes.json();
-      const productsJson = await productsRes.json();
-      // APIs return { success, data } wrapper — extract .data, fall back to raw array
-      setInvoices(Array.isArray(invoicesJson) ? invoicesJson : (invoicesJson.data ?? []));
-      setSuppliers(Array.isArray(suppliersJson) ? suppliersJson : (suppliersJson.data ?? []));
-      setProducts(Array.isArray(productsJson) ? productsJson : (productsJson.data ?? []));
-    } catch (err) {
-      console.error('Error fetching data:', err);
-      setError(err instanceof Error ? err.message : 'خطأ في تحميل البيانات');
+      
+      if (customersRes.ok) {
+        const data = await customersRes.json();
+        setSuppliers(Array.isArray(data) ? data : (data.data || []));
+      } else {
+        setSuppliers([]);
+      }
+      
+      if (productsRes.ok) {
+        const data = await productsRes.json();
+        setProducts(Array.isArray(data) ? data : (data.data || []));
+      } else {
+        setProducts([]);
+      }
+    } catch (error: any) {
+      console.error('Error loading data:', error);
+      if (error.name === 'AbortError') {
+        alert('استغرق تحميل البيانات وقتاً طويلاً. يرجى المحاولة مرة أخرى.');
+      }
+      setInvoices([]);
+      setSuppliers([]);
+      setProducts([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredInvoices = invoices.filter((inv) => {
-    const matchesSearch =
-      inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.supplier?.nameAr.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || inv.status === filterStatus;
-    return matchesSearch && matchesStatus;
-  });
-
-  const totalAmount = invoices.reduce((sum, inv) => sum + inv.total, 0);
-  const pendingAmount = invoices.filter((inv) => inv.status === 'pending').reduce((sum, inv) => sum + inv.total, 0);
-
   const handleAddItem = () => {
-    const newItem = { 
-      productId: '', 
-      productName: '', 
-      productCode: '', 
-      unit: '', 
-      quantity: 0, 
-      price: 0, 
-      total: 0 
-    };
-    setItems([...items, newItem]);
+    setItems([...items, { productId: '', quantity: 1, price: 0, total: 0 }]);
   };
 
   const handleRemoveItem = (index: number) => {
-    // Don't remove the last item
     if (items.length > 1) {
       setItems(items.filter((_, i) => i !== index));
-    } else {
-      // Reset the last item instead of removing it
-      setItems([{ 
-        productId: '', 
-        productName: '', 
-        productCode: '', 
-        unit: '', 
-        quantity: 0, 
-        price: 0, 
-        total: 0 
-      }]);
     }
   };
 
-  const handleItemChange = (index: number, field: string, value: any) => {
+  const handleItemChange = (index: number, field: keyof OrderItem, value: any) => {
     const newItems = [...items];
     newItems[index] = { ...newItems[index], [field]: value };
     
-    // Auto-fill product details when product is selected
+    // Auto-fill price when product is selected
     if (field === 'productId' && value) {
       const product = products.find((p: any) => p.id === value);
       if (product) {
-        newItems[index].productName = product.nameAr || '';
-        newItems[index].productCode = product.code || '';
-        newItems[index].unit = product.unit || '';
-        newItems[index].price = parseFloat((product.price || 0).toString());
-        // Also set quantity to 1 if not set
-        if (!newItems[index].quantity || newItems[index].quantity === 0) {
-          newItems[index].quantity = 1;
-        }
+        newItems[index].price = product.price || 0;
       }
-    } else if (field === 'productId' && !value) {
-      // Clear product details when product is cleared
-      newItems[index].productName = '';
-      newItems[index].productCode = '';
-      newItems[index].unit = '';
-      newItems[index].price = 0;
-      newItems[index].quantity = 0;
     }
     
-    // Auto-calculate totals
-    if (field === 'quantity' || field === 'price' || field === 'productId') {
-      const qty = Math.max(0, parseFloat(newItems[index].quantity.toString()) || 0);
-      const price = Math.max(0, parseFloat(newItems[index].price.toString()) || 0);
-      
-      newItems[index].quantity = qty;
-      newItems[index].price = price;
-      newItems[index].total = qty * price;
-    }
+    // Calculate total for this item
+    newItems[index].total = newItems[index].quantity * newItems[index].price;
     
     setItems(newItems);
   };
 
-  const calculateTotal = () => items.reduce((sum, item) => sum + item.total, 0);
+  const calculateGrandTotal = () => {
+    return items.reduce((sum, item) => sum + item.total, 0);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    
+    if (!formData.supplierId) {
+      alert('يرجى اختيار مورد');
+      return;
+    }
+    
+    if (items.some(item => !item.productId || item.quantity <= 0)) {
+      alert('يرجى ملء جميع بيانات الأصناف بشكل صحيح');
+      return;
+    }
+    
     try {
-      // Enhanced validation
-      if (!formData.invoiceNumber.trim()) {
-        alert('يرجى إدخال رقم الفاتورة');
-        return;
-      }
-
-      if (!formData.supplierId) {
-        alert('يرجى اختيار مورد');
-        return;
-      }
-
-      if (!formData.date) {
-        alert('يرجى اختيار التاريخ');
-        return;
-      }
-
-      // Filter out empty items and validate
-      const validItems = items.filter(i => i.productId && i.quantity > 0);
-      if (validItems.length === 0) {
-        alert('يرجى إدخال منتج واحد على الأقل');
-        return;
-      }
-
-      // Check for invalid prices
-      if (validItems.some(i => i.price < 0)) {
-        alert('السعر لا يمكن أن يكون سالباً');
-        return;
-      }
-
-      const data = {
-        invoiceNumber: formData.invoiceNumber.trim(),
-        supplierId: formData.supplierId,
-        date: new Date(formData.date + 'T00:00:00.000Z'),
-        status: formData.status,
-        notes: formData.notes?.trim() || null,
-        total: calculateTotal(),
-        items: validItems.map((item) => ({
-          productId: item.productId,
-          quantity: parseFloat(item.quantity.toString()),
-          price: parseFloat(item.price.toString()),
-          total: parseFloat(item.total.toString()),
-        })),
-      };
-
-      console.log('Submitting purchase invoice:', data);
-
-      const method = editingInvoice ? 'PUT' : 'POST';
-      const body = editingInvoice ? { id: editingInvoice.id, ...data } : data;
-
-      const token = localStorage.getItem('token');
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
-      const response = await fetch('/api/purchase-invoices', {
-        method,
-        headers,
-        body: JSON.stringify(body),
+      const invoiceNumber = editingInvoice ? editingInvoice.invoiceNumber : generateInvoiceNumber();
+      
+      const response = await fetch('/api/sales-orders', {
+        method: editingInvoice ? 'PUT' : 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          ...(editingInvoice && { id: editingInvoice.id }),
+          invoiceNumber,
+          supplierId: formData.supplierId,
+          date: new Date(formData.date).toISOString(),
+          status: formData.status,
+          notes: formData.notes,
+          total: calculateGrandTotal(),
+          items: items.map(item => ({
+            productId: item.productId,
+            quantity: Number(item.quantity),
+            price: Number(item.price),
+            total: Number(item.total),
+          })),
+        }),
       });
-
+      
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error('Invoice submission error:', errorData);
-        throw new Error(errorData.error || errorData.message || 'Failed to save invoice');
+        throw new Error(errorData.message || 'فشل في حفظ أمر البيع');
       }
+      
+      alert(editingInvoice ? 'تم تحديث الفاتورة بنجاح!' : 'تم إنشاء الفاتورة بنجاح!');
+      resetForm();
+      loadData();
+    } catch (error: any) {
+      console.error('Error saving order:', error);
+      alert(error.message || 'حدث خطأ أثناء حفظ الفاتورة');
+    }
+  };
 
-      const result = await response.json();
-      console.log('Invoice saved successfully:', result);
+  const handleEdit = (invoice: PurchaseInvoice) => {
+    setEditingInvoice(invoice);
+    setFormData({
+      supplierId: invoice.supplierId,
+      date: new Date(invoice.date).toISOString().split('T')[0],
+      status: invoice.status,
+      notes: invoice.notes || '',
+    });
+    
+    if (invoice.items && invoice.items.length > 0) {
+      setItems(invoice.items.map(item => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        price: item.price,
+        total: item.total,
+      })));
+    }
+    
+    setIsModalOpen(true);
+  };
 
-      // Only close form and reset if it's a new invoice
-      if (!editingInvoice) {
-        resetForm();
-        setIsFormOpen(false);
+  const handleDelete = async (id: string) => {
+    if (!confirm('هل أنت متأكد من حذف الفاتورة؟')) return;
+    
+    try {
+      const response = await fetch(`/api/purchase-invoices?id=${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeadersOnly(),
+      });
+
+      if (response.ok) {
+        alert('تم حذف الفاتورة بنجاح!');
+        loadData();
       } else {
-        // For editing, keep form open but refresh data
-        setEditingInvoice(null);
+        const error = await response.json();
+        alert(error.message || 'حدث خطأ أثناء الحذف');
       }
+    } catch (error) {
+      console.error('Error deleting order:', error);
+      alert('حدث خطأ أثناء الحذف');
+    }
+  };
 
-      fetchData();
-    } catch (err) {
-      console.error('Error submitting invoice:', err);
-      alert(err instanceof Error ? err.message : 'خطأ في حفظ الفاتورة');
+  const handleStatusChange = async (id: string, newStatus: string) => {
+    try {
+      const response = await fetch('/api/sales-orders', {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ id, status: newStatus }),
+      });
+      
+      if (response.ok) {
+        alert('تم تحديث الحالة بنجاح!');
+        loadData();
+      } else {
+        const error = await response.json();
+        alert(error.message || 'حدث خطأ');
+      }
+    } catch (error) {
+      console.error('Error updating status:', error);
+      alert('حدث خطأ أثناء تحديث الحالة');
     }
   };
 
   const resetForm = () => {
     setFormData({
-      invoiceNumber: '',
       supplierId: '',
       date: new Date().toISOString().split('T')[0],
       status: 'pending',
       notes: '',
     });
-    setItems([{ productId: '', productName: '', productCode: '', unit: '', quantity: 0, price: 0, total: 0 }]);
-  };
-
-  const handleNew = () => {
-    resetForm();
+    setItems([{ productId: '', quantity: 1, price: 0, total: 0 }]);
     setEditingInvoice(null);
-    // Generate auto invoice number
-    const newInvoiceNumber = `PINV-${new Date().getFullYear()}-${String(invoices.length + 1).padStart(4, '0')}`;
-    setFormData(prev => ({ ...prev, invoiceNumber: newInvoiceNumber }));
-    setIsFormOpen(true);
+    setIsModalOpen(false);
   };
 
-  const handleEdit = (invoice: Invoice) => {
-    setEditingInvoice(invoice);
-    setFormData({
-      invoiceNumber: invoice.invoiceNumber,
-      supplierId: invoice.supplierId || '',
-      date: new Date(invoice.date).toISOString().split('T')[0],
-      status: invoice.status,
-      notes: invoice.notes || '',
-    });
-    if (invoice.items && invoice.items.length > 0) {
-      setItems(invoice.items.map((item) => {
-        const product = products.find((p: any) => p.id === item.productId);
-        return {
-          productId: item.productId || '',
-          productName: product?.nameAr || '',
-          productCode: product?.code || '',
-          unit: product?.unit || '',
-          quantity: item.quantity || 0,
-          price: item.price || 0,
-          total: item.total || 0,
-        };
-      }));
-    } else {
-      setItems([{ productId: '', productName: '', productCode: '', unit: '', quantity: 0, price: 0, total: 0 }]);
-    }
-    setIsFormOpen(true);
+  const filteredInvoices = Array.isArray(invoices)
+    ? invoices.filter(o =>
+        o.invoiceNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        o.supplier?.nameAr?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : [];
+
+  const statusCounts = {
+    pending: filteredInvoices.filter(o => o.status === 'pending').length,
+    paid: filteredInvoices.filter(o => o.status === 'paid').length,
+    partial: filteredInvoices.filter(o => o.status === 'partial').length,
+    unpaid: filteredInvoices.filter(o => o.status === 'unpaid').length,
+    cancelled: filteredInvoices.filter(o => o.status === 'cancelled').length,
   };
 
-  const handleDelete = async (invoice: Invoice) => {
-    if (confirm('هل أنت متأكد من حذف هذه الفاتورة؟')) {
-      try {
-        const token = localStorage.getItem('token');
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-        
-        const response = await fetch(`/api/purchase-invoices?id=${invoice.id}`, { 
-          method: 'DELETE',
-          headers
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || errorData.message || 'Failed to delete invoice');
-        }
-        
-        // Close form if deleting the currently edited invoice
-        if (editingInvoice && editingInvoice.id === invoice.id) {
-          setIsFormOpen(false);
-          setEditingInvoice(null);
-          resetForm();
-        }
-        
-        fetchData();
-      } catch (error: any) {
-        console.error('Delete error:', error);
-        alert(`خطأ في الحذف: ${error.message}`);
-      }
-    }
-  };
-
-  const handleSave = useCallback(async () => {
-    const form = document.getElementById('purchase-invoice-form') as HTMLFormElement;
-    if (form) {
-      try {
-        form.requestSubmit();
-      } catch (error) {
-        console.error('Save error:', error);
-        alert('حدث خطأ أثناء الحفظ');
-      }
-    }
-  }, []);
-
-  const handleCopy = useCallback(() => {
-    if (editingInvoice) {
-      // Create a copy with new invoice number and current date
-      const newInvoiceNumber = `PINV-${new Date().getFullYear()}-${String(invoices.length + 1).padStart(4, '0')}`;
-      setFormData({ 
-        ...formData, 
-        invoiceNumber: newInvoiceNumber, 
-        date: new Date().toISOString().split('T')[0],
-        status: 'pending'
-      });
-      setEditingInvoice(null);
-      // Keep items as they are for copying
-    }
-  }, [editingInvoice, formData, invoices.length]);
-
-  const handleDeleteCurrent = useCallback(() => {
-    if (editingInvoice && confirm('هل أنت متأكد من حذف هذه الفاتورة؟')) {
-      handleDelete(editingInvoice);
-      setIsFormOpen(false);
-    }
-  }, [editingInvoice]);
-
-  const handleNavigate = (direction: 'first' | 'prev' | 'next' | 'last') => {
-    if (filteredInvoices.length === 0) return;
+  const getStatusBadge = (status: string) => {
+    const badges = {
+      pending: { icon: Clock, color: 'yellow', text: 'قيد الانتظار' },
+      confirmed: { icon: CheckCircle2, color: 'blue', text: 'مؤكد' },
+      shipped: { icon: Package, color: 'purple', text: 'تم الشحن' },
+      delivered: { icon: CheckCircle2, color: 'green', text: 'تم التسليم' },
+      cancelled: { icon: AlertCircle, color: 'red', text: 'ملغي' },
+    };
     
-    let newIndex = currentIndex;
-    switch (direction) {
-      case 'first':
-        newIndex = 0;
-        break;
-      case 'prev':
-        newIndex = Math.max(0, currentIndex - 1);
-        break;
-      case 'next':
-        newIndex = Math.min(filteredInvoices.length - 1, currentIndex + 1);
-        break;
-      case 'last':
-        newIndex = filteredInvoices.length - 1;
-        break;
-    }
+    const badge = badges[status as keyof typeof badges] || badges.pending;
+    const Icon = badge.icon;
     
-    setCurrentIndex(newIndex);
-    handleEdit(filteredInvoices[newIndex]);
+    return (
+      <span className={`inline-flex items-center gap-1 px-2 py-1 bg-${badge.color}-100 text-${badge.color}-800 text-xs rounded-full`}>
+        <Icon className="w-3 h-3" />
+        {badge.text}
+      </span>
+    );
   };
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isFormOpen) return;
-      
-      if (e.key === 'F7') {
-        e.preventDefault();
-        handleSave();
-      } else if (e.key === 'F8') {
-        e.preventDefault();
-        handleCopy();
-      } else if (e.key === 'F9') {
-        e.preventDefault();
-        handleDeleteCurrent();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFormOpen, editingInvoice, formData, handleSave, handleCopy, handleDeleteCurrent]);
-
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      pending: 'bg-yellow-100 text-yellow-700',
-      completed: 'bg-green-100 text-green-700',
-      cancelled: 'bg-red-100 text-red-700',
-    };
-    return colors[status] || 'bg-gray-100 text-gray-700';
-  };
-
-  const getStatusLabel = (status: string) => {
-    const labels: Record<string, string> = {
-      pending: 'معلقة',
-      completed: 'مكتملة',
-      cancelled: 'ملغية',
-    };
-    return labels[status] || status;
-  };
-
-  if (loading) {
+  if (loading && invoices.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <RefreshCw className="w-8 h-8 text-blue-600 mx-auto animate-spin mb-4" />
-          <p className="text-gray-600">جاري تحميل الفواتير...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center bg-red-50 border border-red-200 rounded-xl p-8 max-w-md">
-          <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <p className="text-red-700 font-medium mb-2">حدث خطأ</p>
-          <p className="text-red-600 text-sm mb-4">{error}</p>
-          <button
-            onClick={fetchData}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-          >
-            إعادة المحاولة
-          </button>
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">جاري تحميل فواتير الشراء...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {!isFormOpen ? (
-        <>
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">فواتير الشراء</h1>
+          <p className="text-gray-600 mt-1">إدارة فواتير الشراء والمشتريات</p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={loadData}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+            تحديث
+          </button>
+          <button
+            onClick={() => {
+              resetForm();
+              setIsModalOpen(true);
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            <Plus className="w-5 h-5" />
+            فاتورة شراء جديدة
+          </button>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">فواتير الشراء</h1>
-              <p className="text-gray-500 text-sm mt-1">إدارة فواتير المشتريات من الموردين</p>
+              <p className="text-sm text-gray-600">إجمالي الفواتير</p>
+              <p className="text-2xl font-bold text-gray-900">{filteredInvoices.length}</p>
             </div>
-            <div className="flex items-center gap-2">
-              <Link href="/dashboard/purchases/suppliers" className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium">
-                الموردين
-              </Link>
-              <button
-                onClick={handleNew}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-              >
-                <Plus className="w-4 h-4" />
-                فاتورة جديدة
+            <ShoppingCart className="w-10 h-10 text-blue-600" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">قيد الانتظار</p>
+              <p className="text-2xl font-bold text-yellow-600">{statusCounts.pending}</p>
+            </div>
+            <Clock className="w-10 h-10 text-yellow-600" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">مدفوع</p>
+              <p className="text-2xl font-bold text-green-600">{statusCounts.paid}</p>
+            </div>
+            <CheckCircle2 className="w-10 h-10 text-green-600" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">مدفوع جزئياً</p>
+              <p className="text-2xl font-bold text-yellow-600">{statusCounts.partial}</p>
+            </div>
+            <AlertCircle className="w-10 h-10 text-yellow-600" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">غير مدفوع</p>
+              <p className="text-2xl font-bold text-red-600">{statusCounts.unpaid}</p>
+            </div>
+            <AlertCircle className="w-10 h-10 text-red-600" />
+          </div>
+        </div>
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+        <input
+          type="text"
+          placeholder="بحث عن فاتورة شراء..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full pr-10 pl-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+      </div>
+
+      {/* Orders Table */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <table className="w-full">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">رقم الفاتورة</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">المورد</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">التاريخ</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">الإجمالي</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">الحالة</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">إجراءات</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {filteredInvoices.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                  <ShoppingCart className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                  لا توجد فواتير شراء
+                </td>
+              </tr>
+            ) : (
+              filteredInvoices.map((invoice) => (
+                <tr key={invoice.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{invoice.invoiceNumber}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900">
+                    {invoice.supplier?.nameAr} <span className="text-gray-500">({invoice.supplier?.code})</span>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-600">
+                    {new Date(invoice.date).toLocaleDateString('ar-SA')}
+                  </td>
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                    {invoice.total.toFixed(2)} ج.م
+                  </td>
+                  <td className="px-4 py-3">
+                    {getStatusBadge(invoice.status)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-2">
+                      {invoice.status === 'pending' && (
+                        <button
+                          onClick={() => handleStatusChange(invoice.id, 'paid')}
+                          className="text-green-600 hover:text-green-800 text-xs"
+                          title="دفع"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                        </button>
+                      )}
+                      {invoice.status === 'unpaid' && (
+                        <button
+                          onClick={() => handleStatusChange(invoice.id, 'partial')}
+                          className="text-yellow-600 hover:text-yellow-800 text-xs"
+                          title="دفع جزئي"
+                        >
+                          <AlertCircle className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleEdit(invoice)}
+                        className="text-blue-600 hover:text-blue-800"
+                        title="تعديل"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(invoice.id)}
+                        className="text-red-600 hover:text-red-800"
+                        title="حذف"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white">
+              <h2 className="text-xl font-bold text-gray-900">
+                {editingInvoice ? 'تعديل فاتورة شراء' : 'فاتورة شراء جديدة'}
+              </h2>
+              <button onClick={resetForm} className="text-gray-400 hover:text-gray-600">
+                <X className="w-6 h-6" />
               </button>
             </div>
-          </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard title="إجمالي الفواتير" value={invoices.length} subtitle="فاتورة" icon={FileText} color="bg-blue-500" />
-            <StatCard title="إجمالي المشتريات" value={formatCurrency(totalAmount)} subtitle="جميع الفواتير" icon={Download} color="bg-green-500" />
-            <StatCard title="المبالغ المعلقة" value={formatCurrency(pendingAmount)} subtitle="فواتير معلقة" icon={Calendar} color="bg-yellow-500" />
-            <StatCard title="متوسط الفاتورة" value={formatCurrency(invoices.length > 0 ? totalAmount / invoices.length : 0)} subtitle="لكل فاتورة" icon={ArrowUpDown} color="bg-purple-500" />
-          </div>
-
-          {/* Filters & Table */}
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <div className="flex flex-col sm:flex-row gap-4 mb-4">
-              <div className="relative flex-1">
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="البحث..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pr-10 pl-4 py-2 border border-gray-200 rounded-lg text-sm"
-                />
-              </div>
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value as any)}
-                className="px-3 py-2 border border-gray-200 rounded-lg text-sm"
-              >
-                <option value="all">جميع الحالات</option>
-                <option value="pending">معلقة</option>
-                <option value="completed">مكتملة</option>
-                <option value="cancelled">ملغية</option>
-              </select>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-right">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold">رقم الفاتورة</th>
-                    <th className="px-4 py-3 font-semibold">المورد</th>
-                    <th className="px-4 py-3 font-semibold">التاريخ</th>
-                    <th className="px-4 py-3 font-semibold">الإجمالي</th>
-                    <th className="px-4 py-3 font-semibold">الحالة</th>
-                    <th className="px-4 py-3 font-semibold"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filteredInvoices.map((invoice) => (
-                    <tr key={invoice.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium">{invoice.invoiceNumber}</td>
-                      <td className="px-4 py-3">{invoice.supplier?.nameAr || '-'}</td>
-                      <td className="px-4 py-3 text-gray-600">{new Date(invoice.date).toLocaleDateString('ar-EG')}</td>
-                      <td className="px-4 py-3 font-medium">{formatCurrency(invoice.total)}</td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(invoice.status)}`}>
-                          {getStatusLabel(invoice.status)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <button onClick={() => handleEdit(invoice)} className="text-blue-600 hover:underline text-sm ml-2">تعديل</button>
-                        <button onClick={() => handleDelete(invoice)} className="text-red-600 hover:underline text-sm">حذف</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
-      ) : (
-        <>
-          {/* Form Header with Toolbar */}
-          <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-4 rounded-xl">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ToolbarButton label="حفظ" shortcut="F7" icon={Save} color="blue" onClick={handleSave} />
-                <ToolbarButton label="نسخ" shortcut="F8" icon={Copy} color="green" onClick={handleCopy} />
-                <ToolbarButton label="حذف" shortcut="F9" icon={Trash} color="red" onClick={handleDeleteCurrent} />
-              </div>
-              <div className="flex items-center gap-2">
-                <NavButton icon={ChevronsLeft} onClick={() => handleNavigate('first')} disabled={currentIndex === 0} />
-                <NavButton icon={ChevronLeft} onClick={() => handleNavigate('prev')} disabled={currentIndex === 0} />
-                <NavButton icon={ChevronRight} onClick={() => handleNavigate('next')} disabled={currentIndex >= filteredInvoices.length - 1} />
-                <NavButton icon={ChevronsRight} onClick={() => handleNavigate('last')} disabled={currentIndex >= filteredInvoices.length - 1} />
-              </div>
-              <button onClick={() => setIsFormOpen(false)} className="mr-4 text-lg">فواتير الشراء</button>
-            </div>
-          </div>
-
-          {/* Purchase Invoice Form */}
-          <form id="purchase-invoice-form" onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-            {/* Header Fields */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border-b border-gray-200">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">رقم الفاتورة</label>
-                <input type="text" required value={formData.invoiceNumber} onChange={(e) => setFormData({ ...formData, invoiceNumber: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">التاريخ</label>
-                <input type="date" required value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">المورد</label>
-                <select required value={formData.supplierId} onChange={(e) => setFormData({ ...formData, supplierId: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                  <option value="">اختر المورد...</option>
-                  {suppliers.map((s) => (
-                    <option key={s.id} value={s.id}>{s.nameAr}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">الحالة</label>
-                <select value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                  <option value="pending">معلقة</option>
-                  <option value="completed">مكتملة</option>
-                  <option value="cancelled">ملغية</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Totals Display */}
-            <div className="grid grid-cols-2 gap-4 p-4 border-b border-gray-200 bg-gray-50">
-              <div className="text-center">
-                <label className="block text-sm font-medium text-gray-700 mb-1">المجموع الفرعي</label>
-                <div className="text-lg font-bold text-gray-900">{calculateTotal().toFixed(2)}</div>
-              </div>
-              <div className="text-center">
-                <label className="block text-sm font-medium text-gray-700 mb-1">الإجمالي</label>
-                <div className="text-xl font-bold text-blue-600">{calculateTotal().toFixed(2)}</div>
-              </div>
-            </div>
-
-            {/* Notes */}
-            <div className="px-4 py-4 border-b border-gray-200">
-              <label className="block text-sm font-medium text-gray-700 mb-1">ملاحظات</label>
-              <textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-            </div>
-
-            {/* Items Table */}
-            <div className="p-4">
-              <div className="border border-gray-200 rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-100">
-                    <tr>
-                      <th className="px-2 py-2 border border-gray-300 text-center">م</th>
-                      <th className="px-2 py-2 border border-gray-300 text-center">ك.الصنف</th>
-                      <th className="px-2 py-2 border border-gray-300 text-center">الصنف</th>
-                      <th className="px-2 py-2 border border-gray-300 text-center">الوحدة</th>
-                      <th className="px-2 py-2 border border-gray-300 text-center">الكمية</th>
-                      <th className="px-2 py-2 border border-gray-300 text-center">السعر</th>
-                      <th className="px-2 py-2 border border-gray-300 text-center">المجموع</th>
-                      <th className="px-2 py-2 border border-gray-300 text-center"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((item, index) => (
-                      <tr key={index}>
-                        <td className="px-2 py-2 border border-gray-300 text-center">{index + 1}</td>
-                        <td className="px-2 py-2 border border-gray-300">
-                          <select
-                            value={item.productId}
-                            onChange={(e) => handleItemChange(index, 'productId', e.target.value)}
-                            className="w-full px-1 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          >
-                            <option value=""></option>
-                            {products.map((product) => (
-                              <option key={product.id} value={product.id}>{product.code}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="px-2 py-2 border border-gray-300">
-                          <input
-                            type="text"
-                            value={item.productName}
-                            readOnly
-                            className="w-full px-1 py-1 border border-gray-300 rounded text-sm bg-gray-50"
-                          />
-                        </td>
-                        <td className="px-2 py-2 border border-gray-300">
-                          <input
-                            type="text"
-                            value={item.unit}
-                            readOnly
-                            className="w-full px-1 py-1 border border-gray-300 rounded text-sm bg-gray-50 text-center"
-                          />
-                        </td>
-                        <td className="px-2 py-2 border border-gray-300">
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={item.quantity}
-                            onChange={(e) => handleItemChange(index, 'quantity', parseFloat(e.target.value) || 0)}
-                            className="w-full px-1 py-1 border border-gray-300 rounded text-sm text-center"
-                          />
-                        </td>
-                        <td className="px-2 py-2 border border-gray-300">
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={item.price}
-                            onChange={(e) => handleItemChange(index, 'price', parseFloat(e.target.value) || 0)}
-                            className="w-full px-1 py-1 border border-gray-300 rounded text-sm text-center"
-                          />
-                        </td>
-                        <td className="px-2 py-2 border border-gray-300 text-center font-bold">{item.total.toFixed(2)}</td>
-                        <td className="px-2 py-2 border border-gray-300 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveItem(index)}
-                            className="text-red-600 hover:bg-red-50 p-1 rounded"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
+            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              {/* Order Info */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    المورد <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={formData.supplierId}
+                    onChange={(e) => setFormData({ ...formData, supplierId: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">اختر مورد</option>
+                    {suppliers.map((supplier) => (
+                      <option key={supplier.id} value={supplier.id}>
+                        {supplier.nameAr} ({supplier.code})
+                      </option>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="mt-3 flex items-center justify-between">
-                <button type="button" onClick={handleAddItem} className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700">
-                  <Plus className="w-4 h-4" /> إضافة صنف
-                </button>
-                <div className="bg-gray-50 px-6 py-2 rounded-lg border border-gray-200">
-                  <span className="text-sm text-gray-600 ml-3">الإجمالي:</span>
-                  <span className="text-xl font-bold text-gray-900">{calculateTotal().toFixed(2)} ج.م</span>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <Calendar className="w-4 h-4 inline mr-1" />
+                    التاريخ <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={formData.date}
+                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    الحالة <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="pending">قيد الانتظار</option>
+                    <option value="paid">مدفوع</option>
+                    <option value="partial">مدفوع جزئياً</option>
+                    <option value="unpaid">غير مدفوع</option>
+                    <option value="cancelled">ملغي</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    ملاحظات
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="ملاحظات إضافية..."
+                  />
                 </div>
               </div>
-            </div>
 
-            <button type="submit" className="hidden">Submit</button>
-          </form>
-        </>
+              {/* Items */}
+              <div className="border-t pt-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">الأصناف</h3>
+                  <button
+                    type="button"
+                    onClick={handleAddItem}
+                    className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    إضافة صنف
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {items.map((item, index) => (
+                    <div key={index} className="grid grid-cols-12 gap-2 items-end">
+                      <div className="col-span-5">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          المنتج <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          required
+                          value={item.productId}
+                          onChange={(e) => handleItemChange(index, 'productId', e.target.value)}
+                          className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          <option value="">اختر منتج</option>
+                          {products.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.nameAr} ({p.code}) - {p.price} ج.م
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="col-span-2">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          الكمية <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          required
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value))}
+                          className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      <div className="col-span-2">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          السعر <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          required
+                          min="0"
+                          step="0.01"
+                          value={item.price}
+                          onChange={(e) => handleItemChange(index, 'price', parseFloat(e.target.value))}
+                          className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      <div className="col-span-2">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          الإجمالي
+                        </label>
+                        <input
+                          type="text"
+                          readOnly
+                          value={item.total.toFixed(2)}
+                          className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50"
+                        />
+                      </div>
+
+                      <div className="col-span-1">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItem(index)}
+                          disabled={items.length === 1}
+                          className="w-full p-2 text-red-600 hover:text-red-800 disabled:opacity-30 disabled:cursor-not-allowed"
+                          title="حذف"
+                        >
+                          <Trash2 className="w-4 h-4 mx-auto" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Grand Total */}
+                <div className="mt-4 pt-4 border-t">
+                  <div className="flex justify-between items-center">
+                    <span className="text-lg font-semibold text-gray-900">الإجمالي الكلي:</span>
+                    <span className="text-2xl font-bold text-blue-600">
+                      {calculateGrandTotal().toFixed(2)} ج.م
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2 pt-4 border-t">
+                <button
+                  type="submit"
+                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium"
+                >
+                  {editingInvoice ? 'تحديث' : 'إنشاء'}
+                </button>
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 font-medium"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
