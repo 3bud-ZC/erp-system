@@ -3,6 +3,10 @@ import { prisma } from '@/lib/db';
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { getAuthenticatedUser, checkPermission } from '@/lib/auth';
 
+// Disable caching for real-time data
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // ==================== PROFIT & LOSS STATEMENT ====================
 
 async function getProfitAndLossReport(fromDate?: Date, toDate?: Date) {

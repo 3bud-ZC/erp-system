@@ -2,6 +2,10 @@ import { prisma } from '@/lib/db';
 import { apiSuccess, apiError } from '@/lib/api-response';
 import { getAuthenticatedUser } from '@/lib/auth';
 
+// Disable caching for real-time data
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET(request: Request) {
   try {
     // Auth check
