@@ -1,12 +1,19 @@
+[phases.setup]
+nixPkgs = ["nodejs_18", "npm-9_x"]
+
 [phases.build]
 cmds = [
     "npm ci",
     "npx prisma generate",
+    "rm -rf .next",
     "npm run build"
 ]
 
-[phases.setup]
-nixPkgs = ["nodejs_18", "npm-9_x"]
+[phases.build.env]
+NEXT_TELEMETRY_DISABLED = "1"
+NODE_ENV = "production"
 
 [start]
 cmd = "node scripts/railway-start.js"
+restart_policy = "on-failure"
+max_restarts = "5"
