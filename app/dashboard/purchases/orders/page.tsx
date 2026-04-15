@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getAuthHeadersOnly, getAuthHeaders } from '@/lib/api-client';
 import Link from 'next/link';
 import { fetchApi } from '@/lib/api-client';
@@ -425,7 +425,7 @@ export default function PurchaseOrdersPage() {
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     const form = document.getElementById('purchase-order-form') as HTMLFormElement;
     if (form) {
       try {
@@ -435,9 +435,9 @@ export default function PurchaseOrdersPage() {
         alert('حدث خطأ أثناء الحفظ');
       }
     }
-  };
+  }, []);
 
-  const handleCopy = () => {
+  const handleCopy = useCallback(() => {
     if (editingOrder) {
       // Create a copy with new order number and current date
       const newOrderNumber = `PO-${new Date().getFullYear()}-${String(orders.length + 1).padStart(4, '0')}`;
@@ -450,14 +450,14 @@ export default function PurchaseOrdersPage() {
       setEditingOrder(null);
       // Keep items as they are for copying
     }
-  };
+  }, [editingOrder, formData, orders.length]);
 
-  const handleDeleteCurrent = () => {
+  const handleDeleteCurrent = useCallback(() => {
     if (editingOrder && confirm('هل أنت متأكد من حذف هذا الأمر؟')) {
       handleDelete(editingOrder);
       setIsFormOpen(false);
     }
-  };
+  }, [editingOrder]);
 
   const handleNavigate = (direction: 'first' | 'prev' | 'next' | 'last') => {
     if (filteredOrders.length === 0) return;
@@ -501,6 +501,7 @@ export default function PurchaseOrdersPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFormOpen, editingOrder, formData, handleSave, handleCopy, handleDeleteCurrent]);
 
   const getStatusColor = (status: string) => {

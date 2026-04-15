@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { fetchApi } from '@/lib/api-client';
 import {
@@ -313,69 +313,47 @@ export default function ExpensesPage() {
     setIsFormOpen(true);
   };
 
-  const handleDelete = async (expense: Expense) => {
-    if (confirm('هل أنت متأكد من حذف هذا المصروف؟')) {
-      try {
-        const response = await fetch(`/api/expenses?id=${expense.id}`, { 
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' }
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || errorData.message || 'Failed to delete expense');
-        }
-        
-        // Close form if deleting the currently edited expense
-        if (editingExpense && editingExpense.id === expense.id) {
-          setIsFormOpen(false);
-          setEditingExpense(null);
-          resetForm();
-        }
-        
-        fetchData();
-      } catch (error: any) {
-        console.error('Delete error:', error);
-        alert(`خطأ في الحذف: ${error.message}`);
-      }
-    }
-  };
-
-  const handleSave = async () => {
-    const form = document.getElementById('expense-form') as HTMLFormElement;
-    if (form) {
-      try {
-        form.requestSubmit();
-      } catch (error) {
-        console.error('Save error:', error);
-        alert('حدث خطأ أثناء الحفظ');
-      }
-    }
-  };
-
-  const handleCopy = () => {
-    if (editingExpense) {
-      // Create a copy with new expense number and current date
-      const newExpenseNumber = `EXP-${new Date().getFullYear()}-${String(expenses.length + 1).padStart(4, '0')}`;
-      setFormData({ 
-        ...formData, 
-        expenseNumber: newExpenseNumber, 
-        date: new Date().toISOString().split('T')[0],
-        status: 'pending'
+  const handleDelete = async (id: string) => {
+    try {
+      const response = await fetch(`/api/expenses?id=${id}`, { 
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
       });
-      setEditingExpense(null);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.message || 'Failed to delete expense');
+      }
+      fetchData();
+    } catch (error: any) {
+      console.error('Delete error:', error);
     }
   };
 
-  const handleDeleteCurrent = () => {
+  const handleDeleteCurrent = useCallback(() => {
     if (editingExpense && confirm('هل أنت متأكد من حذف هذا المصروف؟')) {
-      handleDelete(editingExpense);
+      handleDelete(editingExpense.id);
       setIsFormOpen(false);
     }
-  };
+  }, [editingExpense]);
+
+  const handleSave = useCallback(() => {
+    const form = document.getElementById('expense-form') as HTMLFormElement;
+    if (form) form.requestSubmit();
+  }, []);
+
+  const handleCopy = useCallback(() => {
+    if (editingExpense) {
+      setFormData(prev => ({ ...prev, expenseNumber: '' }));
+      setEditingExpense(null);
+    }
+  }, [editingExpense]);
 
   const handleNavigate = (direction: 'first' | 'prev' | 'next' | 'last') => {
-    if (filteredExpenses.length === 0) return;
+    if (!editingExpense || filteredExpenses.length === 0) return;
+    
+    const currentIndex = filteredExpenses.findIndex(e => e.id === editingExpense.id);
+    if (currentIndex === -1) return;
     
     let newIndex = currentIndex;
     switch (direction) {
@@ -393,7 +371,6 @@ export default function ExpensesPage() {
         break;
     }
     
-    setCurrentIndex(newIndex);
     handleEdit(filteredExpenses[newIndex]);
   };
 
@@ -416,6 +393,7 @@ export default function ExpensesPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFormOpen, editingExpense, formData, handleSave, handleCopy, handleDeleteCurrent]);
 
   const getStatusColor = (status: string) => {
@@ -547,7 +525,7 @@ export default function ExpensesPage() {
                       </td>
                       <td className="px-4 py-3">
                         <button onClick={() => handleEdit(expense)} className="text-blue-600 hover:underline text-sm ml-2">تعديل</button>
-                        <button onClick={() => handleDelete(expense)} className="text-red-600 hover:underline text-sm">حذف</button>
+                        <button onClick={() => handleDelete(expense.id)} className="text-red-600 hover:underline text-sm">حذف</button>
                       </td>
                     </tr>
                   ))}

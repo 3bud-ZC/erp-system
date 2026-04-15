@@ -435,14 +435,14 @@ export default function SalesOrdersPage() {
             <HelpCircle className="w-5 h-5 text-blue-600" />
           </div>
           <div>
-            <h3 className="font-bold text-blue-900 mb-2">ما هو "أمر البيع"؟</h3>
+            <h3 className="font-bold text-blue-900 mb-2">ما هو &quot;أمر البيع&quot;؟</h3>
             <p className="text-sm text-blue-800 leading-relaxed">
               أمر البيع هو <strong>حجز مؤقت</strong> لطلب العميل. يمكنك استخدامه لـ:
             </p>
             <ul className="text-sm text-blue-700 mt-2 space-y-1 mr-4">
               <li>• تسجيل طلب العميل قبل التأكد من توفر المخزون</li>
               <li>• حجز المنتجات للعميل مؤقتاً</li>
-              <li>• <strong className="text-blue-900">تحويله لاحقاً إلى فاتورة نهائية</strong> (الضغط على زر "تحويل لفاتورة")</li>
+              <li>• <strong className="text-blue-900">تحويله لاحقاً إلى فاتورة نهائية</strong> (الضغط على زر &quot;تحويل لفاتورة&quot;)</li>
             </ul>
             <div className="mt-3 flex items-center gap-2 text-xs text-blue-600 bg-white/50 p-2 rounded">
               <ArrowRight className="w-4 h-4" />

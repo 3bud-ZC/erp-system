@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { fetchApi } from '@/lib/api-client';
 import {
@@ -407,7 +407,7 @@ export default function PurchaseInvoicesPage() {
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     const form = document.getElementById('purchase-invoice-form') as HTMLFormElement;
     if (form) {
       try {
@@ -417,9 +417,9 @@ export default function PurchaseInvoicesPage() {
         alert('حدث خطأ أثناء الحفظ');
       }
     }
-  };
+  }, []);
 
-  const handleCopy = () => {
+  const handleCopy = useCallback(() => {
     if (editingInvoice) {
       // Create a copy with new invoice number and current date
       const newInvoiceNumber = `PINV-${new Date().getFullYear()}-${String(invoices.length + 1).padStart(4, '0')}`;
@@ -432,14 +432,14 @@ export default function PurchaseInvoicesPage() {
       setEditingInvoice(null);
       // Keep items as they are for copying
     }
-  };
+  }, [editingInvoice, formData, invoices.length]);
 
-  const handleDeleteCurrent = () => {
+  const handleDeleteCurrent = useCallback(() => {
     if (editingInvoice && confirm('هل أنت متأكد من حذف هذه الفاتورة؟')) {
       handleDelete(editingInvoice);
       setIsFormOpen(false);
     }
-  };
+  }, [editingInvoice]);
 
   const handleNavigate = (direction: 'first' | 'prev' | 'next' | 'last') => {
     if (filteredInvoices.length === 0) return;
@@ -483,6 +483,7 @@ export default function PurchaseInvoicesPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFormOpen, editingInvoice, formData, handleSave, handleCopy, handleDeleteCurrent]);
 
   const getStatusColor = (status: string) => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getAuthHeaders, getAuthHeadersOnly } from '@/lib/api-client';
 import {
   Plus,
@@ -195,24 +195,24 @@ export default function WarehousesPage() {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = useCallback(() => {
     const form = document.getElementById('warehouse-form') as HTMLFormElement;
     if (form) form.requestSubmit();
-  };
+  }, []);
 
-  const handleCopy = () => {
+  const handleCopy = useCallback(() => {
     if (editingWarehouse) {
       setFormData({ ...formData, code: '' });
       setEditingWarehouse(null);
     }
-  };
+  }, [editingWarehouse, formData]);
 
-  const handleDeleteCurrent = () => {
+  const handleDeleteCurrent = useCallback(() => {
     if (editingWarehouse && confirm('هل أنت متأكد من حذف هذا المخزن؟')) {
       handleDelete(editingWarehouse);
       setIsFormOpen(false);
     }
-  };
+  }, [editingWarehouse]);
 
   const handleNavigate = (direction: 'first' | 'prev' | 'next' | 'last') => {
     if (filteredWarehouses.length === 0) return;
@@ -256,6 +256,7 @@ export default function WarehousesPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFormOpen, editingWarehouse, formData, handleSave, handleCopy, handleDeleteCurrent]);
 
   if (loading) {
