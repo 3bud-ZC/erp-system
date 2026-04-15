@@ -78,7 +78,7 @@ export default function InventoryPage() {
       
       // Load data in parallel with timeout
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
       
       try {
         const [prodRes, whRes] = await Promise.all([
@@ -122,9 +122,13 @@ export default function InventoryPage() {
       if (productsData.length === 0 && warehousesData.length === 0) {
         setError('Unable to load data. Please check your connection.');
       }
-    } catch (err) {
-      console.error('Load data error:', err);
-      setError('Failed to load data. Please try again.');
+    } catch (error: any) {
+      console.error('Error loading data:', error);
+      if (error.name === 'AbortError') {
+        setError('استغرق تحميل البيانات وقتاً طويلاً. يرجى المحاولة مرة أخرى.');
+      } else {
+        setError('فشل في تحميل البيانات');
+      }
     } finally {
       setLoading(false);
     }
