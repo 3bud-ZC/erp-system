@@ -61,21 +61,56 @@ export default function CostStudyPage() {
       setError(null);
       const token = localStorage.getItem('token');
       const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
-      const response = await fetch('/api/reports?type=inventory', { headers });
-      if (response.ok) {
-        const result = await response.json();
-        const data = result.data || result;
-        // Handle different response structures
-        if (data.inventory && data.inventory.items) {
-          setProducts(data.inventory.items);
-        } else if (Array.isArray(data)) {
-          setProducts(data);
-        } else {
-          setProducts([]);
-        }
-      } else {
+      
+      // Fetch both finished products and raw materials
+      const [productsRes, rawMaterialsRes] = await Promise.all([
+        fetch('/api/products', { headers }),
+        fetch('/api/raw-materials', { headers }),
+      ]);
+
+      if (!productsRes.ok && !rawMaterialsRes.ok) {
         throw new Error('فشل في تحميل البيانات');
       }
+
+      const allItems: CostAnalysis[] = [];
+
+      // Process finished products
+      if (productsRes.ok) {
+        const productsData = await productsRes.json();
+        const productsList = Array.isArray(productsData) ? productsData : (productsData.data || []);
+        
+        productsList.forEach((p: any) => {
+          if (p.type !== 'raw_material') {
+            allItems.push({
+              productCode: p.code,
+              productName: p.nameAr,
+              unitCost: p.cost || 0,
+              quantity: p.stock || 0,
+              totalValue: (p.cost || 0) * (p.stock || 0),
+              type: 'منتج نهائي',
+            });
+          }
+        });
+      }
+
+      // Process raw materials
+      if (rawMaterialsRes.ok) {
+        const rawMaterialsData = await rawMaterialsRes.json();
+        const rawMaterialsList = Array.isArray(rawMaterialsData) ? rawMaterialsData : (rawMaterialsData.data || []);
+        
+        rawMaterialsList.forEach((m: any) => {
+          allItems.push({
+            productCode: m.code,
+            productName: m.nameAr,
+            unitCost: m.cost || 0,
+            quantity: m.stock || 0,
+            totalValue: (m.cost || 0) * (m.stock || 0),
+            type: 'مادة خام',
+          });
+        });
+      }
+
+      setProducts(allItems);
     } catch (error) {
       console.error('Error loading inventory data:', error);
       setError(error instanceof Error ? error.message : 'فشل في تحميل البيانات');
@@ -277,13 +312,14 @@ export default function CostStudyPage() {
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
+                  <th className="px-4 py-3 font-semibold text-gray-700">النوع</th>
                   <th className="px-4 py-3 font-semibold text-gray-700">النسبة</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filteredProducts.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                       لا توجد منتجات مطابقة للبحث
                     </td>
                   </tr>
@@ -301,6 +337,15 @@ export default function CostStudyPage() {
                         </td>
                         <td className="px-4 py-3 font-medium text-gray-900">
                           {formatCurrency(product.totalValue)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            product.type === 'منتج نهائي' 
+                              ? 'bg-blue-100 text-blue-700' 
+                              : 'bg-green-100 text-green-700'
+                          }`}>
+                            {product.type}
+                          </span>
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
@@ -326,6 +371,7 @@ export default function CostStudyPage() {
                   <td className="px-4 py-3">{totalQuantity.toLocaleString('ar-EG')}</td>
                   <td className="px-4 py-3">-</td>
                   <td className="px-4 py-3 text-blue-700">{formatCurrency(totalInventoryValue)}</td>
+                  <td className="px-4 py-3">-</td>
                   <td className="px-4 py-3">100%</td>
                 </tr>
               </tfoot>
