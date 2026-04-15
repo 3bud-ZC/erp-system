@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { fetchApi } from '@/lib/api-client';
+import { fetchApi, getAuthHeadersOnly } from '@/lib/api-client';
 import {
   Plus,
   Search,
@@ -78,12 +78,12 @@ export default function CustomersPage() {
     try {
       setLoading(true);
       setError(null);
-      const token = localStorage.getItem('token');
-      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
-      const res = await fetch('/api/customers', { headers });
+      const res = await fetch('/api/customers', { headers: getAuthHeadersOnly() });
       if (!res.ok) throw new Error('فشل في تحميل العملاء');
-      const data = await res.json();
-      setCustomers(data || []);
+      const json = await res.json();
+      // Handle wrapped response { success: true, data: [...] }
+      const data = json.data || json;
+      setCustomers(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error fetching customers:', err);
       setError(err instanceof Error ? err.message : 'خطأ في تحميل العملاء');
@@ -139,6 +139,7 @@ export default function CustomersPage() {
         body: JSON.stringify(body),
       });
 
+      alert(editingCustomer ? 'تم تحديث العميل بنجاح' : 'تم إضافة العميل بنجاح');
       setIsModalOpen(false);
       setEditingCustomer(null);
       resetForm();
@@ -181,10 +182,11 @@ export default function CustomersPage() {
     if (confirm('هل أنت متأكد من حذف هذا العميل؟')) {
       try {
         await fetchApi(`/api/customers?id=${customer.id}`, { method: 'DELETE' });
+        alert('تم حذف العميل بنجاح');
+        fetchCustomers();
       } catch (error: any) {
         alert(`خطأ في الحذف: ${error.message}`);
       }
-      fetchCustomers();
     }
   };
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { getAuthHeaders, getAuthHeadersOnly } from '@/lib/api-client';
 import {
   Package,
   Warehouse,
@@ -80,20 +81,16 @@ export default function InventoryPage() {
       const timeoutId = setTimeout(() => controller.abort(), 8000);
       
       try {
-        // Get auth token from localStorage
-        const token = localStorage.getItem('token');
-        const authHeaders: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
-        
         const [prodRes, whRes] = await Promise.all([
           fetch('/api/products', { 
             signal: controller.signal, 
             cache: 'no-store',
-            headers: authHeaders
+            headers: getAuthHeadersOnly()
           }),
           fetch('/api/warehouses', { 
             signal: controller.signal, 
             cache: 'no-store',
-            headers: authHeaders
+            headers: getAuthHeadersOnly()
           })
         ]);
         
@@ -155,7 +152,6 @@ export default function InventoryPage() {
         return;
       }
 
-      const token = localStorage.getItem('token');
       const method = editingProduct ? 'PUT' : 'POST';
       const body = editingProduct ? { id: editingProduct.id, ...productForm } : productForm;
       
@@ -174,10 +170,7 @@ export default function InventoryPage() {
       
       const res = await fetch('/api/products', {
         method,
-        headers: { 
-          'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` })
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify(productData),
       });
       
@@ -202,13 +195,9 @@ export default function InventoryPage() {
   const deleteProduct = async (p: Product) => {
     if (!confirm(`Are you sure you want to delete "${p.nameAr}"?`)) return;
     try {
-      const token = localStorage.getItem('token');
       const res = await fetch(`/api/products?id=${p.id}`, { 
         method: 'DELETE', 
-        headers: { 
-          'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` })
-        } 
+        headers: getAuthHeadersOnly()
       });
       
       if (!res.ok) {
@@ -242,18 +231,18 @@ export default function InventoryPage() {
   const saveWarehouse = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const token = localStorage.getItem('token');
       const method = editingWarehouse ? 'PUT' : 'POST';
       const body = editingWarehouse ? { id: editingWarehouse.id, ...warehouseForm } : warehouseForm;
       const res = await fetch('/api/warehouses', {
         method,
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token || ''}` },
+        headers: getAuthHeaders(),
         body: JSON.stringify(body),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'فشل في حفظ المخزن');
+        throw new Error(err.message || err.error || 'فشل في حفظ المخزن');
       }
+      alert('تم حفظ المخزن بنجاح');
       setShowWarehouseModal(false);
       loadData();
     } catch (err) {
@@ -264,9 +253,12 @@ export default function InventoryPage() {
   const deleteWarehouse = async (w: WarehouseType) => {
     if (!confirm(`هل أنت متأكد من حذف "${w.nameAr}"؟`)) return;
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`/api/warehouses?id=${w.id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token || ''}` } });
-      if (!res.ok) throw new Error('فشل في حذف المخزن');
+      const res = await fetch(`/api/warehouses?id=${w.id}`, { method: 'DELETE', headers: getAuthHeadersOnly() });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || err.error || 'فشل في حذف المخزن');
+      }
+      alert('تم حذف المخزن بنجاح');
       loadData();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'خطأ في حذف المخزن');

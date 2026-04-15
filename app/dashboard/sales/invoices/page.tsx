@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { fetchApi } from '@/lib/api-client';
+import { fetchApi, getAuthHeaders, getAuthHeadersOnly } from '@/lib/api-client';
 import {
   Plus,
   Trash2,
@@ -116,9 +116,9 @@ export default function SalesInvoicesPage() {
       setError(null);
       
       const [invoicesRes, customersRes, productsRes] = await Promise.all([
-        fetch('/api/sales-invoices'),
-        fetch('/api/customers'),
-        fetch('/api/products'),
+        fetch('/api/sales-invoices', { headers: getAuthHeadersOnly() }),
+        fetch('/api/customers', { headers: getAuthHeadersOnly() }),
+        fetch('/api/products', { headers: getAuthHeadersOnly() }),
       ]);
 
       if (!invoicesRes.ok || !customersRes.ok || !productsRes.ok) {
@@ -298,9 +298,7 @@ export default function SalesInvoicesPage() {
 
       const response = await fetch('/api/sales-invoices', {
         method,
-        headers: { 
-          'Content-Type': 'application/json',
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify(body),
       });
 
@@ -392,7 +390,7 @@ export default function SalesInvoicesPage() {
       try {
         const response = await fetch(`/api/sales-invoices?id=${invoice.id}`, { 
           method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' }
+          headers: getAuthHeadersOnly()
         });
         
         if (!response.ok) {

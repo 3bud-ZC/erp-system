@@ -22,6 +22,26 @@ function getAuthToken(): string | null {
 }
 
 /**
+ * Get authenticated headers for fetch requests
+ * Returns headers object with Authorization if token exists
+ */
+export function getAuthHeaders(): HeadersInit {
+  const token = getAuthToken();
+  return {
+    'Content-Type': 'application/json',
+    ...(token && { 'Authorization': `Bearer ${token}` }),
+  };
+}
+
+/**
+ * Get authenticated headers for non-JSON requests (like DELETE)
+ */
+export function getAuthHeadersOnly(): HeadersInit {
+  const token = getAuthToken();
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
+
+/**
  * Safely fetch data from API
  * Handles both wrapped ({success, data}) and unwrapped responses
  * Automatically includes auth token from localStorage

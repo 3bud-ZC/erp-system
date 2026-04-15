@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { fetchApi } from '@/lib/api-client';
+import { fetchApi, getAuthHeadersOnly } from '@/lib/api-client';
 import {
   Plus,
   Search,
@@ -77,12 +77,11 @@ export default function SuppliersPage() {
     try {
       setLoading(true);
       setError(null);
-      const token = localStorage.getItem('token');
-      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
-      const res = await fetch('/api/suppliers', { headers });
+      const res = await fetch('/api/suppliers', { headers: getAuthHeadersOnly() });
       if (!res.ok) throw new Error('فشل في تحميل الموردين');
-      const data = await res.json();
-      setSuppliers(data || []);
+      const json = await res.json();
+      const data = json.data || json;
+      setSuppliers(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error fetching suppliers:', err);
       setError(err instanceof Error ? err.message : 'خطأ في تحميل الموردين');
@@ -138,6 +137,7 @@ export default function SuppliersPage() {
         body: JSON.stringify(body),
       });
 
+      alert(editingSupplier ? 'تم تحديث المورد بنجاح' : 'تم إضافة المورد بنجاح');
       setIsModalOpen(false);
       setEditingSupplier(null);
       resetForm();
@@ -180,10 +180,11 @@ export default function SuppliersPage() {
     if (confirm('هل أنت متأكد من حذف هذا المورد؟')) {
       try {
         await fetchApi(`/api/suppliers?id=${supplier.id}`, { method: 'DELETE' });
+        alert('تم حذف المورد بنجاح');
+        fetchSuppliers();
       } catch (error: any) {
         alert(`خطأ في الحذف: ${error.message}`);
       }
-      fetchSuppliers();
     }
   };
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { getAuthHeaders, getAuthHeadersOnly } from '@/lib/api-client';
 import {
   Plus,
   Search,
@@ -90,13 +91,16 @@ export default function WarehousesPage() {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch('/api/warehouses');
+      
+      const res = await fetch('/api/warehouses', { headers: getAuthHeadersOnly() });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `HTTP ${res.status}`);
+        throw new Error(err.message || err.error || `HTTP ${res.status}`);
       }
       const json = await res.json();
-      setWarehouses(Array.isArray(json) ? json : (Array.isArray(json.data) ? json.data : []));
+      // Handle wrapped response { success: true, data: [...] }
+      const data = json.data || json;
+      setWarehouses(Array.isArray(data) ? data : (Array.isArray(data.data) ? data.data : []));
     } catch (err) {
       console.error('Error fetching warehouses:', err);
       setError(err instanceof Error ? err.message : 'فشل في تحميل المخازن');
@@ -119,19 +123,20 @@ export default function WarehousesPage() {
 
       const res = await fetch('/api/warehouses', {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(body),
       });
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'فشل في حفظ المخزن');
+        throw new Error(err.message || err.error || 'فشل في حفظ المخزن');
       }
 
       resetForm();
       setIsFormOpen(false);
       setEditingWarehouse(null);
       fetchWarehouses();
+      alert('تم حفظ المخزن بنجاح');
     } catch (err) {
       console.error('Error saving warehouse:', err);
       alert(err instanceof Error ? err.message : 'خطأ في حفظ المخزن');
@@ -170,13 +175,23 @@ export default function WarehousesPage() {
 
   const handleDelete = async (warehouse: Warehouse) => {
     if (confirm('هل أنت متأكد من حذف هذا المخزن؟')) {
-      const res = await fetch(`/api/warehouses?id=${warehouse.id}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        alert(err.error || 'فشل في حذف المخزن');
-        return;
+      try {
+        const res = await fetch(`/api/warehouses?id=${warehouse.id}`, { 
+          method: 'DELETE',
+          headers: getAuthHeadersOnly(),
+        });
+        
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.message || err.error || 'فشل في حذف المخزن');
+        }
+        
+        alert('تم حذف المخزن بنجاح');
+        fetchWarehouses();
+      } catch (err) {
+        console.error('Error deleting warehouse:', err);
+        alert(err instanceof Error ? err.message : 'خطأ في حذف المخزن');
       }
-      fetchWarehouses();
     }
   };
 

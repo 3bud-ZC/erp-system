@@ -18,8 +18,8 @@ export default function LoginPage() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            email: '',
-            password: '',
+            email: 'demo@example.com',
+            password: 'demo123',
           }),
         });
 
@@ -31,8 +31,8 @@ export default function LoginPage() {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              email: '',
-              password: '',
+              email: 'admin@admin.com',
+              password: 'admin123',
             }),
           });
 
@@ -41,18 +41,20 @@ export default function LoginPage() {
           }
 
           const adminData = await adminResponse.json();
-          if (adminData.token) {
-            localStorage.setItem('token', adminData.token);
+          const adminToken = adminData.data?.token || adminData.token;
+          if (adminToken) {
+            localStorage.setItem('token', adminToken);
             router.replace('/dashboard');
             return;
           }
         }
 
         const data = await response.json();
+        const token = data.data?.token || data.token;
         
-        if (data.token) {
+        if (token) {
           // Store token in localStorage
-          localStorage.setItem('token', data.token);
+          localStorage.setItem('token', token);
           // Redirect to dashboard
           router.replace('/dashboard');
         } else {
