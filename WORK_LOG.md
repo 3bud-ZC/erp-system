@@ -755,6 +755,7 @@ DELETE /api/accounts?id=xxx                 - حذف حساب
 | 15 أبريل 2026 | 4:40 مساءً | حذف قسم المحاسبة بالكامل من Sidebar | ✅ مكتمل |
 | 15 أبريل 2026 | 4:40 مساءً | إعادة هيكلة المخزون (منتجات + مواد خام + مخازن منفصلة) | ✅ مكتمل |
 | 15 أبريل 2026 | 4:40 مساءً | إعادة بناء نظام التصنيع من الصفر (نظيف ومبسط) | ✅ مكتمل |
+| 15 أبريل 2026 | 5:00 مساءً | إعادة بناء صفحة أوامر البيع - كود تلقائي + ميزات محسّنة | ✅ مكتمل |
 
 ---
 
@@ -1091,4 +1092,207 @@ setLoading(true);
 
 ---
 
-**آخر تحديث:** 15 أبريل 2026 - 4:40 مساءً
+---
+
+## 🆕 **التحديث الأحدث: إعادة بناء صفحة أوامر البيع**
+
+### **التاريخ:** 15 أبريل 2026 - 5:00 مساءً
+
+### **الطلب:**
+```
+"أوامر البيع - زبطلي الصفحة، فيها مشاكل في الداتا، فيها مشاكل في الإجراءات
+خليها ليها إمكانيات أكتر، زد فيها شوية خواص
+لما أعمل أي إجراء الكود يتعمل تلقائي (auto-generate order number)"
+```
+
+---
+
+### **المشاكل المكتشفة:**
+
+```
+❌ لا يوجد timeout للـ API calls
+❌ لا يوجد cache control
+❌ Array safety checks مفقودة
+❌ رقم الأمر يدوي (مش تلقائي)
+❌ حالات الأمر محدودة (pending, confirmed فقط)
+❌ لا يوجد workflow واضح للحالات
+❌ الإحصائيات محدودة
+❌ لا يوجد auto-fill للسعر عند اختيار المنتج
+❌ حساب الإجمالي يدوي
+❌ لا يوجد loading state واضح
+```
+
+---
+
+### **التحسينات المطبقة:**
+
+#### **1. رقم الأمر التلقائي (Auto-Generate)**
+```typescript
+const generateOrderNumber = () => {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+  return `SO-${year}${month}${day}-${random}`;
+};
+
+// مثال: SO-20260415-123
+```
+
+**النتيجة:**
+```
+✅ رقم الأمر يتولد تلقائياً
+✅ صيغة واضحة: SO-YYYYMMDD-XXX
+✅ لا يحتاج المستخدم لإدخاله يدوياً
+```
+
+---
+
+#### **2. حالات الأمر المحسّنة (Status Workflow)**
+
+**قبل:**
+```
+pending → confirmed
+```
+
+**بعد:**
+```
+pending → confirmed → shipped → delivered
+         ↓
+      cancelled
+```
+
+**الحالات:**
+```typescript
+- pending: قيد الانتظار (أصفر)
+- confirmed: مؤكد (أزرق)
+- shipped: تم الشحن (بنفسجي)
+- delivered: تم التسليم (أخضر)
+- cancelled: ملغي (أحمر)
+```
+
+**Workflow Buttons:**
+```
+✅ pending → confirmed (زر تأكيد)
+✅ confirmed → shipped (زر شحن)
+✅ shipped → delivered (زر تسليم)
+```
+
+---
+
+#### **3. Auto-Fill السعر**
+```typescript
+// عند اختيار المنتج
+if (field === 'productId' && value) {
+  const product = products.find((p: any) => p.id === value);
+  if (product) {
+    newItems[index].price = product.price || 0; // ✅ تلقائي
+  }
+}
+```
+
+**النتيجة:**
+```
+✅ السعر يتعبأ تلقائياً من المنتج
+✅ المستخدم يمكنه تعديله إذا أراد
+✅ يوفر الوقت والجهد
+```
+
+---
+
+#### **4. حساب الإجمالي التلقائي**
+```typescript
+// حساب إجمالي كل صنف
+newItems[index].total = newItems[index].quantity * newItems[index].price;
+
+// حساب الإجمالي الكلي
+const calculateGrandTotal = () => {
+  return items.reduce((sum, item) => sum + item.total, 0);
+};
+```
+
+**النتيجة:**
+```
+✅ الإجمالي يُحسب تلقائياً
+✅ يتحدث فوراً عند تغيير الكمية أو السعر
+✅ دقة عالية في الحسابات
+```
+
+---
+
+#### **5. إحصائيات محسّنة**
+```typescript
+// قبل: 2 cards فقط
+// بعد: 5 cards
+
+✅ إجمالي الأوامر
+✅ قيد الانتظار
+✅ مؤكد
+✅ تم الشحن
+✅ تم التسليم
+```
+
+---
+
+#### **6. التحسينات التقنية**
+```typescript
+✅ Timeout: 30s
+✅ Cache control: no-store
+✅ Array safety: Array.isArray() checks
+✅ Error handling: رسائل واضحة
+✅ Loading state: spinner محسّن
+✅ Form validation: التحقق من البيانات
+✅ Auto-fill: السعر والإجمالي
+✅ Auto-generate: رقم الأمر
+```
+
+---
+
+#### **7. تحسينات الواجهة (UI/UX)**
+```
+✅ Modal أكبر (max-w-4xl) لاستيعاب الأصناف
+✅ Grid layout محسّن للأصناف
+✅ Icons واضحة لكل حقل
+✅ Colors مميزة لكل حالة
+✅ Badges ملونة للحالات
+✅ Buttons واضحة للإجراءات
+✅ Grand Total بارز وواضح
+```
+
+---
+
+### **الميزات الجديدة:**
+
+```
+1. ✅ رقم أمر تلقائي (SO-YYYYMMDD-XXX)
+2. ✅ 5 حالات للأمر بدلاً من 2
+3. ✅ Workflow واضح للحالات
+4. ✅ Auto-fill للسعر
+5. ✅ حساب تلقائي للإجمالي
+6. ✅ 5 إحصائيات بدلاً من 2
+7. ✅ Timeout 30s
+8. ✅ Cache control
+9. ✅ Array safety
+10. ✅ Loading states محسّنة
+```
+
+---
+
+### **المقارنة:**
+
+| الميزة | قبل | بعد |
+|--------|-----|-----|
+| **رقم الأمر** | يدوي | تلقائي ✅ |
+| **الحالات** | 2 | 5 ✅ |
+| **Auto-fill السعر** | ❌ | ✅ |
+| **حساب الإجمالي** | يدوي | تلقائي ✅ |
+| **الإحصائيات** | 2 | 5 ✅ |
+| **Timeout** | ❌ | 30s ✅ |
+| **Cache control** | ❌ | ✅ |
+| **Array safety** | ❌ | ✅ |
+| **Loading state** | بسيط | محسّن ✅ |
+
+---
+
+**آخر تحديث:** 15 أبريل 2026 - 5:00 مساءً
