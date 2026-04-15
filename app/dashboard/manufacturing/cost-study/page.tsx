@@ -59,14 +59,19 @@ export default function CostStudyPage() {
     try {
       setLoading(true);
       setError(null);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      
       const token = localStorage.getItem('token');
       const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
       
       // Fetch both finished products and raw materials
       const [productsRes, rawMaterialsRes] = await Promise.all([
-        fetch('/api/products', { headers }),
-        fetch('/api/raw-materials', { headers }),
+        fetch('/api/products', { headers, signal: controller.signal, cache: 'no-store' }),
+        fetch('/api/raw-materials', { headers, signal: controller.signal, cache: 'no-store' }),
       ]);
+      
+      clearTimeout(timeoutId);
 
       if (!productsRes.ok && !rawMaterialsRes.ok) {
         throw new Error('فشل في تحميل البيانات');
@@ -111,9 +116,13 @@ export default function CostStudyPage() {
       }
 
       setProducts(allItems);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading inventory data:', error);
-      setError(error instanceof Error ? error.message : 'فشل في تحميل البيانات');
+      if (error.name === 'AbortError') {
+        setError('استغرق تحميل البيانات وقتاً طويلاً. يرجى المحاولة مرة أخرى.');
+      } else {
+        setError(error.message || 'فشل في تحميل البيانات');
+      }
       setProducts([]);
     } finally {
       setLoading(false);
