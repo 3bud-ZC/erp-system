@@ -61,15 +61,20 @@ export default function SalesReportsPage() {
       let expenses: any[] = [];
       let products: any[] = [];
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      
       const token = localStorage.getItem('token');
       const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
       const extract = (d: any): any[] => Array.isArray(d) ? d : (Array.isArray(d?.data) ? d.data : []);
       await Promise.allSettled([
-        fetch('/api/sales-invoices', { headers }).then(r => r.ok ? r.json() : []).then(d => { salesInvoices = extract(d); }),
-        fetch('/api/purchase-invoices', { headers }).then(r => r.ok ? r.json() : []).then(d => { purchaseInvoices = extract(d); }),
-        fetch('/api/expenses', { headers }).then(r => r.ok ? r.json() : []).then(d => { expenses = extract(d); }),
-        fetch('/api/products', { headers }).then(r => r.ok ? r.json() : []).then(d => { products = extract(d); }),
+        fetch('/api/sales-invoices', { headers, signal: controller.signal, cache: 'no-store' }).then(r => r.ok ? r.json() : []).then(d => { salesInvoices = extract(d); }),
+        fetch('/api/purchase-invoices', { headers, signal: controller.signal, cache: 'no-store' }).then(r => r.ok ? r.json() : []).then(d => { purchaseInvoices = extract(d); }),
+        fetch('/api/expenses', { headers, signal: controller.signal, cache: 'no-store' }).then(r => r.ok ? r.json() : []).then(d => { expenses = extract(d); }),
+        fetch('/api/products', { headers, signal: controller.signal, cache: 'no-store' }).then(r => r.ok ? r.json() : []).then(d => { products = extract(d); }),
       ]);
+      
+      clearTimeout(timeoutId);
 
       // Parse dates for filtering
       const startDate = new Date(dateRange.startDate);
@@ -127,9 +132,13 @@ export default function SalesReportsPage() {
         lowStockProducts: lowStockCount,
         averageOrderValue,
       });
-    } catch (err) {
-      console.error('Error generating report:', err);
-      setError(err instanceof Error ? err.message : 'فشل في إنشاء التقرير');
+    } catch (error: any) {
+      console.error('Error generating report:', error);
+      if (error.name === 'AbortError') {
+        setError('استغرق تحميل البيانات وقتاً طويلاً. يرجى المحاولة مرة أخرى.');
+      } else {
+        setError('فشل في تحميل بيانات التقرير');
+      }
     } finally {
       setLoading(false);
     }
