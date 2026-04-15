@@ -183,32 +183,13 @@ export default function DashboardPage() {
       
       setData(dashboardData);
       setError(null);
-    } catch (err: any) {
-      console.error('Error fetching dashboard:', err);
-      if (err.name === 'AbortError') {
+    } catch (error: any) {
+      console.error('Error fetching dashboard data:', error);
+      if (error.name === 'AbortError') {
         setError('استغرق تحميل البيانات وقتاً طويلاً. يرجى المحاولة مرة أخرى.');
       } else {
-        setError(err instanceof Error ? err.message : 'خطأ في تحميل لوحة التحكم');
+        setError(error.message || 'فشل في تحميل البيانات');
       }
-      // Set empty data to prevent crashes
-      setData({
-        totalSales: 0,
-        totalPurchases: 0,
-        totalExpenses: 0,
-        salesTrend: 0,
-        purchasesTrend: 0,
-        expensesTrend: 0,
-        grossProfit: 0,
-        netProfit: 0,
-        profitMargin: 0,
-        lowStockProducts: 0,
-        totalProducts: 0,
-        totalInventoryValue: 0,
-        recentActivities: [],
-        alerts: [],
-        chartData: { labels: [], sales: [], purchases: [] },
-        inventoryData: { rawMaterials: 0, finishedGoods: 0, packaging: 0 },
-      });
     } finally {
       setLoading(false);
     }
