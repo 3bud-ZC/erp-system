@@ -201,7 +201,7 @@ export default function SuppliersPage() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={loadCustomers}
+            onClick={loadSuppliers}
             disabled={loading}
             className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
           >
