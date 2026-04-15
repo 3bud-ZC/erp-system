@@ -88,7 +88,7 @@ export async function POST(request: Request) {
       });
 
       if (bomItems.length === 0) {
-        return apiError('No Bill of Materials (BOM) found for this product', 400);
+        return apiError('لا يوجد قائمة مواد (BOM) محددة لهذا المنتج. يرجى إضافة المواد الخام المطلوبة في صفحة عمليات الإنتاج أولاً.', 400);
       }
 
       // STEP 2: Calculate total raw materials needed (BOM explosion)
@@ -217,7 +217,7 @@ export async function PUT(request: Request) {
       });
 
       if (!order) {
-        return handleApiError(new Error('Production order not found'), 'Update production order');
+        return apiError('أمر الإنتاج غير موجود', 404);
       }
 
       if (status === 'completed' && order.status !== 'completed') {
@@ -342,7 +342,7 @@ export async function DELETE(request: Request) {
       const id = searchParams.get('id');
 
       if (!id) {
-        return handleApiError(new Error('ID is required'), 'Delete production order');
+        return apiError('معرف أمر الإنتاج مطلوب', 400);
       }
 
       await prisma.$transaction(async (tx) => {
@@ -352,7 +352,7 @@ export async function DELETE(request: Request) {
         });
 
         if (!order) {
-          throw new Error('Production order not found');
+          throw new Error('أمر الإنتاج غير موجود');
         }
 
         for (const item of order.items) {
