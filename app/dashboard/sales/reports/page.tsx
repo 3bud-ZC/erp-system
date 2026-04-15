@@ -135,6 +135,7 @@ export default function SalesReportsPage() {
 
   useEffect(() => {
     generateReport();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateRange]);
 
   if (loading) {

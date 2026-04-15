@@ -52,6 +52,7 @@ export default function JournalPage() {
 
   useEffect(() => {
     loadEntries();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateRange]);
 
   if (loading) {

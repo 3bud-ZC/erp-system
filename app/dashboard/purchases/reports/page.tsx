@@ -124,6 +124,7 @@ export default function PurchaseReportsPage() {
 
   useEffect(() => {
     generateReport();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateRange]);
 
   const handleExportCSV = () => {

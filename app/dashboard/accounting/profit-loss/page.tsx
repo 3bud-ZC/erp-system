@@ -84,6 +84,7 @@ export default function ProfitLossPage() {
 
   useEffect(() => {
     loadReport();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateRange]);
 
   if (loading) {
