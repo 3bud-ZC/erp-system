@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { getAuthHeadersOnly, getAuthHeaders } from '@/lib/api-client';
 import Link from 'next/link';
 import { fetchApi } from '@/lib/api-client';
 import {
@@ -143,17 +144,20 @@ export default function PurchaseOrdersPage() {
     try {
       setLoading(true);
       setError(null);
+      const headers = getAuthHeadersOnly();
       const [ordersRes, suppliersRes, productsRes] = await Promise.all([
-        fetch('/api/purchase-orders'),
-        fetch('/api/suppliers'),
-        fetch('/api/products'),
+        fetch('/api/purchase-orders', { headers }),
+        fetch('/api/suppliers', { headers }),
+        fetch('/api/products', { headers }),
       ]);
 
       if (!ordersRes.ok) throw new Error('Failed to fetch orders');
       const ordersData = await ordersRes.json();
-      setOrders(Array.isArray(ordersData) ? ordersData : []);
-      setSuppliers(await suppliersRes.json());
-      setProducts(await productsRes.json());
+      setOrders(Array.isArray(ordersData.data || ordersData) ? (ordersData.data || ordersData) : []);
+      const suppliersData = await suppliersRes.json();
+      setSuppliers(suppliersData.data || suppliersData);
+      const productsData = await productsRes.json();
+      setProducts(productsData.data || productsData);
     } catch (err) {
       console.error('Error fetching data:', err);
       setError(err instanceof Error ? err.message : 'خطأ في تحميل البيانات');

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Plus, Trash2, Edit, Package } from 'lucide-react';
+import { getAuthHeadersOnly, getAuthHeaders } from '@/lib/api-client';
 
 interface BOMItem {
   id: string;
@@ -29,13 +30,20 @@ export default function ManufacturingOperationsPage() {
 
   const loadData = async () => {
     try {
+      const headers = getAuthHeadersOnly();
       const [bomRes, productsRes] = await Promise.all([
-        fetch('/api/bom'),
-        fetch('/api/products'),
+        fetch('/api/bom', { headers }),
+        fetch('/api/products', { headers }),
       ]);
 
-      if (bomRes.ok) setBomItems(await bomRes.json());
-      if (productsRes.ok) setProducts(await productsRes.json());
+      if (bomRes.ok) {
+        const data = await bomRes.json();
+        setBomItems(data.data || data);
+      }
+      if (productsRes.ok) {
+        const data = await productsRes.json();
+        setProducts(data.data || data);
+      }
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -48,7 +56,7 @@ export default function ManufacturingOperationsPage() {
     try {
       const response = await fetch('/api/bom', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(formData),
       });
 

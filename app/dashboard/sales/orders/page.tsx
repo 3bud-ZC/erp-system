@@ -5,7 +5,7 @@ import EnhancedTable from '@/components/EnhancedTable';
 import EnhancedModal from '@/components/EnhancedModal';
 import { Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { fetchApi } from '@/lib/api-client';
+import { fetchApi, getAuthHeadersOnly } from '@/lib/api-client';
 
 interface SalesOrder {
   id: string;
@@ -52,19 +52,29 @@ export default function SalesOrdersPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
+      const headers = getAuthHeadersOnly();
       const [ordersRes, customersRes, productsRes] = await Promise.all([
-        fetch('/api/sales-orders'),
-        fetch('/api/customers'),
-        fetch('/api/products'),
+        fetch('/api/sales-orders', { headers }),
+        fetch('/api/customers', { headers }),
+        fetch('/api/products', { headers }),
       ]);
 
-      if (ordersRes.ok) setOrders(await ordersRes.json());
-      if (customersRes.ok) setCustomers(await customersRes.json());
-      if (productsRes.ok) setProducts(await productsRes.json());
+      if (ordersRes.ok) {
+        const data = await ordersRes.json();
+        setOrders(data.data || data);
+      }
+      if (customersRes.ok) {
+        const data = await customersRes.json();
+        setCustomers(data.data || data);
+      }
+      if (productsRes.ok) {
+        const data = await productsRes.json();
+        setProducts(data.data || data);
+      }
       setError(null);
     } catch (err) {
       console.error('Error fetching data:', err);
-      setError('Failed to load data');
+      setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
       setLoading(false);
     }
