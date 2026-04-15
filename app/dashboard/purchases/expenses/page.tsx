@@ -107,6 +107,7 @@ interface Supplier {
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -145,9 +146,10 @@ export default function ExpensesPage() {
       setError(null);
       const token = localStorage.getItem('token');
       const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
-      const [expensesRes, suppliersRes] = await Promise.all([
+      const [expensesRes, suppliersRes, invoicesRes] = await Promise.all([
         fetch('/api/expenses', { headers }),
         fetch('/api/suppliers', { headers }),
+        fetch('/api/purchase-invoices', { headers }),
       ]);
 
       if (!expensesRes.ok || !suppliersRes.ok) {
@@ -156,9 +158,11 @@ export default function ExpensesPage() {
 
       const expensesJson = await expensesRes.json();
       const suppliersJson = await suppliersRes.json();
+      const invoicesJson = invoicesRes.ok ? await invoicesRes.json() : { data: [] };
       // Handle API response format
       setExpenses(Array.isArray(expensesJson) ? expensesJson : (expensesJson.data ?? []));
       setSuppliers(Array.isArray(suppliersJson) ? suppliersJson : (suppliersJson.data ?? []));
+      setInvoices(Array.isArray(invoicesJson) ? invoicesJson : (invoicesJson.data ?? []));
     } catch (err) {
       console.error('Error fetching data:', err);
       setError(err instanceof Error ? err.message : 'خطأ في تحميل البيانات');
@@ -564,18 +568,32 @@ export default function ExpensesPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 text-center">تاريخ القيد</label>
-                <input type="datetime-local" required value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                <input 
+                  type="date" 
+                  required 
+                  value={formData.date} 
+                  readOnly
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50 cursor-not-allowed" 
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 text-center">الفرع</label>
-                <select value={formData.branch} onChange={(e) => setFormData({ ...formData, branch: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                <select 
+                  value={formData.branch} 
+                  onChange={(e) => setFormData({ ...formData, branch: e.target.value })} 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
                   <option value="">الفرع الرئيسي</option>
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 text-center">الموردين</label>
-                <select value={formData.supplierId} onChange={(e) => setFormData({ ...formData, supplierId: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                  <option value=""></option>
+                <select 
+                  value={formData.supplierId} 
+                  onChange={(e) => setFormData({ ...formData, supplierId: e.target.value })} 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">اختر المورد</option>
                   {suppliers.map((s) => (
                     <option key={s.id} value={s.id}>{s.nameAr}</option>
                   ))}
@@ -587,7 +605,19 @@ export default function ExpensesPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1 text-center">رقم الفاتورة</label>
-                <input type="text" required value={formData.invoiceNumber} onChange={(e) => setFormData({ ...formData, invoiceNumber: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+                <select 
+                  required 
+                  value={formData.invoiceNumber} 
+                  onChange={(e) => setFormData({ ...formData, invoiceNumber: e.target.value })} 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">اختر الفاتورة</option>
+                  {invoices.map((inv) => (
+                    <option key={inv.id} value={inv.invoiceNumber}>
+                      {inv.invoiceNumber} - {inv.supplier?.nameAr || 'مورد غير محدد'}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
