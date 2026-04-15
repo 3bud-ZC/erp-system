@@ -1,58 +1,81 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import EnhancedTable from '@/components/EnhancedTable';
-import EnhancedModal from '@/components/EnhancedModal';
-import { Plus, Trash2, Package, AlertTriangle, Edit } from 'lucide-react';
-import Link from 'next/link';
-import { fetchApi, getAuthHeadersOnly } from '@/lib/api-client';
+import { getAuthHeaders, getAuthHeadersOnly } from '@/lib/api-client';
+import {
+  Package,
+  Plus,
+  Search,
+  Edit,
+  Trash2,
+  AlertCircle,
+  RefreshCw,
+  X,
+} from 'lucide-react';
 
-interface RawMaterial {
+interface Product {
   id: string;
   code: string;
   nameAr: string;
-  nameEn: string;
+  nameEn?: string;
+  type: string;
   unit: string;
+  price: number;
   cost: number;
   stock: number;
   minStock: number;
+  warehouseId?: string;
+  warehouse?: { nameAr: string };
 }
 
 export default function RawMaterialsPage() {
-  const [materials, setMaterials] = useState<RawMaterial[]>([]);
+  const [materials, setMaterials] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [editingMaterial, setEditingMaterial] = useState<RawMaterial | null>(null);
-  
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [formData, setFormData] = useState({
     code: '',
     nameAr: '',
     nameEn: '',
-    unit: 'كجم',
+    unit: '',
+    price: 0,
     cost: 0,
     stock: 0,
     minStock: 0,
   });
 
   useEffect(() => {
-    fetchData();
+    loadProducts();
   }, []);
 
-  const fetchData = async () => {
+  const loadProducts = async () => {
     try {
       setLoading(true);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      
       const headers = getAuthHeadersOnly();
-      const res = await fetch('/api/raw-materials', { headers });
+      const response = await fetch('/api/raw-materials', { 
+        headers,
+        signal: controller.signal,
+        cache: 'no-store'
+      });
+      
+      clearTimeout(timeoutId);
 
-      if (res.ok) {
-        const data = await res.json();
-        setMaterials(data.data || data);
+      if (response.ok) {
+        const data = await response.json();
+        setMaterials(Array.isArray(data) ? data : (data.data || []));
+      } else {
+        setMaterials([]);
       }
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load data');
+    } catch (error: any) {
+      console.error('Error loading products:', error);
+      if (error.name === 'AbortError') {
+        alert('استغرق تحميل البيانات وقتاً طويلاً. يرجى المحاولة مرة أخرى.');
+      }
+      setMaterials([]);
     } finally {
       setLoading(false);
     }
@@ -60,75 +83,66 @@ export default function RawMaterialsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.nameAr || !formData.code) {
-      setError('يرجى ملء الحقول المطلوبة');
-      return;
-    }
-
     try {
-      setLoading(true);
-      const method = editingMaterial ? 'PUT' : 'POST';
-      const body = {
-        ...(editingMaterial ? { id: editingMaterial.id } : {}),
-        ...formData,
-        cost: Number(formData.cost),
-        stock: Number(formData.stock),
-        minStock: Number(formData.minStock),
-      };
+      const url = editingProduct ? '/api/raw-materials' : '/api/raw-materials';
+      const method = editingProduct ? 'PUT' : 'POST';
       
-      await fetchApi('/api/raw-materials', {
+      const response = await fetch(url, {
         method,
-        body: JSON.stringify(body),
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          ...(editingProduct && { id: editingProduct.id }),
+          ...formData,
+          type: 'raw_material',
+        }),
       });
 
-      setIsModalOpen(false);
-      resetForm();
-      setEditingMaterial(null);
-      await fetchData();
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save raw material');
-    } finally {
-      setLoading(false);
+      if (response.ok) {
+        resetForm();
+        loadProducts();
+      } else {
+        const error = await response.json();
+        alert(error.message || 'حدث خطأ');
+      }
+    } catch (error) {
+      console.error('Error saving product:', error);
+      alert('حدث خطأ أثناء الحفظ');
     }
   };
 
-  const handleEdit = (material: RawMaterial) => {
-    setEditingMaterial(material);
+  const handleEdit = (product: Product) => {
+    setEditingProduct(product);
     setFormData({
-      code: material.code,
-      nameAr: material.nameAr,
-      nameEn: material.nameEn || '',
-      unit: material.unit,
-      cost: material.cost,
-      stock: material.stock,
-      minStock: material.minStock,
+      code: product.code,
+      nameAr: product.nameAr,
+      nameEn: product.nameEn || '',
+      unit: product.unit,
+      price: product.price,
+      cost: product.cost,
+      stock: product.stock,
+      minStock: product.minStock,
     });
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (material: RawMaterial) => {
-    if (!confirm('هل أنت متأكد من حذف هذه المادة الخام؟')) return;
+  const handleDelete = async (id: string) => {
+    if (!confirm('هل أنت متأكد من حذف هذا المنتج؟')) return;
     
     try {
-      setLoading(true);
-      const token = localStorage.getItem('token');
-      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
-      const res = await fetch(`/api/raw-materials?id=${material.id}`, { 
+      const response = await fetch(`/api/raw-materials?id=${id}`, {
         method: 'DELETE',
-        headers
+        headers: getAuthHeadersOnly(),
       });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || 'فشل حذف المادة الخام');
+
+      if (response.ok) {
+        loadProducts();
+      } else {
+        const error = await response.json();
+        alert(error.message || 'حدث خطأ أثناء الحذف');
       }
-      await fetchData();
-    } catch (err) {
-      console.error('Error deleting material:', err);
-      setError(err instanceof Error ? err.message : 'فشل حذف المادة الخام');
-    } finally {
-      setLoading(false);
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      alert('حدث خطأ أثناء الحذف');
     }
   };
 
@@ -137,89 +151,56 @@ export default function RawMaterialsPage() {
       code: '',
       nameAr: '',
       nameEn: '',
-      unit: 'كجم',
+      unit: '',
+      price: 0,
       cost: 0,
       stock: 0,
       minStock: 0,
     });
-    setError(null);
+    setEditingProduct(null);
+    setIsModalOpen(false);
   };
 
-  const columns = [
-    { key: 'code', label: 'الكود', className: 'font-medium' },
-    { key: 'nameAr', label: 'الاسم بالعربي', className: 'font-medium' },
-    { key: 'nameEn', label: 'الاسم بالإنجليزي' },
-    { key: 'unit', label: 'الوحدة' },
-    {
-      key: 'cost',
-      label: 'التكلفة',
-      render: (value: number) => `${value.toFixed(2)} ج.م`,
-    },
-    {
-      key: 'stock',
-      label: 'المخزون',
-      render: (value: number, row: RawMaterial) => (
-        <span className={value <= row.minStock ? 'text-red-600 font-bold' : 'text-green-600'}>
-          {value.toFixed(2)}
-        </span>
-      ),
-    },
-    {
-      key: 'minStock',
-      label: 'الحد الأدنى',
-      render: (value: number) => value.toFixed(2),
-    },
-    {
-      key: 'actions',
-      label: 'الإجراءات',
-      render: (_: any, row: RawMaterial) => (
-        <div className="flex gap-2 items-center">
-          <button
-            onClick={() => handleEdit(row)}
-            className="text-blue-600 hover:text-blue-800 transition-colors"
-            title="تعديل"
-          >
-            <Edit className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => handleDelete(row)}
-            className="text-red-600 hover:text-red-800 transition-colors"
-            title="حذف"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
-      ),
-    },
-  ];
+  const filteredMaterials = Array.isArray(materials) 
+    ? materials.filter(p =>
+        p.nameAr.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.code.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : [];
 
-  const lowStockMaterials = materials.filter(m => m.stock <= m.minStock);
+  const lowStockMaterials = filteredMaterials.filter(p => p.stock <= p.minStock);
+
+  if (loading && materials.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">جاري تحميل المواد الخام...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">المواد الخام</h1>
           <p className="text-gray-600 mt-1">إدارة المواد الخام المستخدمة في الإنتاج</p>
         </div>
-        <div className="flex gap-3">
-          <Link
-            href="/dashboard/inventory"
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+        <div className="flex gap-2">
+          <button
+            onClick={loadProducts}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
           >
-            المنتجات
-          </Link>
-          <Link
-            href="/dashboard/inventory/warehouses"
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            المخازن
-          </Link>
+            <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+            تحديث
+          </button>
           <button
             onClick={() => {
               resetForm();
-              setEditingMaterial(null);
               setIsModalOpen(true);
             }}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
@@ -230,178 +211,262 @@ export default function RawMaterialsPage() {
         </div>
       </div>
 
-      {/* Low Stock Alert */}
-      {lowStockMaterials.length > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-2">
-          <AlertTriangle className="w-5 h-5 text-red-600" />
-          <div>
-            <p className="text-red-800 font-medium">تحذير: مواد خام منخفضة المخزون</p>
-            <p className="text-red-600 text-sm">
-              {lowStockMaterials.length} مادة خام تحتاج إلى إعادة طلب
-            </p>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">إجمالي المواد</p>
+              <p className="text-2xl font-bold text-gray-900">{filteredMaterials.length}</p>
+            </div>
+            <Package className="w-10 h-10 text-blue-600" />
           </div>
         </div>
-      )}
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <p className="text-gray-500 text-sm">إجمالي المواد</p>
-          <p className="text-2xl font-bold text-gray-900">{materials.length}</p>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">مخزون منخفض</p>
+              <p className="text-2xl font-bold text-red-600">{lowStockMaterials.length}</p>
+            </div>
+            <AlertCircle className="w-10 h-10 text-red-600" />
+          </div>
         </div>
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-          <p className="text-red-700 text-sm">مخزون منخفض</p>
-          <p className="text-2xl font-bold text-red-800">{lowStockMaterials.length}</p>
-        </div>
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-          <p className="text-blue-700 text-sm">إجمالي التكلفة</p>
-          <p className="text-2xl font-bold text-blue-800">
-            {materials.reduce((sum, m) => sum + (m.cost * m.stock), 0).toFixed(2)} ج.م
-          </p>
-        </div>
-        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-          <p className="text-green-700 text-sm">مخزون جيد</p>
-          <p className="text-2xl font-bold text-green-800">
-            {materials.filter(m => m.stock > m.minStock).length}
-          </p>
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">إجمالي القيمة</p>
+              <p className="text-2xl font-bold text-green-600">
+                {filteredMaterials.reduce((sum, p) => sum + (p.cost * p.stock), 0).toFixed(2)} ج.م
+              </p>
+            </div>
+            <Package className="w-10 h-10 text-green-600" />
+          </div>
         </div>
       </div>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-600 flex items-center gap-2">
-          <AlertTriangle className="w-5 h-5" />
-          {error}
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+        <input
+          type="text"
+          placeholder="بحث عن مادة خام..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full pr-10 pl-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+      </div>
+
+      {/* Products Table */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <table className="w-full">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">الكود</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">الاسم</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">الوحدة</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">السعر</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">التكلفة</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">المخزون</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">الحالة</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">إجراءات</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {filteredMaterials.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                  <Package className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                  لا توجد مواد خام
+                </td>
+              </tr>
+            ) : (
+              filteredMaterials.map((material) => (
+                <tr key={material.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 text-sm text-gray-900">{material.code}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900">{material.nameAr}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{material.unit}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900">{material.price ? material.price.toFixed(2) : material.cost.toFixed(2)} ج.م</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{material.cost.toFixed(2)} ج.م</td>
+                  <td className="px-4 py-3 text-sm text-gray-900">{material.stock}</td>
+                  <td className="px-4 py-3">
+                    {material.stock <= material.minStock ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">
+                        <AlertCircle className="w-3 h-3" />
+                        منخفض
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                        <Package className="w-3 h-3" />
+                        متوفر
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEdit(material)}
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(material.id)}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-bold text-gray-900">
+                {editingProduct ? 'تعديل مادة خام' : 'مادة خام جديدة'}
+              </h2>
+              <button onClick={resetForm} className="text-gray-400 hover:text-gray-600">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    الكود <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.code}
+                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    الاسم بالعربي <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.nameAr}
+                    onChange={(e) => setFormData({ ...formData, nameAr: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    الاسم بالإنجليزي
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.nameEn}
+                    onChange={(e) => setFormData({ ...formData, nameEn: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    الوحدة <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.unit}
+                    onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                    placeholder="قطعة، كجم، لتر، إلخ"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    السعر <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={formData.price}
+                    onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    التكلفة <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={formData.cost}
+                    onChange={(e) => setFormData({ ...formData, cost: parseFloat(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    المخزون الحالي <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    value={formData.stock}
+                    onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    الحد الأدنى للمخزون <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    value={formData.minStock}
+                    onChange={(e) => setFormData({ ...formData, minStock: parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-4">
+                <button
+                  type="submit"
+                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                >
+                  {editingProduct ? 'تحديث' : 'إضافة'}
+                </button>
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
-
-      {materials.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <Package className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-          <p className="text-gray-500">لا توجد مواد خام</p>
-          <p className="text-sm text-gray-400 mt-1">أضف مادة خام جديدة للبدء</p>
-        </div>
-      ) : (
-        <EnhancedTable columns={columns} data={materials} />
-      )}
-
-      <EnhancedModal
-        isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          resetForm();
-          setEditingMaterial(null);
-        }}
-        title={editingMaterial ? 'تعديل مادة خام' : 'إضافة مادة خام جديدة'}
-        size="xl"
-      >
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">الكود *</label>
-              <input
-                type="text"
-                required
-                value={formData.code}
-                onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                placeholder="مثال: RM-001"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">الاسم بالعربي *</label>
-              <input
-                type="text"
-                required
-                value={formData.nameAr}
-                onChange={(e) => setFormData({ ...formData, nameAr: e.target.value })}
-                placeholder="مثال: دقيق"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">الاسم بالإنجليزي</label>
-              <input
-                type="text"
-                value={formData.nameEn}
-                onChange={(e) => setFormData({ ...formData, nameEn: e.target.value })}
-                placeholder="Flour"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">الوحدة *</label>
-              <select
-                required
-                value={formData.unit}
-                onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="كجم">كجم</option>
-                <option value="جرام">جرام</option>
-                <option value="لتر">لتر</option>
-                <option value="متر">متر</option>
-                <option value="قطعة">قطعة</option>
-                <option value="علبة">علبة</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">التكلفة (للوحدة) *</label>
-              <input
-                type="number"
-                required
-                min="0"
-                step="0.01"
-                value={formData.cost}
-                onChange={(e) => setFormData({ ...formData, cost: parseFloat(e.target.value) || 0 })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">المخزون الحالي</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={formData.stock}
-                onChange={(e) => setFormData({ ...formData, stock: parseFloat(e.target.value) || 0 })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">الحد الأدنى للمخزون</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={formData.minStock}
-                onChange={(e) => setFormData({ ...formData, minStock: parseFloat(e.target.value) || 0 })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-2 justify-end">
-            <button
-              type="button"
-              onClick={() => {
-                setIsModalOpen(false);
-                resetForm();
-                setEditingMaterial(null);
-              }}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-            >
-              إلغاء
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
-            >
-              {loading ? 'جاري الحفظ...' : 'حفظ'}
-            </button>
-          </div>
-        </form>
-      </EnhancedModal>
     </div>
   );
 }
