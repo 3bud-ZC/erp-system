@@ -170,8 +170,7 @@ export async function GET() {
       message: 'Database initialized successfully',
       data: {
         demoUser: {
-          email: 'demo@erp-system.com',
-          password: 'demo12345'
+          email: 'demo@erp-system.com'
         },
         products: 2,
         warehouse: 1,
@@ -184,9 +183,8 @@ export async function GET() {
     console.error('❌ Initialization error:', error);
     return NextResponse.json({
       success: false,
-      error: error.message,
-      stack: error.stack,
-      hint: 'Check DATABASE_URL in Railway Variables'
+      message: 'فشل في تهيئة قاعدة البيانات',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     }, { status: 500 });
   } finally {
     await prisma.$disconnect();

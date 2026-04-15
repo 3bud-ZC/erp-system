@@ -136,7 +136,7 @@ export async function PUT(request: Request) {
         }
       }
 
-      // STEP 3: Execute update atomically - TEMPORARY: Skip stock adjustments
+      // STEP 3: Execute update atomically with stock delta adjustments
       const invoice = await prisma.$transaction(async (tx) => {
         await tx.purchaseInvoiceItem.deleteMany({
           where: { purchaseInvoiceId: id },

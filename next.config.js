@@ -3,7 +3,6 @@ const path = require('path');
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  swcMinify: true,
   poweredByHeader: false,
   
   // Optimize for production
@@ -50,14 +49,9 @@ const nextConfig = {
     return config;
   },
   
-  // Disable type checking during build (we check locally)
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  
-  // Disable ESLint during build (we check locally)
+  // ESLint warnings allowed but errors will not block build
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
 };
 

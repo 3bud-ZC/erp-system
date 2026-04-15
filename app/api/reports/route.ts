@@ -258,6 +258,10 @@ async function getInventoryValuation() {
 // GET - Read reports
 export async function GET(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) return apiError('لم يتم المصادقة', 401);
+    if (!checkPermission(user, 'view_financial_reports')) return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+
     const { searchParams } = new URL(request.url);
     const reportType = searchParams.get('type') || 'summary';
     const fromDate = searchParams.get('fromDate') ? new Date(searchParams.get('fromDate')!) : undefined;
@@ -289,7 +293,7 @@ export async function GET(request: Request) {
         break;
     }
 
-    return NextResponse.json(report);
+    return apiSuccess(report, 'Report fetched successfully');
   } catch (error) {
     return handleApiError(error, 'Generate report');
   }

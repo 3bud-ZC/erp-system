@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { apiSuccess, apiError, handleApiError } from '@/lib/api-response';
+import { getAuthenticatedUser, checkPermission, logAuditAction } from '@/lib/auth';
 
 /**
  * Purchase Orders API
@@ -8,8 +9,17 @@ import { apiSuccess, apiError, handleApiError } from '@/lib/api-response';
  * Stock is only affected when a Purchase Invoice is created/received.
  */
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
+    if (!checkPermission(user, 'read_purchase_invoice')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
+
     const orders = await prisma.purchaseOrder.findMany({
       include: {
         supplier: true,
@@ -30,6 +40,15 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
+    if (!checkPermission(user, 'create_purchase_invoice')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
+
     const body = await request.json();
     const { items, supplierId, orderNumber, date, status, notes, total, branch, warehouse } = body;
 
@@ -100,6 +119,12 @@ export async function POST(request: Request) {
       },
     });
 
+    await logAuditAction(
+      user.id, 'CREATE', 'purchases', 'PurchaseOrder', order.id, { order },
+      request.headers.get('x-forwarded-for') || undefined,
+      request.headers.get('user-agent') || undefined
+    );
+
     return apiSuccess(order, 'Purchase order created successfully');
   } catch (error: any) {
     console.error('Error creating purchase order:', error);
@@ -109,6 +134,15 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
+    if (!checkPermission(user, 'update_purchase_invoice')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
+
     const body = await request.json();
     const { id, items, orderNumber, date, status, notes, total, supplierId } = body;
 
@@ -179,6 +213,12 @@ export async function PUT(request: Request) {
       },
     });
 
+    await logAuditAction(
+      user.id, 'UPDATE', 'purchases', 'PurchaseOrder', order.id, { order },
+      request.headers.get('x-forwarded-for') || undefined,
+      request.headers.get('user-agent') || undefined
+    );
+
     return apiSuccess(order, 'Purchase order updated successfully');
   } catch (error: any) {
     console.error('Error updating purchase order:', error);
@@ -188,6 +228,15 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
+    if (!checkPermission(user, 'delete_purchase_invoice')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
@@ -195,9 +244,16 @@ export async function DELETE(request: Request) {
       return apiError('ID is required', 400);
     }
 
-    await prisma.purchaseOrder.delete({
-      where: { id },
-    });
+    await prisma.$transaction([
+      prisma.purchaseOrderItem.deleteMany({ where: { purchaseOrderId: id } }),
+      prisma.purchaseOrder.delete({ where: { id } }),
+    ]);
+
+    await logAuditAction(
+      user.id, 'DELETE', 'purchases', 'PurchaseOrder', id, undefined,
+      request.headers.get('x-forwarded-for') || undefined,
+      request.headers.get('user-agent') || undefined
+    );
 
     return apiSuccess({ id }, 'Purchase order deleted successfully');
   } catch (error) {

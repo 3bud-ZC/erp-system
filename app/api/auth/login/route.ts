@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { apiSuccess, apiError } from '@/lib/api-response';
 import { loginUser, logAuditAction } from '@/lib/auth';
 
 export async function POST(request: Request) {
@@ -8,10 +8,7 @@ export async function POST(request: Request) {
 
     // Validate input
     if (!email || !password) {
-      return NextResponse.json(
-        { error: 'البريد الإلكتروني وكلمة المرور مطلوبان' },
-        { status: 400 }
-      );
+      return apiError('البريد الإلكتروني وكلمة المرور مطلوبان', 400);
     }
 
     // Login user
@@ -31,12 +28,9 @@ export async function POST(request: Request) {
       userAgent
     );
 
-    return NextResponse.json(result);
+    return apiSuccess(result, 'تم تسجيل الدخول بنجاح');
   } catch (error: any) {
     console.error('Login error:', error);
-    return NextResponse.json(
-      { error: error.message || 'فشل تسجيل الدخول' },
-      { status: 401 }
-    );
+    return apiError(error.message || 'فشل تسجيل الدخول', 401);
   }
 }

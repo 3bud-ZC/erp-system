@@ -19,6 +19,10 @@ export async function GET(request: Request) {
       return apiError('لم يتم المصادقة', 401);
     }
 
+    if (!checkPermission(user, 'read_production_order')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
+
     const orders = await prisma.productionOrder.findMany({
       include: {
         product: true,

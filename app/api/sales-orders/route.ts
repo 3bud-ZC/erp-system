@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { apiSuccess, apiError, handleApiError } from '@/lib/api-response';
+import { getAuthenticatedUser, checkPermission, logAuditAction } from '@/lib/auth';
 
 /**
  * Sales Orders API
@@ -8,8 +9,17 @@ import { apiSuccess, apiError, handleApiError } from '@/lib/api-response';
  * Stock is only affected when a Sales Invoice is created/confirmed.
  */
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
+    if (!checkPermission(user, 'read_sales_invoice')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
+
     const orders = await prisma.salesOrder.findMany({
       include: {
         customer: true,
@@ -30,6 +40,15 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
+    if (!checkPermission(user, 'create_sales_invoice')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
+
     const body = await request.json();
     const { items, customerId, orderNumber, date, status, notes, total } = body;
 
@@ -95,6 +114,12 @@ export async function POST(request: Request) {
       },
     });
 
+    await logAuditAction(
+      user.id, 'CREATE', 'sales', 'SalesOrder', order.id, { order },
+      request.headers.get('x-forwarded-for') || undefined,
+      request.headers.get('user-agent') || undefined
+    );
+
     return apiSuccess(order, 'Sales order created successfully');
   } catch (error: any) {
     console.error('Error creating sales order:', error);
@@ -104,6 +129,15 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
+    if (!checkPermission(user, 'update_sales_invoice')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
+
     const body = await request.json();
     const { id, items, orderNumber, date, status, notes, total, customerId } = body;
 
@@ -169,6 +203,12 @@ export async function PUT(request: Request) {
       },
     });
 
+    await logAuditAction(
+      user.id, 'UPDATE', 'sales', 'SalesOrder', order.id, { body },
+      request.headers.get('x-forwarded-for') || undefined,
+      request.headers.get('user-agent') || undefined
+    );
+
     return apiSuccess(order, 'Sales order updated successfully');
   } catch (error: any) {
     console.error('Error updating sales order:', error);
@@ -178,6 +218,15 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
+    if (!checkPermission(user, 'delete_sales_invoice')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
@@ -194,6 +243,12 @@ export async function DELETE(request: Request) {
         where: { id },
       }),
     ]);
+
+    await logAuditAction(
+      user.id, 'DELETE', 'sales', 'SalesOrder', id, undefined,
+      request.headers.get('x-forwarded-for') || undefined,
+      request.headers.get('user-agent') || undefined
+    );
 
     return apiSuccess({ id }, 'Sales order deleted successfully');
   } catch (error: any) {

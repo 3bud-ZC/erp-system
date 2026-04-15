@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
-// import { getAuthenticatedUser, checkPermission } from '@/lib/auth';
+import { getAuthenticatedUser, checkPermission } from '@/lib/auth';
 
 // GET - Read journal entries
 export async function GET(request: Request) {
   try {
-    // Bypass auth for testing
-    // const user = await getAuthenticatedUser();
-    // if (!user) return apiError('Unauthorized', 401);
-    
+    const user = await getAuthenticatedUser(request);
+    if (!user) return apiError('لم يتم المصادقة', 401);
+    if (!checkPermission(user, 'view_accounting')) return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+
     const { searchParams } = new URL(request.url);
     const fromDate = searchParams.get('fromDate');
     const toDate = searchParams.get('toDate');
@@ -42,7 +42,7 @@ export async function GET(request: Request) {
       prisma.journalEntry.count({ where }),
     ]);
 
-    return NextResponse.json({ entries: data, total, page, limit });
+    return apiSuccess({ entries: data, total, page, limit }, 'Journal entries fetched successfully');
   } catch (error) {
     return handleApiError(error, 'Fetch journal entries');
   }

@@ -113,8 +113,7 @@ export async function GET() {
       success: true,
       message: 'Setup completed successfully',
       demoUser: {
-        email: 'demo@erp-system.com',
-        password: 'demo12345'
+        email: 'demo@erp-system.com'
       }
     });
 
@@ -122,8 +121,8 @@ export async function GET() {
     console.error('Setup error:', error);
     return NextResponse.json({
       success: false,
-      error: error.message,
-      stack: error.stack
+      message: 'فشل في إعداد النظام',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     }, { status: 500 });
   } finally {
     await prisma.$disconnect();

@@ -62,6 +62,10 @@ export async function PUT(request: Request) {
       return apiError('لم يتم المصادقة', 401);
     }
 
+    if (!checkPermission(user, 'update_purchase_invoice')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
+
     const body = await request.json();
     const { id, ...data } = body;
     const supplier = await prisma.supplier.update({
@@ -94,11 +98,22 @@ export async function DELETE(request: Request) {
       return apiError('لم يتم المصادقة', 401);
     }
 
+    if (!checkPermission(user, 'delete_purchase_invoice')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
     if (!id) {
       return handleApiError(new Error('ID is required'), 'Delete supplier');
+    }
+
+    const linkedCount =
+      (await prisma.purchaseOrder.count({ where: { supplierId: id } })) +
+      (await prisma.purchaseInvoice.count({ where: { supplierId: id } }));
+    if (linkedCount > 0) {
+      return apiError('Cannot delete supplier with existing orders or invoices', 400);
     }
 
     await prisma.supplier.delete({

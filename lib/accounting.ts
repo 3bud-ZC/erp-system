@@ -229,7 +229,6 @@ export async function createSalesInvoiceEntry(invoiceId: string, totalAmount: nu
       },
     ];
 
-    // Only add COGS entry if there is a measurable cost
     if (totalCOGS > 0) {
       lines.push(
         {
@@ -245,6 +244,8 @@ export async function createSalesInvoiceEntry(invoiceId: string, totalAmount: nu
           description: 'تخفيض المخزون عند البيع',
         }
       );
+    } else {
+      console.warn(`[ACCOUNTING] Invoice ${invoiceId}: COGS entry skipped — all products have cost=0 or null. Update product costs to fix P&L.`);
     }
 
     const entry: JournalEntryInput = {

@@ -1,10 +1,14 @@
-import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
 
 export async function GET(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     const { searchParams } = new URL(request.url);
     const productId = searchParams.get('productId');
 
@@ -16,7 +20,7 @@ export async function GET(request: Request) {
         },
         orderBy: { createdAt: 'desc' },
       });
-      return NextResponse.json(allBOMs);
+      return apiSuccess(allBOMs, 'BOM items fetched successfully');
     }
 
     const bom = await prisma.bOMItem.findMany({
@@ -27,7 +31,7 @@ export async function GET(request: Request) {
       },
     });
 
-    return NextResponse.json(bom);
+    return apiSuccess(bom, 'BOM items fetched successfully');
   } catch (error) {
     return handleApiError(error, 'Fetch BOM');
   }

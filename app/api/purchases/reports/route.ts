@@ -1,8 +1,15 @@
-import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { apiSuccess, apiError } from '@/lib/api-response';
+import { getAuthenticatedUser } from '@/lib/auth';
 
 export async function GET(request: Request) {
   try {
+    // Auth check
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     const { searchParams } = new URL(request.url);
     const fromDate = searchParams.get('fromDate');
     const toDate = searchParams.get('toDate');
@@ -85,7 +92,7 @@ export async function GET(request: Request) {
       });
     }
 
-    return NextResponse.json({
+    return apiSuccess({
       totalPurchases,
       totalExpenses: totalPurchases, // For backward compatibility
       averageOrderValue,
@@ -98,12 +105,9 @@ export async function GET(request: Request) {
         from: from.toISOString(),
         to: to.toISOString(),
       },
-    });
+    }, 'Purchase reports fetched successfully');
   } catch (error) {
     console.error('Error fetching purchase reports:', error);
-    return NextResponse.json(
-      { error: 'فشل في تحميل تقارير المشتريات' },
-      { status: 500 }
-    );
+    return apiError('فشل في تحميل تقارير المشتريات', 500);
   }
 }

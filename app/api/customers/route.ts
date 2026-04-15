@@ -28,6 +28,10 @@ export async function POST(request: Request) {
       return apiError('لم يتم المصادقة', 401);
     }
 
+    if (!checkPermission(user, 'create_sales_invoice')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
+
     const body = await request.json();
     const customer = await prisma.customer.create({
       data: body,
@@ -56,6 +60,10 @@ export async function PUT(request: Request) {
     const user = await getAuthenticatedUser(request);
     if (!user) {
       return apiError('لم يتم المصادقة', 401);
+    }
+
+    if (!checkPermission(user, 'update_sales_invoice')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
 
     const body = await request.json();
@@ -90,9 +98,20 @@ export async function DELETE(request: Request) {
       return apiError('لم يتم المصادقة', 401);
     }
 
+    if (!checkPermission(user, 'delete_sales_invoice')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     if (!id) return apiError('Customer ID is required', 400);
+
+    const linkedCount =
+      (await prisma.salesOrder.count({ where: { customerId: id } })) +
+      (await prisma.salesInvoice.count({ where: { customerId: id } }));
+    if (linkedCount > 0) {
+      return apiError('Cannot delete customer with existing orders or invoices', 400);
+    }
 
     await prisma.customer.delete({ where: { id } });
 

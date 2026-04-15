@@ -155,15 +155,18 @@ async function getRecentActivities() {
 
 export async function GET(request: Request) {
   try {
-    console.log('Dashboard API called');
-    
+    // Auth check
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     // Test database connection
     try {
-      const testQuery = await prisma.$queryRaw`SELECT 1`;
-      console.log('Database connection OK');
+      await prisma.$queryRaw`SELECT 1`;
     } catch (dbError: any) {
       console.error('Database connection failed:', dbError.message);
-      return apiError('Database connection failed: ' + dbError.message, 500);
+      return apiError('Database connection failed', 500);
     }
     
     // Get current month data
@@ -184,11 +187,10 @@ export async function GET(request: Request) {
       return ((current - previous) / previous) * 100;
     };
 
-    // FIX: Count low-stock products by comparing stock to minStock field (not hardcoded 10)
     const lowStockProducts = await safeFindMany('product');
 
     const lowStockFilteredCount = lowStockProducts.filter(
-      (p: any) => p.stock <= (p.minStock || 10)
+      (p: any) => p.stock <= (p.minStock ?? 0)
     ).length;
 
     const lowStockDetails = lowStockProducts
@@ -208,7 +210,7 @@ export async function GET(request: Request) {
       pnl = await calculateProfitAndLoss(currentMonthStart, currentMonthEnd);
     } catch (e) {
       // Accounting system not yet initialized, use defaults
-      console.log('Accounting system not initialized');
+      // Silently continue with zero values
     }
 
     // Get total inventory value and count

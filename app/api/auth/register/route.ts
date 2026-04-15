@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { apiSuccess, apiError } from '@/lib/api-response';
 import { registerUser, assignRoleToUser, logAuditAction } from '@/lib/auth';
 
 export async function POST(request: Request) {
@@ -8,35 +8,23 @@ export async function POST(request: Request) {
 
     // Validate input
     if (!email || !name || !password || !confirmPassword) {
-      return NextResponse.json(
-        { error: 'جميع الحقول مطلوبة' },
-        { status: 400 }
-      );
+      return apiError('جميع الحقول مطلوبة', 400);
     }
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      return NextResponse.json(
-        { error: 'البريد الإلكتروني غير صحيح' },
-        { status: 400 }
-      );
+      return apiError('البريد الإلكتروني غير صحيح', 400);
     }
 
     // Validate password length
     if (password.length < 8) {
-      return NextResponse.json(
-        { error: 'كلمة المرور يجب أن تكون 8 أحرف على الأقل' },
-        { status: 400 }
-      );
+      return apiError('كلمة المرور يجب أن تكون 8 أحرف على الأقل', 400);
     }
 
     // Validate password match
     if (password !== confirmPassword) {
-      return NextResponse.json(
-        { error: 'كلمات المرور غير متطابقة' },
-        { status: 400 }
-      );
+      return apiError('كلمات المرور غير متطابقة', 400);
     }
 
     // Register user
@@ -63,18 +51,9 @@ export async function POST(request: Request) {
       userAgent
     );
 
-    return NextResponse.json(
-      {
-        message: 'تم التسجيل بنجاح',
-        user,
-      },
-      { status: 201 }
-    );
+    return apiSuccess({ user }, 'تم التسجيل بنجاح');
   } catch (error: any) {
     console.error('Registration error:', error);
-    return NextResponse.json(
-      { error: error.message || 'فشل التسجيل' },
-      { status: 400 }
-    );
+    return apiError(error.message || 'فشل التسجيل', 400);
   }
 }

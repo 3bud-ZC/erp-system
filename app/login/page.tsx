@@ -18,8 +18,8 @@ export default function LoginPage() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            email: 'demo@erp-system.com',
-            password: 'demo12345',
+            email: '',
+            password: '',
           }),
         });
 
@@ -31,8 +31,8 @@ export default function LoginPage() {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              email: 'admin@example.com',
-              password: 'admin12345',
+              email: '',
+              password: '',
             }),
           });
 

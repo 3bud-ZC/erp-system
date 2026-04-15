@@ -7,8 +7,15 @@ import { prisma } from './db';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 const JWT_EXPIRY = '7d';
+
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is required');
+  }
+  return secret;
+}
 
 /**
  * Hash password using bcrypt
@@ -29,7 +36,7 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
  * Generate JWT token
  */
 export function generateToken(userId: string): string {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+  return jwt.sign({ userId }, getJwtSecret(), { expiresIn: JWT_EXPIRY });
 }
 
 /**
@@ -37,7 +44,7 @@ export function generateToken(userId: string): string {
  */
 export function verifyToken(token: string): { userId: string } | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+    const decoded = jwt.verify(token, getJwtSecret()) as { userId: string };
     return decoded;
   } catch (error) {
     return null;
@@ -393,7 +400,7 @@ export async function getAuthenticatedUser(req: Request): Promise<{
  * Check if authenticated user has specific permission
  * Call this after getAuthenticatedUser
  */
-export function checkPermission(user: any, permissionCode: string): boolean {
+export function checkPermission(user: { permissions: string[] }, permissionCode: string): boolean {
   return user.permissions.includes(permissionCode);
 }
 
@@ -401,6 +408,6 @@ export function checkPermission(user: any, permissionCode: string): boolean {
  * Check if authenticated user has specific role
  * Call this after getAuthenticatedUser
  */
-export function checkRole(user: any, roleCode: string): boolean {
+export function checkRole(user: { roles: string[] }, roleCode: string): boolean {
   return user.roles.includes(roleCode);
 }

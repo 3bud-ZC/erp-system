@@ -1,12 +1,16 @@
-import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
-import { logAuditAction, getAuthenticatedUser } from '@/lib/auth';
+import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
 
 export async function GET(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     const companies = await prisma.company.findMany({ orderBy: { createdAt: 'desc' } });
-    return NextResponse.json(companies);
+    return apiSuccess(companies, 'Companies fetched successfully');
   } catch (error) {
     return handleApiError(error, 'Fetch companies');
   }
@@ -24,6 +28,10 @@ export async function POST(request: Request) {
     const user = await getAuthenticatedUser(request);
     if (!user) {
       return apiError('لم يتم المصادقة', 401);
+    }
+
+    if (!checkPermission(user, 'create_product')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
 
     const body = await request.json();
@@ -71,6 +79,10 @@ export async function PUT(request: Request) {
     const user = await getAuthenticatedUser(request);
     if (!user) {
       return apiError('لم يتم المصادقة', 401);
+    }
+
+    if (!checkPermission(user, 'update_product')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
 
     const body = await request.json();
@@ -128,11 +140,20 @@ export async function DELETE(request: Request) {
       return apiError('لم يتم المصادقة', 401);
     }
 
+    if (!checkPermission(user, 'delete_product')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
     if (!id) {
       return handleApiError(new Error('id مطلوب'), 'Delete company');
+    }
+
+    const productCount = await prisma.product.count({ where: { companyId: id } });
+    if (productCount > 0) {
+      return apiError('Cannot delete company with assigned products', 400);
     }
 
     await prisma.company.delete({ where: { id } });

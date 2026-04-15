@@ -92,6 +92,16 @@ export async function PUT(request: Request) {
 
     const body = await request.json();
       const { id, expenseType } = body;
+      // STEP 1: Reverse existing journal entry for this expense (if any)
+      const existingEntry = await prisma.journalEntry.findFirst({
+        where: { referenceType: 'Expense', referenceId: id },
+      });
+      if (existingEntry) {
+        await prisma.journalEntryLine.deleteMany({ where: { journalEntryId: existingEntry.id } });
+        await prisma.journalEntry.delete({ where: { id: existingEntry.id } });
+      }
+
+      // STEP 2: Update the expense
       const expense = await prisma.expense.update({
         where: { id },
         data: {
@@ -113,9 +123,11 @@ export async function PUT(request: Request) {
         },
       });
 
-      // NOTE: Journal entry update not implemented — updating an expense requires
-      // reversing the original entry and creating a new one to avoid double-counting.
-      // This is a known limitation; expenses should be deleted and re-created for now.
+      // STEP 3: Create and post new journal entry with updated amount
+      const journalEntry = await createExpenseEntry(expense.id, expense.amount, expenseType || 'other');
+      if (journalEntry) {
+        await postJournalEntry(journalEntry.id);
+      }
 
       await logAuditAction(
         user.id,

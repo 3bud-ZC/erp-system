@@ -1,12 +1,16 @@
-import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
-import { logAuditAction, getAuthenticatedUser } from '@/lib/auth';
+import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
 
 export async function GET(request: Request) {
   try {
+    const user = await getAuthenticatedUser(request);
+    if (!user) {
+      return apiError('لم يتم المصادقة', 401);
+    }
+
     const groups = await prisma.itemGroup.findMany({ orderBy: { createdAt: 'desc' } });
-    return NextResponse.json(groups);
+    return apiSuccess(groups, 'Item groups fetched successfully');
   } catch (error) {
     return handleApiError(error, 'Fetch item groups');
   }
@@ -24,6 +28,10 @@ export async function POST(request: Request) {
     const user = await getAuthenticatedUser(request);
     if (!user) {
       return apiError('لم يتم المصادقة', 401);
+    }
+
+    if (!checkPermission(user, 'create_product')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
 
     const body = await request.json();
@@ -68,6 +76,10 @@ export async function PUT(request: Request) {
     const user = await getAuthenticatedUser(request);
     if (!user) {
       return apiError('لم يتم المصادقة', 401);
+    }
+
+    if (!checkPermission(user, 'update_product')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
 
     const body = await request.json();
@@ -122,11 +134,20 @@ export async function DELETE(request: Request) {
       return apiError('لم يتم المصادقة', 401);
     }
 
+    if (!checkPermission(user, 'delete_product')) {
+      return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
     if (!id) {
       return handleApiError(new Error('id مطلوب'), 'Delete item group');
+    }
+
+    const productCount = await prisma.product.count({ where: { itemGroupId: id } });
+    if (productCount > 0) {
+      return apiError('Cannot delete item group with assigned products', 400);
     }
 
     await prisma.itemGroup.delete({ where: { id } });

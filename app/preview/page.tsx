@@ -165,22 +165,15 @@ export default function PreviewPage() {
           </div>
         </div>
 
-        {/* Demo Credentials */}
+        {/* Setup Note */}
         <div className="mt-6 bg-gradient-to-r from-indigo-900/50 to-purple-900/50 rounded-2xl p-6 border border-indigo-500/30">
           <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
             <Shield className="w-6 h-6 text-indigo-400" />
-            بيانات الدخول التجريبية
+            ملاحظة الأمان
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-slate-900/50 p-4 rounded-xl">
-              <p className="text-slate-400 text-sm">البريد الإلكتروني</p>
-              <p className="text-white font-mono text-lg">demo@erp-system.com</p>
-            </div>
-            <div className="bg-slate-900/50 p-4 rounded-xl">
-              <p className="text-slate-400 text-sm">كلمة المرور</p>
-              <p className="text-white font-mono text-lg">demo12345</p>
-            </div>
-          </div>
+          <p className="text-slate-300">
+            استخدم صفحة الإعداد لإنشاء مستخدم جديد. لا توجد بيانات دخول افتراضية للنظام.
+          </p>
         </div>
       </div>
     </div>
