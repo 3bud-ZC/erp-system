@@ -132,7 +132,7 @@ export default function DashboardPage() {
       setLoading(true);
       setError(null);
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout (increased)
       
       // Get auth token from localStorage
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
@@ -141,6 +141,7 @@ export default function DashboardPage() {
         signal: controller.signal,
         cache: 'no-store',
         headers: {
+          'Content-Type': 'application/json',
           ...(token && { 'Authorization': `Bearer ${token}` }),
         },
       });
@@ -182,9 +183,32 @@ export default function DashboardPage() {
       
       setData(dashboardData);
       setError(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching dashboard:', err);
-      setError(err instanceof Error ? err.message : 'خطأ في تحميل لوحة التحكم');
+      if (err.name === 'AbortError') {
+        setError('استغرق تحميل البيانات وقتاً طويلاً. يرجى المحاولة مرة أخرى.');
+      } else {
+        setError(err instanceof Error ? err.message : 'خطأ في تحميل لوحة التحكم');
+      }
+      // Set empty data to prevent crashes
+      setData({
+        totalSales: 0,
+        totalPurchases: 0,
+        totalExpenses: 0,
+        salesTrend: 0,
+        purchasesTrend: 0,
+        expensesTrend: 0,
+        grossProfit: 0,
+        netProfit: 0,
+        profitMargin: 0,
+        lowStockProducts: 0,
+        totalProducts: 0,
+        totalInventoryValue: 0,
+        recentActivities: [],
+        alerts: [],
+        chartData: { labels: [], sales: [], purchases: [] },
+        inventoryData: { rawMaterials: 0, finishedGoods: 0, packaging: 0 },
+      });
     } finally {
       setLoading(false);
     }

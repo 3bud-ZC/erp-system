@@ -62,24 +62,42 @@ export default function JournalEntriesPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
+      setError(null);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+      
       const headers = getAuthHeadersOnly();
       const [entriesRes, accountsRes] = await Promise.all([
-        fetch('/api/journal-entries', { headers }),
-        fetch('/api/accounts', { headers }),
+        fetch('/api/journal-entries', { headers, signal: controller.signal }),
+        fetch('/api/accounts', { headers, signal: controller.signal }),
       ]);
+      
+      clearTimeout(timeoutId);
 
       if (entriesRes.ok) {
         const data = await entriesRes.json();
-        setEntries(data.data || data);
+        setEntries(Array.isArray(data) ? data : (data.data || []));
+      } else {
+        setEntries([]);
       }
+      
       if (accountsRes.ok) {
         const data = await accountsRes.json();
-        setAccounts(data.data || data);
+        setAccounts(Array.isArray(data) ? data : (data.data || []));
+      } else {
+        setAccounts([]);
       }
+      
       setError(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load data');
+      if (err.name === 'AbortError') {
+        setError('استغرق تحميل البيانات وقتاً طويلاً. يرجى المحاولة مرة أخرى.');
+      } else {
+        setError(err instanceof Error ? err.message : 'فشل في تحميل البيانات');
+      }
+      setEntries([]);
+      setAccounts([]);
     } finally {
       setLoading(false);
     }
@@ -270,6 +288,17 @@ export default function JournalEntriesPage() {
 
   const { totalDebit, totalCredit } = calculateTotals();
   const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01;
+
+  if (loading && entries.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">جاري تحميل القيود اليومية...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
