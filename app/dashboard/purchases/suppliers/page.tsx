@@ -1,22 +1,20 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { fetchApi, getAuthHeadersOnly } from '@/lib/api-client';
+import { getAuthHeaders, getAuthHeadersOnly } from '@/lib/api-client';
 import {
+  User,
   Plus,
   Search,
-  Phone,
-  Mail,
-  Building2,
-  FileText,
-  RefreshCw,
-  AlertTriangle,
-  Users,
-  Truck,
   Edit,
   Trash2,
-  ArrowUpDown,
+  AlertCircle,
+  RefreshCw,
+  X,
+  Phone,
+  Mail,
+  MapPin,
+  FileText,
 } from 'lucide-react';
 
 interface Supplier {
@@ -24,41 +22,19 @@ interface Supplier {
   code: string;
   nameAr: string;
   nameEn?: string;
-  phone?: string;
+  phone: string;
   email?: string;
   address?: string;
   taxNumber?: string;
-}
-
-// Stats Card Component
-function StatCard({ title, value, subtitle, icon: Icon, color }: any) {
-  return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-gray-500 text-sm font-medium">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-          {subtitle && <p className="text-gray-400 text-xs mt-1">{subtitle}</p>}
-        </div>
-        <div className={`w-10 h-10 ${color} rounded-lg flex items-center justify-center`}>
-          <Icon className="w-5 h-5 text-white" />
-        </div>
-      </div>
-    </div>
-  );
+  createdAt: string;
 }
 
 export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortConfig, setSortConfig] = useState<{ key: keyof Supplier; direction: 'asc' | 'desc' } | null>(null);
-
-  // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     code: '',
     nameAr: '',
@@ -69,84 +45,116 @@ export default function SuppliersPage() {
     taxNumber: '',
   });
 
+  // Auto-generate customer code
+  const generateSupplierCode = () => {
+    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    return `SUPP-${random}`;
+  };
+
   useEffect(() => {
-    fetchSuppliers();
+    loadSuppliers();
   }, []);
 
-  const fetchSuppliers = async () => {
+  const loadSuppliers = async () => {
     try {
       setLoading(true);
-      setError(null);
-      const res = await fetch('/api/suppliers', { headers: getAuthHeadersOnly() });
-      if (!res.ok) throw new Error('فشل في تحميل الموردين');
-      const json = await res.json();
-      const data = json.data || json;
-      setSuppliers(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Error fetching suppliers:', err);
-      setError(err instanceof Error ? err.message : 'خطأ في تحميل الموردين');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      
+      const headers = getAuthHeadersOnly();
+      const response = await fetch('/api/suppliers', { 
+        headers,
+        signal: controller.signal,
+        cache: 'no-store'
+      });
+      
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const data = await response.json();
+        setSuppliers(Array.isArray(data) ? data : (data.data || []));
+      } else {
+        setSuppliers([]);
+      }
+    } catch (error: any) {
+      console.error('Error loading suppliers:', error);
+      if (error.name === 'AbortError') {
+        alert('استغرق تحميل البيانات وقتاً طويلاً. يرجى المحاولة مرة أخرى.');
+      }
       setSuppliers([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSort = (key: keyof Supplier) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
-  };
-
-  const filteredSuppliers = suppliers
-    .filter((s) => {
-      const search = searchTerm.toLowerCase();
-      return (
-        s.nameAr.toLowerCase().includes(search) ||
-        s.nameEn?.toLowerCase().includes(search) ||
-        s.code.toLowerCase().includes(search) ||
-        s.phone?.includes(search)
-      );
-    })
-    .sort((a, b) => {
-      if (!sortConfig) return 0;
-      const aValue = a[sortConfig.key] || '';
-      const bValue = b[sortConfig.key] || '';
-      if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
-      return 0;
-    });
-
-  const stats = {
-    total: suppliers.length,
-    withPhone: suppliers.filter((s) => s.phone).length,
-    withEmail: suppliers.filter((s) => s.email).length,
-    withTax: suppliers.filter((s) => s.taxNumber).length,
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
     try {
+      const url = editingSupplier ? '/api/suppliers' : '/api/suppliers';
       const method = editingSupplier ? 'PUT' : 'POST';
-      const body = editingSupplier ? { id: editingSupplier.id, ...formData } : formData;
-
-      await fetchApi('/api/suppliers', {
+      
+      const code = editingSupplier ? editingSupplier.code : generateSupplierCode();
+      
+      const response = await fetch(url, {
         method,
-        body: JSON.stringify(body),
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          ...(editingSupplier && { id: editingSupplier.id }),
+          code,
+          nameAr: formData.nameAr,
+          nameEn: formData.nameEn,
+          phone: formData.phone,
+          email: formData.email,
+          address: formData.address,
+          taxNumber: formData.taxNumber,
+        }),
       });
 
-      alert(editingSupplier ? 'تم تحديث المورد بنجاح' : 'تم إضافة المورد بنجاح');
-      setIsModalOpen(false);
-      setEditingSupplier(null);
-      resetForm();
-      fetchSuppliers();
-    } catch (err) {
-      console.error('Error saving supplier:', err);
-      alert(err instanceof Error ? err.message : 'خطأ في حفظ المورد');
-    } finally {
-      setIsSubmitting(false);
+      if (response.ok) {
+        resetForm();
+        loadSuppliers();
+      } else {
+        const error = await response.json();
+        alert(error.message || 'حدث خطأ');
+      }
+    } catch (error) {
+      console.error('Error saving supplier:', error);
+      alert('حدث خطأ أثناء الحفظ');
+    }
+  };
+
+  const handleEdit = (supplier: Supplier) => {
+    setEditingSupplier(supplier);
+    setFormData({
+      code: supplier.code,
+      nameAr: supplier.nameAr,
+      nameEn: supplier.nameEn || '',
+      phone: supplier.phone,
+      email: supplier.email || '',
+      address: supplier.address || '',
+      taxNumber: supplier.taxNumber || '',
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('هل أنت متأكد من حذف المورد؟')) return;
+    
+    try {
+      const response = await fetch(`/api/suppliers?id=${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeadersOnly(),
+      });
+
+      if (response.ok) {
+        loadSuppliers();
+      } else {
+        const error = await response.json();
+        alert(error.message || 'حدث خطأ أثناء الحذف');
+      }
+    } catch (error) {
+      console.error('Error deleting supplier:', error);
+      alert('حدث خطأ أثناء الحذف');
     }
   };
 
@@ -160,320 +168,278 @@ export default function SuppliersPage() {
       address: '',
       taxNumber: '',
     });
+    setEditingSupplier(null);
+    setIsModalOpen(false);
   };
 
-  const handleEdit = (supplier: Supplier) => {
-    setEditingSupplier(supplier);
-    setFormData({
-      code: supplier.code,
-      nameAr: supplier.nameAr,
-      nameEn: supplier.nameEn || '',
-      phone: supplier.phone || '',
-      email: supplier.email || '',
-      address: supplier.address || '',
-      taxNumber: supplier.taxNumber || '',
-    });
-    setIsModalOpen(true);
-  };
+  const filteredSuppliers = Array.isArray(suppliers) 
+    ? suppliers.filter(c =>
+        c.nameAr.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.phone.includes(searchTerm)
+      )
+    : [];
 
-  const handleDelete = async (supplier: Supplier) => {
-    if (confirm('هل أنت متأكد من حذف هذا المورد؟')) {
-      try {
-        await fetchApi(`/api/suppliers?id=${supplier.id}`, { method: 'DELETE' });
-        alert('تم حذف المورد بنجاح');
-        fetchSuppliers();
-      } catch (error: any) {
-        alert(`خطأ في الحذف: ${error.message}`);
-      }
-    }
-  };
-
-  if (loading) {
+  if (loading && suppliers.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <RefreshCw className="w-8 h-8 text-blue-600 mx-auto animate-spin mb-4" />
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-600">جاري تحميل الموردين...</p>
         </div>
       </div>
     );
   }
 
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center bg-red-50 border border-red-200 rounded-xl p-8 max-w-md">
-          <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <p className="text-red-700 font-medium mb-2">حدث خطأ</p>
-          <p className="text-red-600 text-sm mb-4">{error}</p>
-          <button
-            onClick={fetchSuppliers}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-          >
-            إعادة المحاولة
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">الموردين</h1>
-          <p className="text-gray-500 text-sm mt-1">إدارة الموردين وبياناتهم</p>
+          <p className="text-gray-600 mt-1">إدارة بيانات الموردين</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/dashboard/purchases/invoices"
-            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-700"
-          >
-            <FileText className="w-4 h-4" />
-            فواتير الشراء
-          </Link>
+        <div className="flex gap-2">
           <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+            onClick={loadCustomers}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
           >
-            <Plus className="w-4 h-4" />
-            إضافة مورد
+            <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+            تحديث
+          </button>
+          <button
+            onClick={() => {
+              resetForm();
+              setIsModalOpen(true);
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            <Plus className="w-5 h-5" />
+            مورد جديد
           </button>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="إجمالي الموردين"
-          value={stats.total}
-          subtitle="مورد مسجل"
-          icon={Truck}
-          color="bg-blue-500"
-        />
-        <StatCard
-          title="لديهم هاتف"
-          value={stats.withPhone}
-          subtitle={`${stats.total > 0 ? Math.round((stats.withPhone / stats.total) * 100) : 0}%`}
-          icon={Phone}
-          color="bg-green-500"
-        />
-        <StatCard
-          title="لديهم بريد"
-          value={stats.withEmail}
-          subtitle={`${stats.total > 0 ? Math.round((stats.withEmail / stats.total) * 100) : 0}%`}
-          icon={Mail}
-          color="bg-purple-500"
-        />
-        <StatCard
-          title="رقم ضريبي"
-          value={stats.withTax}
-          subtitle={`${stats.total > 0 ? Math.round((stats.withTax / stats.total) * 100) : 0}%`}
-          icon={Building2}
-          color="bg-orange-500"
-        />
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">إجمالي الموردين</p>
+              <p className="text-2xl font-bold text-gray-900">{filteredSuppliers.length}</p>
+            </div>
+            <User className="w-10 h-10 text-blue-600" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">تمت إضافتهم اليوم</p>
+              <p className="text-2xl font-bold text-green-600">
+                {filteredSuppliers.filter(c => {
+                  const today = new Date().toISOString().split('T')[0];
+                  return new Date(c.createdAt).toISOString().split('T')[0] === today;
+                }).length}
+              </p>
+            </div>
+            <User className="w-10 h-10 text-green-600" />
+          </div>
+        </div>
       </div>
 
       {/* Search */}
-      <div className="bg-white border border-gray-200 rounded-xl p-4">
-        <div className="relative">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="البحث في الموردين (الاسم، الكود، الهاتف)..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pr-10 pl-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm"
-          />
-        </div>
+      <div className="relative">
+        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+        <input
+          type="text"
+          placeholder="بحث عن مورد..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full pr-10 pl-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
       </div>
 
-      {/* Table */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-right">
-            <thead className="bg-gray-50 border-b border-gray-200">
+      {/* Suppliers Table */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <table className="w-full">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">الكود</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">الاسم</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">الهاتف</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">البريد الإلكتروني</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">العنوان</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">إجراءات</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {filteredSuppliers.length === 0 ? (
               <tr>
-                <th
-                  className="px-4 py-3 font-semibold text-gray-700 cursor-pointer hover:bg-gray-100"
-                  onClick={() => handleSort('code')}
-                >
-                  <div className="flex items-center gap-1">
-                    الكود
-                    <ArrowUpDown className="w-3 h-3" />
-                  </div>
-                </th>
-                <th
-                  className="px-4 py-3 font-semibold text-gray-700 cursor-pointer hover:bg-gray-100"
-                  onClick={() => handleSort('nameAr')}
-                >
-                  <div className="flex items-center gap-1">
-                    الاسم
-                    <ArrowUpDown className="w-3 h-3" />
-                  </div>
-                </th>
-                <th className="px-4 py-3 font-semibold text-gray-700">الهاتف</th>
-                <th className="px-4 py-3 font-semibold text-gray-700">البريد الإلكتروني</th>
-                <th className="px-4 py-3 font-semibold text-gray-700">الإجراءات</th>
+                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                  <User className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                  لا يوجد موردين
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filteredSuppliers.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
-                    لا يوجد موردين مطابقين للبحث
+            ) : (
+              filteredSuppliers.map((supplier) => (
+                <tr key={supplier.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{supplier.code}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900">{supplier.nameAr}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600 flex items-center gap-1">
+                    <Phone className="w-3 h-3" />
+                    {supplier.phone}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-600 flex items-center gap-1">
+                    <Mail className="w-3 h-3" />
+                    {supplier.email || '-'}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-600 flex items-center gap-1">
+                    <MapPin className="w-3 h-3" />
+                    {supplier.address || '-'}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEdit(supplier)}
+                        className="text-blue-600 hover:text-blue-800"
+                        title="تعديل"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(supplier.id)}
+                        className="text-red-600 hover:text-red-800"
+                        title="حذف"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
-              ) : (
-                filteredSuppliers.map((supplier) => (
-                  <tr key={supplier.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium text-gray-900">{supplier.code}</td>
-                    <td className="px-4 py-3">
-                      <div>
-                        <p className="font-medium text-gray-900">{supplier.nameAr}</p>
-                        {supplier.nameEn && <p className="text-xs text-gray-500">{supplier.nameEn}</p>}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {supplier.phone ? (
-                        <div className="flex items-center gap-1 text-gray-600">
-                          <Phone className="w-3 h-3" />
-                          {supplier.phone}
-                        </div>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {supplier.email ? (
-                        <div className="flex items-center gap-1 text-gray-600">
-                          <Mail className="w-3 h-3" />
-                          <span className="text-xs">{supplier.email}</span>
-                        </div>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => handleEdit(supplier)}
-                          className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(supplier)}
-                          className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
 
       {/* Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-lg font-bold text-gray-900">
-                {editingSupplier ? 'تعديل مورد' : 'إضافة مورد جديد'}
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-bold text-gray-900">
+                {editingSupplier ? 'تعديل مورد' : 'مورد جديد'}
               </h2>
+              <button onClick={resetForm} className="text-gray-400 hover:text-gray-600">
+                <X className="w-6 h-6" />
+              </button>
             </div>
+
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">الكود *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    الكود {editingSupplier ? '' : <span className="text-gray-500">(تلقائي)</span>}
+                  </label>
                   <input
                     type="text"
-                    required
-                    value={formData.code}
-                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm"
+                    value={editingSupplier ? formData.code : generateSupplierCode()}
+                    disabled={!editingSupplier}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">الاسم العربي *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    الاسم بالعربية <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="text"
                     required
                     value={formData.nameAr}
                     onChange={(e) => setFormData({ ...formData, nameAr: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">الاسم الإنجليزي</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    الاسم بالإنجليزية
+                  </label>
                   <input
                     type="text"
                     value={formData.nameEn}
                     onChange={(e) => setFormData({ ...formData, nameEn: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">الهاتف</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    الهاتف <span className="text-red-500">*</span>
+                  </label>
                   <input
-                    type="tel"
+                    type="text"
+                    required
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">البريد الإلكتروني</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    البريد الإلكتروني
+                  </label>
                   <input
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">الرقم الضريبي</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    الرقم الضريبي
+                  </label>
                   <input
                     type="text"
                     value={formData.taxNumber}
                     onChange={(e) => setFormData({ ...formData, taxNumber: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    العنوان
+                  </label>
+                  <textarea
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    rows={2}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">العنوان</label>
-                <textarea
-                  rows={3}
-                  value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm"
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsModalOpen(false);
-                    setEditingSupplier(null);
-                    resetForm();
-                  }}
-                  className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium"
-                >
-                  إلغاء
-                </button>
+
+              {/* Actions */}
+              <div className="flex gap-2 pt-4 border-t">
                 <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 text-sm font-medium"
+                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium"
                 >
-                  {isSubmitting ? 'جاري الحفظ...' : (editingSupplier ? 'تحديث' : 'إضافة')}
+                  {editingSupplier ? 'تحديث' : 'إنشاء'}
+                </button>
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 font-medium"
+                >
+                  إلغاء
                 </button>
               </div>
             </form>
