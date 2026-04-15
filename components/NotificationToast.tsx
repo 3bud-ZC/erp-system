@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
 interface NotificationToastProps {
@@ -52,13 +52,13 @@ export default function NotificationToast({
   const config = typeConfig[type];
   const Icon = config.icon;
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setIsExiting(true);
     setTimeout(() => {
       setIsVisible(false);
       onClose?.();
     }, 300);
-  };
+  }, [onClose]);
 
   useEffect(() => {
     // Entrance animation
