@@ -170,6 +170,23 @@ export async function DELETE(request: Request) {
       return handleApiError(new Error('ID is required'), 'Delete product');
     }
 
+    // Check if product is used in any sales orders, purchase orders, or invoices
+    const [salesOrderItems, purchaseOrderItems, salesInvoiceItems, purchaseInvoiceItems] = await Promise.all([
+      prisma.salesOrderItem.count({ where: { productId: id } }),
+      prisma.purchaseOrderItem.count({ where: { productId: id } }),
+      prisma.salesInvoiceItem.count({ where: { productId: id } }),
+      prisma.purchaseInvoiceItem.count({ where: { productId: id } }),
+    ]);
+
+    const totalUsage = salesOrderItems + purchaseOrderItems + salesInvoiceItems + purchaseInvoiceItems;
+
+    if (totalUsage > 0) {
+      return apiError(
+        `لا يمكن حذف المنتج لأنه مستخدم في ${totalUsage} سجل (أوامر بيع: ${salesOrderItems}, أوامر شراء: ${purchaseOrderItems}, فواتير بيع: ${salesInvoiceItems}, فواتير شراء: ${purchaseInvoiceItems}). يرجى حذف السجلات المرتبطة أولاً أو إلغاء تفعيل المنتج بدلاً من الحذف.`,
+        409
+      );
+    }
+
     await prisma.product.delete({
       where: { id },
     });

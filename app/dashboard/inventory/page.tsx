@@ -153,9 +153,14 @@ export default function InventoryPage() {
       }
 
       const method = editingProduct ? 'PUT' : 'POST';
-      const body = editingProduct ? { id: editingProduct.id, ...productForm } : productForm;
       
       // Prepare data with proper number conversion
+      // IMPORTANT: Exclude stock field from updates - API rejects it for security
+      const { stock, ...productDataWithoutStock } = productForm;
+      const body = editingProduct 
+        ? { id: editingProduct.id, ...productDataWithoutStock } 
+        : { ...productForm, stock: Number(stock) || 0 };
+      
       const productData: any = {
         ...body,
         price: Number(body.price) || 0,
@@ -164,12 +169,6 @@ export default function InventoryPage() {
         warehouseId: body.warehouseId || null,
         nameEn: body.nameEn || null,
       };
-      
-      // Only include stock for new products (POST), not for updates (PUT)
-      // API rejects stock changes directly for security - must use inventory operations
-      if (!editingProduct) {
-        productData.stock = Number(body.stock) || 0;
-      }
 
       console.log('Saving product:', productData);
       
