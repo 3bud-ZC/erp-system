@@ -63,6 +63,9 @@ export default function ProfitLossPage() {
     try {
       setLoading(true);
       setError(null);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      
       const token = localStorage.getItem('token');
       const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
       const params = new URLSearchParams({
@@ -70,16 +73,26 @@ export default function ProfitLossPage() {
         fromDate: dateRange.fromDate,
         toDate: dateRange.toDate,
       });
-      const response = await fetch(`/api/reports?${params}`, { headers });
+      const response = await fetch(`/api/reports?${params}`, { 
+        headers,
+        signal: controller.signal,
+        cache: 'no-store'
+      });
+      
+      clearTimeout(timeoutId);
       if (response.ok) {
         const result = await response.json();
         setData(result.data?.profitAndLoss || result.profitAndLoss || null);
       } else {
         throw new Error('فشل في تحميل التقرير');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading report:', error);
-      setError(error instanceof Error ? error.message : 'فشل في تحميل التقرير');
+      if (error.name === 'AbortError') {
+        setError('استغرق تحميل البيانات وقتاً طويلاً. يرجى المحاولة مرة أخرى.');
+      } else {
+        setError(error instanceof Error ? error.message : 'فشل في تحميل التقرير');
+      }
     } finally {
       setLoading(false);
     }
