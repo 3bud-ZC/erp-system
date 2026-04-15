@@ -87,12 +87,15 @@ export default function RawMaterialsPage() {
       const url = editingProduct ? '/api/raw-materials' : '/api/raw-materials';
       const method = editingProduct ? 'PUT' : 'POST';
       
+      // Remove stock field from request - API rejects direct stock modifications
+      const { stock, ...dataWithoutStock } = formData;
+      
       const response = await fetch(url, {
         method,
         headers: getAuthHeaders(),
         body: JSON.stringify({
           ...(editingProduct && { id: editingProduct.id }),
-          ...formData,
+          ...dataWithoutStock,
           type: 'raw_material',
         }),
       });
