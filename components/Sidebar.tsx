@@ -45,8 +45,9 @@ const menuItems: MenuItem[] = [
     icon: Package,
     href: '/dashboard/inventory',
     children: [
-      { title: 'المنتجات', icon: Boxes, href: '/dashboard/inventory' },
+      { title: 'المنتجات', icon: Boxes, href: '/dashboard/inventory/products' },
       { title: 'المواد الخام', icon: Layers, href: '/dashboard/inventory/raw-materials' },
+      { title: 'المخازن', icon: Building2, href: '/dashboard/inventory/warehouses' },
     ],
   },
   {
@@ -80,16 +81,6 @@ const menuItems: MenuItem[] = [
       { title: 'أوامر إنتاج', icon: FileText, href: '/dashboard/manufacturing/production-orders' },
       { title: 'عمليات الإنتاج', icon: Settings, href: '/dashboard/manufacturing/operations' },
       { title: 'دراسة التكاليف', icon: Calculator, href: '/dashboard/manufacturing/cost-study' },
-    ],
-  },
-  {
-    title: 'المحاسبة',
-    icon: BarChart3,
-    href: '/dashboard/accounting',
-    children: [
-      { title: 'الملخص المالي', icon: DollarSign, href: '/dashboard/accounting' },
-      { title: 'القيود اليومية', icon: FileText, href: '/dashboard/accounting/journal' },
-      { title: 'قائمة الدخل', icon: TrendingUp, href: '/dashboard/accounting/profit-loss' },
     ],
   },
 ];
