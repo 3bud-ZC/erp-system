@@ -256,7 +256,7 @@ export default function PurchaseOrdersPage() {
 
   const handleStatusChange = async (id: string, newStatus: string) => {
     try {
-      const response = await fetch('/api/sales-orders', {
+      const response = await fetch('/api/purchase-orders', {
         method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify({ id, status: newStatus }),

@@ -177,7 +177,7 @@ export default function SalesInvoicesPage() {
     try {
       const invoiceNumber = editingInvoice ? editingInvoice.invoiceNumber : generateInvoiceNumber();
       
-      const response = await fetch('/api/sales-orders', {
+      const response = await fetch('/api/sales-invoices', {
         method: editingInvoice ? 'PUT' : 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -256,7 +256,7 @@ export default function SalesInvoicesPage() {
 
   const handleStatusChange = async (id: string, newStatus: string) => {
     try {
-      const response = await fetch('/api/sales-orders', {
+      const response = await fetch('/api/sales-invoices', {
         method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify({ id, status: newStatus }),
