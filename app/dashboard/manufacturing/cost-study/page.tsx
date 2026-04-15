@@ -59,16 +59,27 @@ export default function CostStudyPage() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch('/api/reports?type=inventory');
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const response = await fetch('/api/reports?type=inventory', { headers });
       if (response.ok) {
-        const data = await response.json();
-        setProducts(data.inventory.items || []);
+        const result = await response.json();
+        const data = result.data || result;
+        // Handle different response structures
+        if (data.inventory && data.inventory.items) {
+          setProducts(data.inventory.items);
+        } else if (Array.isArray(data)) {
+          setProducts(data);
+        } else {
+          setProducts([]);
+        }
       } else {
         throw new Error('فشل في تحميل البيانات');
       }
     } catch (error) {
       console.error('Error loading inventory data:', error);
       setError(error instanceof Error ? error.message : 'فشل في تحميل البيانات');
+      setProducts([]);
     } finally {
       setLoading(false);
     }

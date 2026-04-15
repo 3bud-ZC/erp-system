@@ -62,15 +62,17 @@ export default function ProfitLossPage() {
     try {
       setLoading(true);
       setError(null);
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
       const params = new URLSearchParams({
         type: 'profit-loss',
         fromDate: dateRange.fromDate,
         toDate: dateRange.toDate,
       });
-      const response = await fetch(`/api/reports?${params}`);
+      const response = await fetch(`/api/reports?${params}`, { headers });
       if (response.ok) {
         const result = await response.json();
-        setData(result.profitAndLoss);
+        setData(result.data?.profitAndLoss || result.profitAndLoss || null);
       } else {
         throw new Error('فشل في تحميل التقرير');
       }

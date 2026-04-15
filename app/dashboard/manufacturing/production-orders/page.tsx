@@ -43,10 +43,18 @@ export default function ProductionOrdersPage() {
         fetch('/api/products', { headers }),
       ]);
 
-      if (ordersRes.ok) setOrders(await ordersRes.json());
-      if (productsRes.ok) setProducts(await productsRes.json());
+      if (ordersRes.ok) {
+        const ordersData = await ordersRes.json();
+        setOrders(ordersData.data || ordersData || []);
+      }
+      if (productsRes.ok) {
+        const productsData = await productsRes.json();
+        setProducts(productsData.data || productsData || []);
+      }
     } catch (error) {
       console.error('Error loading data:', error);
+      setOrders([]);
+      setProducts([]);
     } finally {
       setLoading(false);
     }

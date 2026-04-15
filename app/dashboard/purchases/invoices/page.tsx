@@ -137,10 +137,12 @@ export default function PurchaseInvoicesPage() {
     try {
       setLoading(true);
       setError(null);
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
       const [invoicesRes, suppliersRes, productsRes] = await Promise.all([
-        fetch('/api/purchase-invoices'),
-        fetch('/api/suppliers'),
-        fetch('/api/products'),
+        fetch('/api/purchase-invoices', { headers }),
+        fetch('/api/suppliers', { headers }),
+        fetch('/api/products', { headers }),
       ]);
 
       if (!invoicesRes.ok || !suppliersRes.ok || !productsRes.ok) {

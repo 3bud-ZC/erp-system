@@ -61,12 +61,14 @@ export default function SalesReportsPage() {
       let expenses: any[] = [];
       let products: any[] = [];
 
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
       const extract = (d: any): any[] => Array.isArray(d) ? d : (Array.isArray(d?.data) ? d.data : []);
       await Promise.allSettled([
-        fetch('/api/sales-invoices').then(r => r.ok ? r.json() : []).then(d => { salesInvoices = extract(d); }),
-        fetch('/api/purchase-invoices').then(r => r.ok ? r.json() : []).then(d => { purchaseInvoices = extract(d); }),
-        fetch('/api/expenses').then(r => r.ok ? r.json() : []).then(d => { expenses = extract(d); }),
-        fetch('/api/products').then(r => r.ok ? r.json() : []).then(d => { products = extract(d); }),
+        fetch('/api/sales-invoices', { headers }).then(r => r.ok ? r.json() : []).then(d => { salesInvoices = extract(d); }),
+        fetch('/api/purchase-invoices', { headers }).then(r => r.ok ? r.json() : []).then(d => { purchaseInvoices = extract(d); }),
+        fetch('/api/expenses', { headers }).then(r => r.ok ? r.json() : []).then(d => { expenses = extract(d); }),
+        fetch('/api/products', { headers }).then(r => r.ok ? r.json() : []).then(d => { products = extract(d); }),
       ]);
 
       // Parse dates for filtering
@@ -167,7 +169,7 @@ export default function SalesReportsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">تقارير المبيعات والمشتريات</h1>
-          <p className="text-gray-500 text-sm mt-1">ملخص أداء المبيعات والمشتريات والمصروفات</p>
+          <p className="text-gray-500 text-sm mt-1">ملخص شامل لأداء المبيعات والمشتريات والمصروفات والأرباح</p>
         </div>
         <button
           onClick={generateReport}
@@ -176,6 +178,44 @@ export default function SalesReportsPage() {
           <RefreshCw className="w-4 h-4" />
           تحديث
         </button>
+      </div>
+
+      {/* Guide / Explanation */}
+      <div className="bg-gradient-to-r from-blue-50 to-green-50 border border-blue-200 rounded-xl p-5">
+        <h2 className="text-lg font-bold text-blue-900 mb-3 flex items-center gap-2">
+          <BarChart3 className="w-5 h-5" />
+          شرح التقارير والمؤشرات
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+          <div className="space-y-2">
+            <p className="text-gray-700">
+              <span className="font-bold text-green-700">• إجمالي المبيعات:</span> مجموع قيمة جميع فواتير البيع خلال الفترة المحددة
+            </p>
+            <p className="text-gray-700">
+              <span className="font-bold text-blue-700">• إجمالي المشتريات:</span> مجموع قيمة جميع فواتير الشراء من الموردين
+            </p>
+            <p className="text-gray-700">
+              <span className="font-bold text-orange-700">• المصروفات التشغيلية:</span> جميع المصروفات مثل الإيجار والمرتبات والخدمات
+            </p>
+          </div>
+          <div className="space-y-2">
+            <p className="text-gray-700">
+              <span className="font-bold text-purple-700">• عدد فواتير البيع:</span> عدد معاملات البيع المنفذة
+            </p>
+            <p className="text-gray-700">
+              <span className="font-bold text-cyan-700">• متوسط قيمة الفاتورة:</span> متوسط مبيعات الفاتورة الواحدة
+            </p>
+            <p className="text-gray-700">
+              <span className="font-bold text-red-700">• مخزون منخفض:</span> عدد المنتجات التي وصلت للحد الأدنى
+            </p>
+          </div>
+        </div>
+        <div className="mt-3 p-3 bg-white/50 rounded-lg">
+          <p className="text-sm text-gray-600">
+            <span className="font-bold">📊 الربح الصافي =</span> المبيعات - المشتريات - المصروفات | 
+            <span className="font-bold">🎯 نسبة المبيعات للمشتريات:</span> مؤشر كفاءة الشراء (كلما زاد أفضل)
+          </p>
+        </div>
       </div>
 
       {/* Error Message */}

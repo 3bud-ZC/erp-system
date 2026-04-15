@@ -183,11 +183,36 @@ export default function SalesOrdersPage() {
     
     try {
       setLoading(true);
-      await fetch(`/api/sales-orders?id=${order.id}`, { method: 'DELETE' });
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const res = await fetch(`/api/sales-orders?id=${order.id}`, { 
+        method: 'DELETE',
+        headers
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || 'فشل حذف أمر البيع');
+      }
       await fetchData();
     } catch (err) {
       console.error('Error deleting order:', err);
-      setError('فشل حذف أمر البيع');
+      setError(err instanceof Error ? err.message : 'فشل حذف أمر البيع');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStatusChange = async (order: SalesOrder, newStatus: string) => {
+    try {
+      setLoading(true);
+      await fetchApi('/api/sales-orders', {
+        method: 'PUT',
+        body: JSON.stringify({ id: order.id, status: newStatus }),
+      });
+      await fetchData();
+    } catch (err) {
+      console.error('Error updating status:', err);
+      setError('فشل تحديث الحالة');
     } finally {
       setLoading(false);
     }
@@ -242,7 +267,18 @@ export default function SalesOrdersPage() {
       key: 'actions',
       label: 'الإجراءات',
       render: (_: any, row: SalesOrder) => (
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <select
+            value={row.status}
+            onChange={(e) => handleStatusChange(row, e.target.value)}
+            className="text-sm border border-gray-300 rounded px-2 py-1"
+          >
+            <option value="pending">قيد الانتظار</option>
+            <option value="confirmed">مؤكد</option>
+            <option value="shipped">مشحون</option>
+            <option value="delivered">تم التسليم</option>
+            <option value="cancelled">ملغي</option>
+          </select>
           <button
             onClick={() => handleEdit(row)}
             className="text-blue-600 hover:text-blue-800 text-sm font-medium"

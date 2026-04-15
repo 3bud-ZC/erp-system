@@ -143,20 +143,27 @@ export default function ExpensesPage() {
     try {
       setLoading(true);
       setError(null);
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
       const [expensesRes, suppliersRes] = await Promise.all([
-        fetch('/api/expenses'),
-        fetch('/api/suppliers'),
+        fetch('/api/expenses', { headers }),
+        fetch('/api/suppliers', { headers }),
       ]);
 
       if (!expensesRes.ok || !suppliersRes.ok) {
         throw new Error('فشل في تحميل البيانات');
       }
 
-      setExpenses(await expensesRes.json());
-      setSuppliers(await suppliersRes.json());
+      const expensesJson = await expensesRes.json();
+      const suppliersJson = await suppliersRes.json();
+      // Handle API response format
+      setExpenses(Array.isArray(expensesJson) ? expensesJson : (expensesJson.data ?? []));
+      setSuppliers(Array.isArray(suppliersJson) ? suppliersJson : (suppliersJson.data ?? []));
     } catch (err) {
       console.error('Error fetching data:', err);
       setError(err instanceof Error ? err.message : 'خطأ في تحميل البيانات');
+      setExpenses([]);
+      setSuppliers([]);
     } finally {
       setLoading(false);
     }
