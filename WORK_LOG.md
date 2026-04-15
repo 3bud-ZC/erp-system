@@ -749,7 +749,104 @@ DELETE /api/accounts?id=xxx                 - حذف حساب
 | التاريخ | الوقت | التعديل | الحالة |
 |---------|-------|---------|--------|
 | 15 أبريل 2026 | 4:17 مساءً | إنشاء ملف التتبع الشامل | ✅ مكتمل |
+| 15 أبريل 2026 | 4:25 مساءً | إضافة قسم المواد الخام في Sidebar | ✅ مكتمل |
+| 15 أبريل 2026 | 4:25 مساءً | تحسين صفحة أوامر الإنتاج (timeout + error handling) | ✅ مكتمل |
 
 ---
 
-**آخر تحديث:** 15 أبريل 2026 - 4:17 مساءً
+## 🆕 **التحديث الأخير: إضافة قسم المواد الخام في Sidebar**
+
+### **التاريخ:** 15 أبريل 2026 - 4:25 مساءً
+
+### **الطلب:**
+```
+"عندك في إدارة المخازن أنا عايزك تضيف للقسم الجديد جوه يبقى اسمه المواد الخام
+تمام المواد الخام عشان تبقى منفصلة عن المنتجات عن المخازن"
+```
+
+### **التعديلات:**
+
+#### **1. إضافة قسم المواد الخام في Sidebar**
+**الملف:** `components/Sidebar.tsx`
+
+**قبل:**
+```typescript
+{
+  title: 'المخزون',
+  icon: Package,
+  href: '/dashboard/inventory',
+},
+```
+
+**بعد:**
+```typescript
+{
+  title: 'المخزون',
+  icon: Package,
+  href: '/dashboard/inventory',
+  children: [
+    { title: 'المنتجات', icon: Boxes, href: '/dashboard/inventory' },
+    { title: 'المواد الخام', icon: Layers, href: '/dashboard/inventory/raw-materials' },
+  ],
+},
+```
+
+**النتيجة:**
+```
+✅ المخزون الآن له قسمين منفصلين:
+   - المنتجات (المنتجات النهائية)
+   - المواد الخام (منفصلة تماماً)
+```
+
+---
+
+#### **2. تحسين صفحة أوامر الإنتاج**
+**الملف:** `app/dashboard/manufacturing/production-orders/page.tsx`
+
+**المشاكل المكتشفة:**
+```
+❌ لا يوجد timeout للـ API calls
+❌ لا يوجد cache control
+❌ Array safety checks مفقودة
+❌ Loading state بسيط
+```
+
+**التحسينات المطبقة:**
+```typescript
+// 1. إضافة Timeout (30s)
+const controller = new AbortController();
+const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+// 2. إضافة Cache Control
+fetch('/api/production-orders', { 
+  headers, 
+  signal: controller.signal, 
+  cache: 'no-store' 
+})
+
+// 3. Array Safety Checks
+setOrders(Array.isArray(ordersData) ? ordersData : (ordersData.data || []));
+
+// 4. Better Error Handling
+if (error.name === 'AbortError') {
+  alert('استغرق تحميل البيانات وقتاً طويلاً. يرجى المحاولة مرة أخرى.');
+}
+
+// 5. Improved Loading State
+if (loading && orders.length === 0) {
+  return <LoadingSpinner message="جاري تحميل أوامر الإنتاج..." />;
+}
+```
+
+**النتيجة:**
+```
+✅ Timeout: 30 ثانية
+✅ Cache control: no-store
+✅ Array safety: Array.isArray() checks
+✅ Error handling: رسائل واضحة
+✅ Loading state: spinner محسّن
+```
+
+---
+
+**آخر تحديث:** 15 أبريل 2026 - 4:25 مساءً

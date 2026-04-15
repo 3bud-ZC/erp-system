@@ -44,6 +44,10 @@ const menuItems: MenuItem[] = [
     title: 'المخزون',
     icon: Package,
     href: '/dashboard/inventory',
+    children: [
+      { title: 'المنتجات', icon: Boxes, href: '/dashboard/inventory' },
+      { title: 'المواد الخام', icon: Layers, href: '/dashboard/inventory/raw-materials' },
+    ],
   },
   {
     title: 'المبيعات',

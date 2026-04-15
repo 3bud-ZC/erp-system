@@ -38,23 +38,36 @@ export default function ProductionOrdersPage() {
   const loadData = async () => {
     try {
       setLoading(true);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+      
       const token = localStorage.getItem('token');
       const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
       const [ordersRes, productsRes] = await Promise.all([
-        fetch('/api/production-orders', { headers }),
-        fetch('/api/products', { headers }),
+        fetch('/api/production-orders', { headers, signal: controller.signal, cache: 'no-store' }),
+        fetch('/api/products', { headers, signal: controller.signal, cache: 'no-store' }),
       ]);
+      
+      clearTimeout(timeoutId);
 
       if (ordersRes.ok) {
         const ordersData = await ordersRes.json();
-        setOrders(ordersData.data || ordersData || []);
+        setOrders(Array.isArray(ordersData) ? ordersData : (ordersData.data || []));
+      } else {
+        setOrders([]);
       }
+      
       if (productsRes.ok) {
         const productsData = await productsRes.json();
-        setProducts(productsData.data || productsData || []);
+        setProducts(Array.isArray(productsData) ? productsData : (productsData.data || []));
+      } else {
+        setProducts([]);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading data:', error);
+      if (error.name === 'AbortError') {
+        alert('استغرق تحميل البيانات وقتاً طويلاً. يرجى المحاولة مرة أخرى.');
+      }
       setOrders([]);
       setProducts([]);
     } finally {
@@ -141,12 +154,12 @@ export default function ProductionOrdersPage() {
     }
   };
 
-  if (loading) {
+  if (loading && orders.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <Clock className="w-8 h-8 animate-spin mx-auto mb-2" />
-          <p>جاري التحميل...</p>
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">جاري تحميل أوامر الإنتاج...</p>
         </div>
       </div>
     );
