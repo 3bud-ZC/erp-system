@@ -18,35 +18,13 @@ export default function LoginPage() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            email: 'demo@example.com',
-            password: 'demo123',
+            email: 'demo@erp-system.com',
+            password: 'demo12345',
           }),
         });
 
         if (!response.ok) {
-          // If demo user doesn't exist, try admin user
-          const adminResponse = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              email: 'admin@admin.com',
-              password: 'admin123',
-            }),
-          });
-
-          if (!adminResponse.ok) {
-            throw new Error('فشل في تسجيل الدخول');
-          }
-
-          const adminData = await adminResponse.json();
-          const adminToken = adminData.data?.token || adminData.token;
-          if (adminToken) {
-            localStorage.setItem('token', adminToken);
-            router.replace('/dashboard');
-            return;
-          }
+          throw new Error('فشل في تسجيل الدخول');
         }
 
         const data = await response.json();
