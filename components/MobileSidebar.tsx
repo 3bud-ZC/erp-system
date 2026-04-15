@@ -15,7 +15,10 @@ import {
   ChevronLeft,
   LayoutDashboard,
   X,
-  Menu
+  Menu,
+  Link2,
+  Workflow,
+  Calculator,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -63,8 +66,10 @@ const menuItems: MenuItem[] = [
     icon: Factory,
     children: [
       { title: 'أوامر الإنتاج', icon: FileText, href: '/manufacturing/production-orders' },
+      { title: 'خطوط الإنتاج', icon: Workflow, href: '/manufacturing/production-lines' },
+      { title: 'تخصيص المنتجات', icon: Link2, href: '/manufacturing/line-assignments' },
       { title: 'عمليات الإنتاج', icon: Settings, href: '/manufacturing/operations' },
-      { title: 'دراسة التكاليف', icon: DollarSign, href: '/manufacturing/cost-study' },
+      { title: 'دراسة التكاليف', icon: Calculator, href: '/manufacturing/cost-study' },
     ],
   },
 ];

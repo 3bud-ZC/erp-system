@@ -118,6 +118,7 @@ model Product {
   bomMaterials  BOMItem[]       @relation("BOMMaterial")
   stockMovements StockMovement[] @relation("StockMovements")
   inventoryValuation InventoryValuation? @relation("InventoryValuation")
+  lineAssignments ProductionLineAssignment[]
 }
 
 model PurchaseOrder {
@@ -249,21 +250,7 @@ model Expense {
   updatedAt     DateTime  @updatedAt
 }
 
-model ProductionOrder {
-  id            String          @id @default(cuid())
-  orderNumber   String          @unique
-  productId     String
-  product       Product         @relation(fields: [productId], references: [id])
-  quantity      Float
-  date          DateTime
-  status        String          @default("pending")
-  notes         String?
-  totalCost     Float           @default(0)
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  items         ProductionOrderItem[]
-  workInProgress WorkInProgress?
-}
+// ProductionOrder model moved below with ProductionLine relation
 
 model ProductionOrderItem {
   id                String          @id @default(cuid())
@@ -329,6 +316,60 @@ model WorkInProgress {
   status          String   @default("in_progress")  // in_progress, completed
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+// ==================== PRODUCTION LINES MODELS ====================
+
+model ProductionLine {
+  id              String   @id @default(cuid())
+  code            String   @unique
+  name            String
+  capacityPerHour Float    @default(0)  // إنتاجية الخط بالساعة
+  description     String?
+  status          String   @default("active")  // active, maintenance, inactive
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  assignments     ProductionLineAssignment[]
+  productionOrders ProductionOrder[]
+}
+
+model ProductionLineAssignment {
+  id              String   @id @default(cuid())
+  productionLineId String
+  productionLine  ProductionLine @relation(fields: [productionLineId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  priority        Int      @default(0)  // أولوية المنتج على هذا الخط
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([productionLineId, productId])
+  @@index([productionLineId])
+  @@index([productId])
+}
+
+// Update ProductionOrder to include production line
+model ProductionOrder {
+  id              String          @id @default(cuid())
+  orderNumber     String          @unique
+  productId       String
+  product         Product         @relation(fields: [productId], references: [id])
+  quantity        Float
+  produced        Float           @default(0)
+  remaining       Float
+  cost            Float           @default(0)
+  status          String          @default("pending")  // pending, in_progress, completed, cancelled
+  date            DateTime
+  notes           String?
+  productionLineId String?
+  productionLine  ProductionLine? @relation(fields: [productionLineId], references: [id])
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  items           ProductionOrderItem[]
+  workInProgress  WorkInProgress?
 }
 
 // ==================== ACCOUNTING MODELS ====================

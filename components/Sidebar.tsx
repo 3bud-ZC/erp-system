@@ -24,6 +24,8 @@ import {
   FileText,
   DollarSign,
   ArrowLeftRight,
+  Link2,
+  Workflow,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -79,6 +81,8 @@ const menuItems: MenuItem[] = [
     href: '/dashboard/manufacturing',
     children: [
       { title: 'أوامر إنتاج', icon: FileText, href: '/dashboard/manufacturing/production-orders' },
+      { title: 'خطوط الإنتاج', icon: Workflow, href: '/dashboard/manufacturing/production-lines' },
+      { title: 'تخصيص المنتجات', icon: Link2, href: '/dashboard/manufacturing/line-assignments' },
       { title: 'عمليات الإنتاج', icon: Settings, href: '/dashboard/manufacturing/operations' },
       { title: 'دراسة التكاليف', icon: Calculator, href: '/dashboard/manufacturing/cost-study' },
     ],
