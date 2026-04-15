@@ -1,98 +1,149 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import EnhancedTable from '@/components/EnhancedTable';
-import EnhancedModal from '@/components/EnhancedModal';
-import { Plus, Trash2, FileText, ArrowRight, RefreshCw, AlertTriangle, HelpCircle } from 'lucide-react';
-import Link from 'next/link';
-import { fetchApi, getAuthHeadersOnly } from '@/lib/api-client';
+import { getAuthHeaders, getAuthHeadersOnly } from '@/lib/api-client';
+import {
+  Plus,
+  Search,
+  Edit,
+  Trash2,
+  RefreshCw,
+  X,
+  Package,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  FileText,
+  User,
+  Calendar,
+  DollarSign,
+  ShoppingCart,
+} from 'lucide-react';
 
 interface PurchaseOrder {
   id: string;
   orderNumber: string;
-  supplierId?: string;
-  supplier?: { nameAr: string };
+  supplierId: string;
+  supplier: { nameAr: string; code: string };
   date: string;
-  status: string;
+  status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
   total: number;
   notes?: string;
-  items?: any[];
+  items: OrderItem[];
+  createdAt: string;
 }
 
-interface FormItem {
+interface OrderItem {
+  id?: string;
   productId: string;
+  product?: { nameAr: string; code: string };
   quantity: number;
   price: number;
+  total: number;
 }
 
 export default function PurchaseOrdersPage() {
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null);
   
-  const [formData, setFormData] = useState({
-    orderNumber: '',
+  const [formData, setFormData] = useState<{
+    supplierId: string;
+    date: string;
+    status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
+    notes: string;
+  }>({
     supplierId: '',
     date: new Date().toISOString().split('T')[0],
-    status: 'confirmed',
+    status: 'pending',
     notes: '',
   });
   
-  const [items, setItems] = useState<FormItem[]>([
-    { productId: '', quantity: 0, price: 0 },
+  const [items, setItems] = useState<OrderItem[]>([
+    { productId: '', quantity: 1, price: 0, total: 0 },
   ]);
 
+  // Auto-generate order number
+  const generateOrderNumber = () => {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    return `PO-${year}${month}${day}-${random}`;
+  };
+
   useEffect(() => {
-    fetchData();
+    loadData();
   }, []);
 
-  const fetchData = async () => {
+  const loadData = async () => {
     try {
       setLoading(true);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      
       const headers = getAuthHeadersOnly();
-      const [ordersRes, suppliersRes, productsRes] = await Promise.all([
-        fetch('/api/purchase-orders', { headers }),
-        fetch('/api/suppliers', { headers }),
-        fetch('/api/products', { headers }),
+      const [ordersRes, customersRes, productsRes] = await Promise.all([
+        fetch('/api/purchase-orders', { headers, signal: controller.signal, cache: 'no-store' }),
+        fetch('/api/suppliers', { headers, signal: controller.signal, cache: 'no-store' }),
+        fetch('/api/products?type=product', { headers, signal: controller.signal, cache: 'no-store' }),
       ]);
+      
+      clearTimeout(timeoutId);
 
       if (ordersRes.ok) {
         const data = await ordersRes.json();
-        setOrders(data.data || data);
+        setOrders(Array.isArray(data) ? data : (data.data || []));
+      } else {
+        setOrders([]);
       }
-      if (suppliersRes.ok) {
-        const data = await suppliersRes.json();
-        setSuppliers(data.data || data);
+      
+      if (customersRes.ok) {
+        const data = await customersRes.json();
+        setSuppliers(Array.isArray(data) ? data : (data.data || []));
+      } else {
+        setSuppliers([]);
       }
+      
       if (productsRes.ok) {
         const data = await productsRes.json();
-        setProducts(data.data || data);
+        setProducts(Array.isArray(data) ? data : (data.data || []));
+      } else {
+        setProducts([]);
       }
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load data');
+    } catch (error: any) {
+      console.error('Error loading data:', error);
+      if (error.name === 'AbortError') {
+        alert('استغرق تحميل البيانات وقتاً طويلاً. يرجى المحاولة مرة أخرى.');
+      }
+      setOrders([]);
+      setSuppliers([]);
+      setProducts([]);
     } finally {
       setLoading(false);
     }
   };
 
   const handleAddItem = () => {
-    setItems([...items, { productId: '', quantity: 0, price: 0 }]);
+    setItems([...items, { productId: '', quantity: 1, price: 0, total: 0 }]);
   };
 
   const handleRemoveItem = (index: number) => {
-    setItems(items.filter((_, i) => i !== index));
+    if (items.length > 1) {
+      setItems(items.filter((_, i) => i !== index));
+    }
   };
 
-  const handleItemChange = (index: number, field: string, value: any) => {
+  const handleItemChange = (index: number, field: keyof OrderItem, value: any) => {
     const newItems = [...items];
     newItems[index] = { ...newItems[index], [field]: value };
     
-    // Auto-fill product details when product is selected
+    // Auto-fill price when product is selected
     if (field === 'productId' && value) {
       const product = products.find((p: any) => p.id === value);
       if (product) {
@@ -100,231 +151,210 @@ export default function PurchaseOrdersPage() {
       }
     }
     
+    // Calculate total for this item
+    newItems[index].total = newItems[index].quantity * newItems[index].price;
+    
     setItems(newItems);
   };
 
-  const calculateTotal = () => {
-    return items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
+  const calculateGrandTotal = () => {
+    return items.reduce((sum, item) => sum + item.total, 0);
   };
-
-  const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.supplierId) {
-      setError('يرجى اختيار مورد');
+      alert('يرجى اختيار مورد');
       return;
     }
-
+    
     if (items.some(item => !item.productId || item.quantity <= 0)) {
-      setError('يرجى ملء جميع بيانات الأصناف');
+      alert('يرجى ملء جميع بيانات الأصناف بشكل صحيح');
       return;
     }
-
+    
     try {
-      setLoading(true);
-      const method = editingOrder ? 'PUT' : 'POST';
-      const body = {
-        ...(editingOrder ? { id: editingOrder.id } : {}),
-        ...formData,
-        date: new Date(formData.date).toISOString(),
-        items: items.map(item => ({
-          productId: item.productId,
-          quantity: Number(item.quantity),
-          price: Number(item.price),
-          total: Number(item.quantity) * Number(item.price),
-        })),
-      };
+      const orderNumber = editingOrder ? editingOrder.orderNumber : generateOrderNumber();
       
-      await fetchApi('/api/purchase-orders', {
-        method,
-        body: JSON.stringify(body),
+      const response = await fetch('/api/sales-orders', {
+        method: editingOrder ? 'PUT' : 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          ...(editingOrder && { id: editingOrder.id }),
+          orderNumber,
+          supplierId: formData.supplierId,
+          date: new Date(formData.date).toISOString(),
+          status: formData.status,
+          notes: formData.notes,
+          total: calculateGrandTotal(),
+          items: items.map(item => ({
+            productId: item.productId,
+            quantity: Number(item.quantity),
+            price: Number(item.price),
+            total: Number(item.total),
+          })),
+        }),
       });
-
-      setIsModalOpen(false);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'فشل في حفظ أمر البيع');
+      }
+      
+      alert(editingOrder ? 'تم تحديث أمر البيع بنجاح!' : 'تم إنشاء أمر البيع بنجاح!');
       resetForm();
-      setEditingOrder(null);
-      await fetchData();
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save purchase order');
-    } finally {
-      setLoading(false);
+      loadData();
+    } catch (error: any) {
+      console.error('Error saving order:', error);
+      alert(error.message || 'حدث خطأ أثناء حفظ أمر البيع');
     }
   };
 
   const handleEdit = (order: PurchaseOrder) => {
     setEditingOrder(order);
     setFormData({
-      orderNumber: order.orderNumber || '',
-      supplierId: order.supplierId || '',
+      supplierId: order.supplierId,
       date: new Date(order.date).toISOString().split('T')[0],
-      status: order.status || 'pending',
+      status: order.status,
       notes: order.notes || '',
     });
     
-    // Populate items
     if (order.items && order.items.length > 0) {
       setItems(order.items.map(item => ({
         productId: item.productId,
         quantity: item.quantity,
-        price: item.price || 0,
+        price: item.price,
+        total: item.total,
       })));
-    } else {
-      setItems([{ productId: '', quantity: 0, price: 0 }]);
     }
     
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (order: PurchaseOrder) => {
-    if (!confirm('هل أنت متأكد من حذف هذا الأمر؟')) return;
+  const handleDelete = async (id: string) => {
+    if (!confirm('هل أنت متأكد من حذف أمر البيع؟')) return;
     
     try {
-      setLoading(true);
-      const token = localStorage.getItem('token');
-      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
-      const res = await fetch(`/api/purchase-orders?id=${order.id}`, { 
+      const response = await fetch(`/api/purchase-orders?id=${id}`, {
         method: 'DELETE',
-        headers
+        headers: getAuthHeadersOnly(),
       });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || 'فشل حذف أمر الشراء');
+
+      if (response.ok) {
+        alert('تم حذف أمر البيع بنجاح!');
+        loadData();
+      } else {
+        const error = await response.json();
+        alert(error.message || 'حدث خطأ أثناء الحذف');
       }
-      await fetchData();
-    } catch (err) {
-      console.error('Error deleting order:', err);
-      setError(err instanceof Error ? err.message : 'فشل حذف أمر الشراء');
-    } finally {
-      setLoading(false);
+    } catch (error) {
+      console.error('Error deleting order:', error);
+      alert('حدث خطأ أثناء الحذف');
     }
   };
 
-  const handleStatusChange = async (order: PurchaseOrder, newStatus: string) => {
+  const handleStatusChange = async (id: string, newStatus: string) => {
     try {
-      setLoading(true);
-      await fetchApi('/api/purchase-orders', {
+      const response = await fetch('/api/sales-orders', {
         method: 'PUT',
-        body: JSON.stringify({ id: order.id, status: newStatus }),
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ id, status: newStatus }),
       });
-      await fetchData();
-    } catch (err) {
-      console.error('Error updating status:', err);
-      setError('فشل تحديث الحالة');
-    } finally {
-      setLoading(false);
+      
+      if (response.ok) {
+        alert('تم تحديث الحالة بنجاح!');
+        loadData();
+      } else {
+        const error = await response.json();
+        alert(error.message || 'حدث خطأ');
+      }
+    } catch (error) {
+      console.error('Error updating status:', error);
+      alert('حدث خطأ أثناء تحديث الحالة');
     }
   };
 
   const resetForm = () => {
     setFormData({
-      orderNumber: '',
       supplierId: '',
       date: new Date().toISOString().split('T')[0],
-      status: 'confirmed',
+      status: 'pending',
       notes: '',
     });
-    setItems([{ productId: '', quantity: 0, price: 0 }]);
-    setError(null);
+    setItems([{ productId: '', quantity: 1, price: 0, total: 0 }]);
+    setEditingOrder(null);
+    setIsModalOpen(false);
   };
 
-  const columns = [
-    { key: 'orderNumber', label: 'رقم الأمر', className: 'font-medium' },
-    {
-      key: 'supplier',
-      label: 'المورد',
-      render: (value: any) => value?.nameAr || 'N/A',
-    },
-    {
-      key: 'date',
-      label: 'التاريخ',
-      render: (value: string) => new Date(value).toLocaleDateString('ar-EG'),
-    },
-    {
-      key: 'total',
-      label: 'الإجمالي',
-      render: (value: number) => `${value.toFixed(2)} ج.م`,
-    },
-    {
-      key: 'status',
-      label: 'الحالة',
-      render: (value: string, row: PurchaseOrder) => (
-        <select
-          value={value}
-          onChange={(e) => handleStatusChange(row, e.target.value)}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium border-2 cursor-pointer transition-all ${getStatusColor(value)}`}
-        >
-          <option value="confirmed">مؤكد</option>
-          <option value="shipped">تم الشحن</option>
-          <option value="delivered">تم التسليم</option>
-          <option value="cancelled">ملغي</option>
-        </select>
-      ),
-    },
-    {
-      key: 'actions',
-      label: 'الإجراءات',
-      render: (_: any, row: PurchaseOrder) => (
-        <div className="flex gap-2 items-center">
-          <button
-            onClick={() => handleDelete(row)}
-            className="text-red-600 hover:text-red-800 transition-colors"
-            title="حذف الأمر"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+  const filteredOrders = Array.isArray(orders)
+    ? orders.filter(o =>
+        o.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        o.supplier?.nameAr?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : [];
+
+  const statusCounts = {
+    pending: filteredOrders.filter(o => o.status === 'pending').length,
+    confirmed: filteredOrders.filter(o => o.status === 'confirmed').length,
+    shipped: filteredOrders.filter(o => o.status === 'shipped').length,
+    delivered: filteredOrders.filter(o => o.status === 'delivered').length,
+    cancelled: filteredOrders.filter(o => o.status === 'cancelled').length,
+  };
+
+  const getStatusBadge = (status: string) => {
+    const badges = {
+      pending: { icon: Clock, color: 'yellow', text: 'قيد الانتظار' },
+      confirmed: { icon: CheckCircle2, color: 'blue', text: 'مؤكد' },
+      shipped: { icon: Package, color: 'purple', text: 'تم الشحن' },
+      delivered: { icon: CheckCircle2, color: 'green', text: 'تم التسليم' },
+      cancelled: { icon: AlertCircle, color: 'red', text: 'ملغي' },
+    };
+    
+    const badge = badges[status as keyof typeof badges] || badges.pending;
+    const Icon = badge.icon;
+    
+    return (
+      <span className={`inline-flex items-center gap-1 px-2 py-1 bg-${badge.color}-100 text-${badge.color}-800 text-xs rounded-full`}>
+        <Icon className="w-3 h-3" />
+        {badge.text}
+      </span>
+    );
+  };
+
+  if (loading && orders.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">جاري تحميل أوامر الشراء...</p>
         </div>
-      ),
-    },
-  ];
-
-
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      confirmed: 'bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100',
-      shipped: 'bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100',
-      delivered: 'bg-green-50 text-green-700 border-green-300 hover:bg-green-100',
-      cancelled: 'bg-red-50 text-red-700 border-red-300 hover:bg-red-100',
-    };
-    return colors[status] || 'bg-gray-50 text-gray-700 border-gray-300 hover:bg-gray-100';
-  };
-
-  const getStatusLabel = (status: string) => {
-    const labels: Record<string, string> = {
-      confirmed: 'مؤكد',
-      shipped: 'تم الشحن',
-      delivered: 'تم التسليم',
-      cancelled: 'ملغي',
-    };
-    return labels[status] || status;
-  };
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Header with Info */}
+    <div className="p-6 space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">أوامر الشراء</h1>
-          <p className="text-gray-600 mt-1">حجز طلبات الموردين قبل إصدار الفاتورة النهائية</p>
+          <p className="text-gray-600 mt-1">إدارة أوامر الشراء والمشتريات</p>
         </div>
-        <div className="flex gap-3">
-          <Link
-            href="/dashboard/purchases/suppliers"
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            الموردين
-          </Link>
-          <Link
-            href="/dashboard/purchases/invoices"
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-          >
-            <FileText className="w-4 h-4 inline ml-1" />
-            فواتير الشراء
-          </Link>
+        <div className="flex gap-2">
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={loadData}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+            تحديث
+          </button>
+          <button
+            onClick={() => {
+              resetForm();
+              setIsModalOpen(true);
+            }}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             <Plus className="w-5 h-5" />
@@ -333,244 +363,365 @@ export default function PurchaseOrdersPage() {
         </div>
       </div>
 
-      {/* Info Card: What is Purchase Order */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-            <HelpCircle className="w-5 h-5 text-blue-600" />
-          </div>
-          <div>
-            <h3 className="font-bold text-blue-900 mb-2">ما هو &quot;أمر الشراء&quot;؟</h3>
-            <p className="text-sm text-blue-800 leading-relaxed">
-              أمر الشراء هو <strong>حجز مؤقت</strong> لطلب من المورد. يمكنك تتبع حالة الطلب من خلال:
-            </p>
-            <ul className="text-sm text-blue-700 mt-2 space-y-1 mr-4">
-              <li>• <strong>مؤكد:</strong> تم تأكيد الطلب من المورد</li>
-              <li>• <strong>تم الشحن:</strong> تم شحن المنتجات من المورد</li>
-              <li>• <strong>تم التسليم:</strong> استلمت المنتجات من المورد</li>
-            </ul>
-            <div className="mt-3 flex items-center gap-2 text-xs text-blue-600 bg-white/50 p-2 rounded">
-              <ArrowRight className="w-4 h-4" />
-              <span>سير العمل: مؤكد → تم الشحن → تم التسليم</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <p className="text-gray-500 text-sm">إجمالي الأوامر</p>
-          <p className="text-2xl font-bold text-gray-900">{orders.length}</p>
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">إجمالي الأوامر</p>
+              <p className="text-2xl font-bold text-gray-900">{filteredOrders.length}</p>
+            </div>
+            <ShoppingCart className="w-10 h-10 text-blue-600" />
+          </div>
         </div>
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-          <p className="text-blue-700 text-sm">مؤكدة</p>
-          <p className="text-2xl font-bold text-blue-800">
-            {orders.filter(o => o.status === 'confirmed').length}
-          </p>
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">قيد الانتظار</p>
+              <p className="text-2xl font-bold text-yellow-600">{statusCounts.pending}</p>
+            </div>
+            <Clock className="w-10 h-10 text-yellow-600" />
+          </div>
         </div>
-        <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
-          <p className="text-purple-700 text-sm">تم الشحن</p>
-          <p className="text-2xl font-bold text-purple-800">
-            {orders.filter(o => o.status === 'shipped').length}
-          </p>
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">مؤكد</p>
+              <p className="text-2xl font-bold text-blue-600">{statusCounts.confirmed}</p>
+            </div>
+            <CheckCircle2 className="w-10 h-10 text-blue-600" />
+          </div>
         </div>
-        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-          <p className="text-green-700 text-sm">تم التسليم</p>
-          <p className="text-2xl font-bold text-green-800">
-            {orders.filter(o => o.status === 'delivered').length}
-          </p>
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">تم الشحن</p>
+              <p className="text-2xl font-bold text-purple-600">{statusCounts.shipped}</p>
+            </div>
+            <Package className="w-10 h-10 text-purple-600" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">تم التسليم</p>
+              <p className="text-2xl font-bold text-green-600">{statusCounts.delivered}</p>
+            </div>
+            <CheckCircle2 className="w-10 h-10 text-green-600" />
+          </div>
         </div>
       </div>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-600 flex items-center gap-2">
-          <AlertTriangle className="w-5 h-5" />
-          {error}
-        </div>
-      )}
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+        <input
+          type="text"
+          placeholder="بحث عن أمر شراء..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full pr-10 pl-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+      </div>
 
-      {orders.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <FileText className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-          <p className="text-gray-500">لا توجد أوامر شراء</p>
-          <p className="text-sm text-gray-400 mt-1">أضف أمر شراء جديد لتسجيل طلب من مورد</p>
-        </div>
-      ) : (
-        <EnhancedTable columns={columns} data={orders} />
-      )}
+      {/* Orders Table */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <table className="w-full">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">رقم الأمر</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">المورد</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">التاريخ</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">الإجمالي</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">الحالة</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">إجراءات</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {filteredOrders.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                  <ShoppingCart className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                  لا توجد أوامر شراء
+                </td>
+              </tr>
+            ) : (
+              filteredOrders.map((order) => (
+                <tr key={order.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{order.orderNumber}</td>
+                  <td className="px-4 py-3 text-sm text-gray-900">
+                    {order.supplier?.nameAr} <span className="text-gray-500">({order.supplier?.code})</span>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-600">
+                    {new Date(order.date).toLocaleDateString('ar-SA')}
+                  </td>
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                    {order.total.toFixed(2)} ج.م
+                  </td>
+                  <td className="px-4 py-3">
+                    {getStatusBadge(order.status)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-2">
+                      {order.status === 'pending' && (
+                        <button
+                          onClick={() => handleStatusChange(order.id, 'confirmed')}
+                          className="text-blue-600 hover:text-blue-800 text-xs"
+                          title="تأكيد"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                        </button>
+                      )}
+                      {order.status === 'confirmed' && (
+                        <button
+                          onClick={() => handleStatusChange(order.id, 'shipped')}
+                          className="text-purple-600 hover:text-purple-800 text-xs"
+                          title="شحن"
+                        >
+                          <Package className="w-4 h-4" />
+                        </button>
+                      )}
+                      {order.status === 'shipped' && (
+                        <button
+                          onClick={() => handleStatusChange(order.id, 'delivered')}
+                          className="text-green-600 hover:text-green-800 text-xs"
+                          title="تسليم"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleEdit(order)}
+                        className="text-blue-600 hover:text-blue-800"
+                        title="تعديل"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(order.id)}
+                        className="text-red-600 hover:text-red-800"
+                        title="حذف"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
 
-      <EnhancedModal
-        isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          resetForm();
-          setEditingOrder(null);
-        }}
-        title={editingOrder ? 'تعديل أمر شراء' : 'إضافة أمر شراء جديد'}
-        size="xl"
-      >
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">رقم الأمر</label>
-              <input
-                type="text"
-                required
-                value={formData.orderNumber}
-                onChange={(e) => setFormData({ ...formData, orderNumber: e.target.value })}
-                placeholder="مثال: PO-001"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">المورد</label>
-              <select
-                required
-                value={formData.supplierId}
-                onChange={(e) => setFormData({ ...formData, supplierId: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">اختر المورد</option>
-                {suppliers.map((supplier: any) => (
-                  <option key={supplier.id} value={supplier.id}>
-                    {supplier.nameAr}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">التاريخ</label>
-              <input
-                type="date"
-                required
-                value={formData.date}
-                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-medium text-gray-900">الأصناف</h3>
-              <button
-                type="button"
-                onClick={handleAddItem}
-                className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700"
-              >
-                <Plus className="w-4 h-4" />
-                إضافة صنف
+      {/* Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white">
+              <h2 className="text-xl font-bold text-gray-900">
+                {editingOrder ? 'تعديل أمر شراء' : 'أمر شراء جديد'}
+              </h2>
+              <button onClick={resetForm} className="text-gray-400 hover:text-gray-600">
+                <X className="w-6 h-6" />
               </button>
             </div>
 
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-700">المنتج</th>
-                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-700">الكمية</th>
-                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-700">سعر الوحدة</th>
-                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-700">الإجمالي</th>
-                    <th className="px-4 py-2 text-right text-sm font-medium text-gray-700">إجراء</th>
-                  </tr>
-                </thead>
-                <tbody>
+            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              {/* Order Info */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    المورد <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={formData.supplierId}
+                    onChange={(e) => setFormData({ ...formData, supplierId: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">اختر مورد</option>
+                    {suppliers.map((supplier) => (
+                      <option key={supplier.id} value={supplier.id}>
+                        {supplier.nameAr} ({supplier.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <Calendar className="w-4 h-4 inline mr-1" />
+                    التاريخ <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={formData.date}
+                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    الحالة <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="pending">قيد الانتظار</option>
+                    <option value="confirmed">مؤكد</option>
+                    <option value="shipped">تم الشحن</option>
+                    <option value="received">تم الاستلام</option>
+                    <option value="cancelled">ملغي</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    ملاحظات
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="ملاحظات إضافية..."
+                  />
+                </div>
+              </div>
+
+              {/* Items */}
+              <div className="border-t pt-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">الأصناف</h3>
+                  <button
+                    type="button"
+                    onClick={handleAddItem}
+                    className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    إضافة صنف
+                  </button>
+                </div>
+
+                <div className="space-y-3">
                   {items.map((item, index) => (
-                    <tr key={index} className="border-t border-gray-200">
-                      <td className="px-4 py-2">
+                    <div key={index} className="grid grid-cols-12 gap-2 items-end">
+                      <div className="col-span-5">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          المنتج <span className="text-red-500">*</span>
+                        </label>
                         <select
                           required
                           value={item.productId}
                           onChange={(e) => handleItemChange(index, 'productId', e.target.value)}
-                          className="w-full px-2 py-1.5 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         >
-                          <option value="">اختر المنتج</option>
-                          {products.map((product: any) => (
-                            <option key={product.id} value={product.id}>
-                              {product.nameAr}
+                          <option value="">اختر منتج</option>
+                          {products.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.nameAr} ({p.code}) - {p.price} ج.م
                             </option>
                           ))}
                         </select>
-                      </td>
-                      <td className="px-4 py-2">
+                      </div>
+
+                      <div className="col-span-2">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          الكمية <span className="text-red-500">*</span>
+                        </label>
                         <input
                           type="number"
                           required
-                          min="0.01"
-                          step="0.01"
+                          min="1"
                           value={item.quantity}
-                          onChange={(e) => handleItemChange(index, 'quantity', parseFloat(e.target.value) || 0)}
-                          className="w-full px-2 py-1.5 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value))}
+                          className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
-                      </td>
-                      <td className="px-4 py-2">
+                      </div>
+
+                      <div className="col-span-2">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          السعر <span className="text-red-500">*</span>
+                        </label>
                         <input
                           type="number"
                           required
                           min="0"
                           step="0.01"
                           value={item.price}
-                          onChange={(e) => handleItemChange(index, 'price', parseFloat(e.target.value) || 0)}
-                          className="w-full px-2 py-1.5 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          onChange={(e) => handleItemChange(index, 'price', parseFloat(e.target.value))}
+                          className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
-                      </td>
-                      <td className="px-4 py-2">
-                        <span className="font-medium">{(item.quantity * item.price).toFixed(2)} ج.م</span>
-                      </td>
-                      <td className="px-4 py-2">
-                        {items.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveItem(index)}
-                            className="p-1.5 text-red-600 hover:bg-red-50 rounded"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
+                      </div>
+
+                      <div className="col-span-2">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          الإجمالي
+                        </label>
+                        <input
+                          type="text"
+                          readOnly
+                          value={item.total.toFixed(2)}
+                          className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50"
+                        />
+                      </div>
+
+                      <div className="col-span-1">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItem(index)}
+                          disabled={items.length === 1}
+                          className="w-full p-2 text-red-600 hover:text-red-800 disabled:opacity-30 disabled:cursor-not-allowed"
+                          title="حذف"
+                        >
+                          <Trash2 className="w-4 h-4 mx-auto" />
+                        </button>
+                      </div>
+                    </div>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </div>
 
-            <div className="mt-4 flex justify-end">
-              <div className="bg-gray-50 px-6 py-3 rounded-lg">
-                <span className="text-sm text-gray-600 ml-4">الإجمالي:</span>
-                <span className="text-xl font-bold text-gray-900">{calculateTotal().toFixed(2)} ج.م</span>
+                {/* Grand Total */}
+                <div className="mt-4 pt-4 border-t">
+                  <div className="flex justify-between items-center">
+                    <span className="text-lg font-semibold text-gray-900">الإجمالي الكلي:</span>
+                    <span className="text-2xl font-bold text-blue-600">
+                      {calculateGrandTotal().toFixed(2)} ج.م
+                    </span>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">ملاحظات</label>
-            <textarea
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+              {/* Actions */}
+              <div className="flex gap-2 pt-4 border-t">
+                <button
+                  type="submit"
+                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium"
+                >
+                  {editingOrder ? 'تحديث' : 'إنشاء'}
+                </button>
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 font-medium"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </form>
           </div>
-
-          <div className="flex gap-2 justify-end">
-            <button
-              type="button"
-              onClick={() => setIsModalOpen(false)}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-            >
-              إلغاء
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
-            >
-              {loading ? 'جاري الحفظ...' : 'حفظ'}
-            </button>
-          </div>
-        </form>
-      </EnhancedModal>
+        </div>
+      )}
     </div>
   );
 }
