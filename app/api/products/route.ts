@@ -180,7 +180,7 @@ export async function DELETE(request: Request) {
       prisma.productionOrder.count({ where: { productId: id } }),
     ]);
 
-    const totalUsage = salesOrderItems + purchaseOrderItems + salesInvoiceItems + purchaseInvoiceItems + stockMovements + productionOrders;
+    const totalUsage = salesOrderItems + purchaseOrderItems + salesInvoiceItems + purchaseInvoiceItems + productionOrders;
 
     if (totalUsage > 0) {
       const lines = [];
@@ -188,13 +188,17 @@ export async function DELETE(request: Request) {
       if (purchaseOrderItems > 0) lines.push(`- أوامر شراء: ${purchaseOrderItems}`);
       if (salesInvoiceItems > 0) lines.push(`- فواتير بيع: ${salesInvoiceItems}`);
       if (purchaseInvoiceItems > 0) lines.push(`- فواتير شراء: ${purchaseInvoiceItems}`);
-      if (stockMovements > 0) lines.push(`- حركات مخزن: ${stockMovements}`);
       if (productionOrders > 0) lines.push(`- أوامر إنتاج: ${productionOrders}`);
       
       return apiError(
         `لا يمكن حذف المنتج لأنه مستخدم في ${totalUsage} سجل:\n${lines.join('\n')}\n\nيرجى حذف السجلات المرتبطة أولاً أو إلغاء تفعيل المنتج بدلاً من الحذف.`,
         409
       );
+    }
+
+    // Delete stock movements first (these are just history records)
+    if (stockMovements > 0) {
+      await prisma.stockMovement.deleteMany({ where: { productId: id } });
     }
 
     await prisma.product.delete({
