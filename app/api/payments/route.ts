@@ -8,6 +8,7 @@ import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
 import { validatePaymentAmount } from '@/lib/validation';
 import { createPaymentJournalEntry, postJournalEntry, reverseJournalEntry } from '@/lib/accounting';
+import { logActivity } from '@/lib/activity-log';
 
 // GET - Read payments with filters
 export async function GET(request: Request) {
@@ -152,6 +153,15 @@ export async function POST(request: Request) {
       request.headers.get('x-forwarded-for') || undefined,
       request.headers.get('user-agent') || undefined
     );
+
+    // Log activity for audit trail
+    await logActivity({
+      entity: 'Payment',
+      entityId: payment.id,
+      action: 'CREATE',
+      userId: user.id,
+      after: payment,
+    });
 
     return apiSuccess(payment, 'Payment created successfully');
   } catch (error) {

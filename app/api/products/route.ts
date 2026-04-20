@@ -7,6 +7,7 @@ export const revalidate = 0;
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
 import { validateProductType } from '@/lib/validation';
+import { logActivity } from '@/lib/activity-log';
 
 // GET - Read products (finished products only)
 export async function GET(request: Request) {
@@ -106,6 +107,15 @@ export async function POST(request: Request) {
       request.headers.get('user-agent') || undefined
     );
 
+    // Log activity for audit trail
+    await logActivity({
+      entity: 'Product',
+      entityId: product.id,
+      action: 'CREATE',
+      userId: user.id,
+      after: product,
+    });
+
     return apiSuccess(product, 'Product created successfully');
   } catch (error) {
     return handleApiError(error, 'Create product');
@@ -136,6 +146,11 @@ export async function PUT(request: Request) {
       );
     }
 
+    // Fetch existing product for activity logging
+    const existingProduct = await prisma.product.findUnique({
+      where: { id },
+    });
+
     const product = await prisma.product.update({
       where: { id },
       data,
@@ -152,6 +167,16 @@ export async function PUT(request: Request) {
       request.headers.get('x-forwarded-for') || undefined,
       request.headers.get('user-agent') || undefined
     );
+
+    // Log activity for audit trail
+    await logActivity({
+      entity: 'Product',
+      entityId: product.id,
+      action: 'UPDATE',
+      userId: user.id,
+      before: existingProduct,
+      after: product,
+    });
 
     return apiSuccess(product, 'Product updated successfully');
   } catch (error) {
@@ -178,17 +203,17 @@ export async function DELETE(request: Request) {
       return handleApiError(new Error('ID is required'), 'Delete product');
     }
 
-    // Check if product is used in any sales orders, purchase orders, invoices, stock movements, or production
-    const [salesOrderItems, purchaseOrderItems, salesInvoiceItems, purchaseInvoiceItems, stockMovements, productionOrders] = await Promise.all([
+    // Check if product is used in any sales orders, purchase orders, invoices, or production
+    const [salesOrderItems, purchaseOrderItems, salesInvoiceItems, purchaseInvoiceItems, inventoryTransactions, productionOrders] = await Promise.all([
       prisma.salesOrderItem.count({ where: { productId: id } }),
       prisma.purchaseOrderItem.count({ where: { productId: id } }),
       prisma.salesInvoiceItem.count({ where: { productId: id } }),
       prisma.purchaseInvoiceItem.count({ where: { productId: id } }),
-      prisma.stockMovement.count({ where: { productId: id } }),
+      prisma.inventoryTransaction.count({ where: { productId: id } }),
       prisma.productionOrder.count({ where: { productId: id } }),
     ]);
 
-    const totalUsage = salesOrderItems + purchaseOrderItems + salesInvoiceItems + purchaseInvoiceItems + productionOrders;
+    const totalUsage = salesOrderItems + purchaseOrderItems + salesInvoiceItems + purchaseInvoiceItems + inventoryTransactions + productionOrders;
 
     if (totalUsage > 0) {
       const lines = [];
@@ -196,6 +221,7 @@ export async function DELETE(request: Request) {
       if (purchaseOrderItems > 0) lines.push(`- أوامر شراء: ${purchaseOrderItems}`);
       if (salesInvoiceItems > 0) lines.push(`- فواتير بيع: ${salesInvoiceItems}`);
       if (purchaseInvoiceItems > 0) lines.push(`- فواتير شراء: ${purchaseInvoiceItems}`);
+      if (inventoryTransactions > 0) lines.push(`- حركات المخزون: ${inventoryTransactions}`);
       if (productionOrders > 0) lines.push(`- أوامر إنتاج: ${productionOrders}`);
       
       return apiError(
@@ -204,9 +230,14 @@ export async function DELETE(request: Request) {
       );
     }
 
-    // Delete stock movements first (these are just history records)
-    if (stockMovements > 0) {
-      await prisma.stockMovement.deleteMany({ where: { productId: id } });
+    // Fetch existing product for activity logging
+    const existingProduct = await prisma.product.findUnique({
+      where: { id },
+    });
+
+    // Delete inventory transactions first (these are history records)
+    if (inventoryTransactions > 0) {
+      await prisma.inventoryTransaction.deleteMany({ where: { productId: id } });
     }
 
     await prisma.product.delete({
@@ -224,6 +255,15 @@ export async function DELETE(request: Request) {
       request.headers.get('x-forwarded-for') || undefined,
       request.headers.get('user-agent') || undefined
     );
+
+    // Log activity for audit trail
+    await logActivity({
+      entity: 'Product',
+      entityId: id,
+      action: 'DELETE',
+      userId: user.id,
+      before: existingProduct,
+    });
 
     return apiSuccess({ id }, 'Product deleted successfully');
   } catch (error) {

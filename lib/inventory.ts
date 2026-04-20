@@ -12,6 +12,7 @@ export interface StockValidationResult {
 
 /**
  * Record a stock movement (audit trail)
+ * DEPRECATED: Use createInventoryTransaction from inventory-transactions.ts instead
  */
 export async function recordStockMovement(
   productId: string,
@@ -22,14 +23,14 @@ export async function recordStockMovement(
   notes?: string
 ): Promise<void> {
   try {
-    await prisma.stockMovement.create({
+    await prisma.inventoryTransaction.create({
       data: {
         productId,
-        type,
+        type: type.toLowerCase() as 'purchase' | 'sale' | 'production_in' | 'production_out' | 'adjustment',
         quantity,
-        reference,
-        referenceType,
+        referenceId: reference,
         notes,
+        date: new Date(),
       },
     });
   } catch (error) {
@@ -108,13 +109,13 @@ export async function decrementStockInTransaction(
 
     // Record stock movement
     if (referenceType && referenceId) {
-      await tx.stockMovement.create({
+      await tx.inventoryTransaction.create({
         data: {
           productId: item.productId,
-          type: referenceType === 'SalesInvoice' ? 'OUT' : 'MANUFACTURING_OUT',
+          type: referenceType === 'SalesInvoice' ? 'sale' : 'production_out',
           quantity: -item.quantity,
-          reference: referenceId,
-          referenceType,
+          referenceId: referenceId,
+          date: new Date(),
         },
       });
     }
@@ -142,13 +143,13 @@ export async function incrementStockInTransaction(
 
     // Record stock movement
     if (referenceType && referenceId) {
-      await tx.stockMovement.create({
+      await tx.inventoryTransaction.create({
         data: {
           productId: item.productId,
-          type: referenceType === 'PurchaseInvoice' ? 'IN' : 'MANUFACTURING_IN',
+          type: referenceType === 'PurchaseInvoice' ? 'purchase' : 'production_in',
           quantity: item.quantity,
-          reference: referenceId,
-          referenceType,
+          referenceId: referenceId,
+          date: new Date(),
         },
       });
     }

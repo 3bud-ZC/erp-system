@@ -8,6 +8,7 @@ import { incrementStockWithTransaction, createInventoryTransaction } from '@/lib
 import { createPurchaseInvoiceEntry, postJournalEntry, reverseJournalEntry } from '@/lib/accounting';
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
+import { logActivity } from '@/lib/activity-log';
 
 // GET - Read purchase invoices (requires read_purchase_invoice permission)
 export async function GET(request: Request) {
@@ -92,6 +93,15 @@ export async function POST(request: Request) {
         request.headers.get('x-forwarded-for') || undefined,
         request.headers.get('user-agent') || undefined
       );
+
+      // Log activity for audit trail
+      await logActivity({
+        entity: 'PurchaseInvoice',
+        entityId: invoice.id,
+        action: 'CREATE',
+        userId: user.id,
+        after: invoice,
+      });
 
       return apiSuccess(invoice, 'Purchase invoice created successfully');
     } catch (error) {
@@ -205,6 +215,16 @@ export async function PUT(request: Request) {
         request.headers.get('user-agent') || undefined
       );
 
+      // Log activity for audit trail
+      await logActivity({
+        entity: 'PurchaseInvoice',
+        entityId: invoice.id,
+        action: 'UPDATE',
+        userId: user.id,
+        before: existingInvoice,
+        after: invoice,
+      });
+
       return apiSuccess(invoice, 'Purchase invoice updated successfully');
     } catch (error) {
       return handleApiError(error, 'Update purchase invoice');
@@ -239,7 +259,7 @@ export async function DELETE(request: Request) {
       }
 
       // STEP 2: Delete invoice and reverse stock in transaction
-      await prisma.$transaction(async (tx) => {
+      const deletedInvoice = await prisma.$transaction(async (tx) => {
         const invoice = await tx.purchaseInvoice.findUnique({
           where: { id },
           include: { items: true },
@@ -273,6 +293,8 @@ export async function DELETE(request: Request) {
         await tx.purchaseInvoice.delete({
           where: { id },
         });
+
+        return invoice;
       });
 
       // Log audit action
@@ -286,6 +308,15 @@ export async function DELETE(request: Request) {
         request.headers.get('x-forwarded-for') || undefined,
         request.headers.get('user-agent') || undefined
       );
+
+      // Log activity for audit trail
+      await logActivity({
+        entity: 'PurchaseInvoice',
+        entityId: id,
+        action: 'DELETE',
+        userId: user.id,
+        before: deletedInvoice,
+      });
 
       return apiSuccess({ id }, 'Purchase invoice deleted successfully');
     } catch (error) {

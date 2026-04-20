@@ -242,7 +242,7 @@ async function getCashFlowReport(fromDate?: Date, toDate?: Date) {
 async function getInventoryValuation() {
   const products = await prisma.product.findMany({
     where: { stock: { gt: 0 } },
-    include: { stockMovements: true },
+    include: { inventoryTransactions: true },
   });
 
   let totalInventoryValue = 0;

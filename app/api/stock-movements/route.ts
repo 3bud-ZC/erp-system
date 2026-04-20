@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
+import { logActivity } from '@/lib/activity-log';
 
 // GET - List stock movements for a product
 export async function GET(request: Request) {
@@ -20,14 +21,14 @@ export async function GET(request: Request) {
 
     const where = productId ? { productId } : {};
 
-    const movements = await prisma.stockMovement.findMany({
+    const movements = await prisma.inventoryTransaction.findMany({
       where,
       include: {
         product: {
           select: { code: true, nameAr: true }
         }
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { date: 'desc' }
     });
 
     return apiSuccess(movements, 'تم جلب حركات المخزن');
@@ -54,16 +55,46 @@ export async function DELETE(request: Request) {
     const id = searchParams.get('id');
 
     if (id) {
+      // Fetch existing movement for activity logging
+      const existingMovement = await prisma.inventoryTransaction.findUnique({
+        where: { id },
+      });
+
       // Delete single movement
-      await prisma.stockMovement.delete({ where: { id } });
+      await prisma.inventoryTransaction.delete({ where: { id } });
+
+      // Log activity for audit trail
+      await logActivity({
+        entity: 'InventoryTransaction',
+        entityId: id,
+        action: 'DELETE',
+        userId: user.id,
+        before: existingMovement,
+      });
+
       return apiSuccess({ id }, 'تم حذف حركة المخزن');
     }
 
     if (productId) {
+      // Fetch existing movements for activity logging
+      const existingMovements = await prisma.inventoryTransaction.findMany({
+        where: { productId },
+      });
+
       // Delete all movements for a product
-      const result = await prisma.stockMovement.deleteMany({
+      const result = await prisma.inventoryTransaction.deleteMany({
         where: { productId }
       });
+
+      // Log activity for audit trail
+      await logActivity({
+        entity: 'InventoryTransaction',
+        entityId: productId,
+        action: 'DELETE',
+        userId: user.id,
+        before: existingMovements,
+      });
+
       return apiSuccess({ count: result.count }, `تم حذف ${result.count} حركة مخزن للمنتج`);
     }
 

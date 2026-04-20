@@ -3,10 +3,25 @@
 import { useState } from 'react';
 import { Bell, User, Search, ChevronDown, LogOut, Settings } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function Topbar() {
+  const router = useRouter();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      router.replace('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+      router.replace('/login');
+    }
+  };
 
   return (
     <header className="fixed top-0 left-0 right-0 lg:right-72 h-16 bg-white shadow-sm z-30">
@@ -89,7 +104,10 @@ export default function Topbar() {
                     <span>الإعدادات</span>
                   </Link>
                   <hr className="border-gray-100" />
-                  <button className="w-full flex items-center gap-2 px-4 py-3 hover:bg-red-50 text-red-600">
+                  <button 
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-2 px-4 py-3 hover:bg-red-50 text-red-600"
+                  >
                     <LogOut className="w-4 h-4" />
                     <span>تسجيل الخروج</span>
                   </button>

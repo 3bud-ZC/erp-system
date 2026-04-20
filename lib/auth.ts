@@ -353,7 +353,7 @@ export async function createNotification(
 }
 
 /**
- * Get authenticated user from request headers
+ * Get authenticated user from request cookies
  * Compatible with Next.js 14 App Router - call this inside route handlers
  */
 export async function getAuthenticatedUser(req: Request): Promise<{
@@ -364,13 +364,24 @@ export async function getAuthenticatedUser(req: Request): Promise<{
   permissions: string[];
 } | null> {
   try {
-    const authHeader = req.headers.get('authorization');
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // Read token from cookies
+    const cookieHeader = req.headers.get('cookie');
+    if (!cookieHeader) {
       return null;
     }
 
-    const token = authHeader.substring(7);
+    // Parse cookies to find token
+    const cookies = cookieHeader.split(';').reduce((acc: any, cookie) => {
+      const [key, value] = cookie.trim().split('=');
+      acc[key] = value;
+      return acc;
+    }, {});
+
+    const token = cookies['token'];
+    if (!token) {
+      return null;
+    }
+
     const decoded = verifyToken(token);
 
     if (!decoded) {
@@ -378,7 +389,7 @@ export async function getAuthenticatedUser(req: Request): Promise<{
     }
 
     const user = await getUserWithPermissions(decoded.userId);
-    
+
     if (!user || !user.isActive) {
       return null;
     }
@@ -410,4 +421,58 @@ export function checkPermission(user: { permissions: string[] }, permissionCode:
  */
 export function checkRole(user: { roles: string[] }, roleCode: string): boolean {
   return user.roles.includes(roleCode);
+}
+
+/**
+ * Require authentication - throws error if user not authenticated
+ * Use in API routes to enforce login requirement
+ */
+export async function requireAuth(req: Request): Promise<{
+  id: string;
+  email: string;
+  name: string;
+  roles: string[];
+  permissions: string[];
+}> {
+  const user = await getAuthenticatedUser(req);
+  if (!user) {
+    throw new Error('لم يتم المصادقة');
+  }
+  return user;
+}
+
+/**
+ * Require specific role - throws error if user doesn't have role
+ * Use in API routes to enforce role-based access
+ */
+export async function requireRole(req: Request, roleCode: string): Promise<{
+  id: string;
+  email: string;
+  name: string;
+  roles: string[];
+  permissions: string[];
+}> {
+  const user = await requireAuth(req);
+  if (!checkRole(user, roleCode)) {
+    throw new Error('ليس لديك صلاحية للقيام بهذا الإجراء');
+  }
+  return user;
+}
+
+/**
+ * Require specific permission - throws error if user doesn't have permission
+ * Use in API routes to enforce permission-based access
+ */
+export async function requirePermission(req: Request, permissionCode: string): Promise<{
+  id: string;
+  email: string;
+  name: string;
+  roles: string[];
+  permissions: string[];
+}> {
+  const user = await requireAuth(req);
+  if (!checkPermission(user, permissionCode)) {
+    throw new Error('ليس لديك صلاحية للقيام بهذا الإجراء');
+  }
+  return user;
 }

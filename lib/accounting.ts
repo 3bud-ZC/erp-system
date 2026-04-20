@@ -101,7 +101,7 @@ export async function generateEntryNumber(): Promise<string> {
 /**
  * Create a journal entry with validation
  */
-export async function createJournalEntry(entry: JournalEntryInput): Promise<any> {
+export async function createJournalEntry(entry: JournalEntryInput, createdBy?: string): Promise<any> {
   try {
     // Validate that debits equal credits
     const totalDebit = entry.lines.reduce((sum, line) => sum + line.debit, 0);
@@ -126,6 +126,7 @@ export async function createJournalEntry(entry: JournalEntryInput): Promise<any>
         totalDebit,
         totalCredit,
         isPosted: false,
+        createdBy,
         lines: {
           create: entry.lines,
         },
@@ -148,35 +149,37 @@ export async function createJournalEntry(entry: JournalEntryInput): Promise<any>
 }
 
 /**
- * Post a journal entry (mark as permanent record)
+ * Post a journal entry (mark as posted and update account balances)
  */
-export async function postJournalEntry(entryId: string): Promise<any> {
+export async function postJournalEntry(entryId: string, userId?: string): Promise<any> {
   try {
-    const journalEntry = await prisma.journalEntry.update({
+    const journalEntry = await prisma.journalEntry.findUnique({
       where: { id: entryId },
-      data: {
-        isPosted: true,
-        postedDate: new Date(),
-      },
-      include: {
-        lines: {
-          include: {
-            account: true,
-          },
-        },
-      },
+      include: { lines: true },
     });
 
-    // Update account balances using correct sign convention per account type:
-    //   Debit-normal (Asset, Expense):          balance increases with debits
-    //   Credit-normal (Liability, Equity, Revenue): balance increases with credits
-    for (const line of journalEntry.lines) {
-      const accountType = (line as any).account?.type ?? '';
-      const isCreditNormal = ['Liability', 'Equity', 'Revenue'].includes(accountType);
-      const balanceChange = isCreditNormal
-        ? Number(line.credit) - Number(line.debit)
-        : Number(line.debit) - Number(line.credit);
+    if (!journalEntry) {
+      throw new Error('Journal entry not found');
+    }
 
+    if (journalEntry.isPosted) {
+      throw new Error('Journal entry already posted');
+    }
+
+    // Update account balances for each line
+    for (const line of journalEntry.lines) {
+      const account = await prisma.account.findUnique({
+        where: { code: line.accountCode },
+      });
+
+      if (!account) {
+        throw new Error(`Account with code ${line.accountCode} not found`);
+      }
+
+      const isCreditNormal = ['Liability', 'Equity', 'Revenue'].includes(account.type);
+      const balanceChange = isCreditNormal ? line.credit - line.debit : line.debit - line.credit;
+
+      // Update account balance
       const updatedAccount = await prisma.account.update({
         where: { code: line.accountCode },
         data: {
@@ -194,12 +197,22 @@ export async function postJournalEntry(entryId: string): Promise<any> {
           changeAmount: balanceChange,
           journalEntryId: entryId,
           changeType: balanceChange > 0 ? 'debit' : 'credit',
+          changedBy: userId,
         },
       });
     }
 
+    // Mark journal entry as posted
+    const postedEntry = await prisma.journalEntry.update({
+      where: { id: entryId },
+      data: {
+        isPosted: true,
+        postedDate: new Date(),
+      },
+    });
+
     console.log(`Journal entry posted: ${journalEntry.entryNumber}`);
-    return journalEntry;
+    return postedEntry;
   } catch (error) {
     console.error('Error posting journal entry:', error);
     throw error;

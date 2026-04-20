@@ -6,6 +6,7 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
+import { logActivity } from '@/lib/activity-log';
 
 // GET - Read all accounts
 export async function GET(request: Request) {
@@ -123,6 +124,15 @@ export async function POST(request: Request) {
       account.id
     );
 
+    // Log activity for audit trail
+    await logActivity({
+      entity: 'Account',
+      entityId: account.id,
+      action: 'CREATE',
+      userId: user.id,
+      after: account,
+    });
+
     return apiSuccess(account, 'Account created successfully');
   } catch (error) {
     return handleApiError(error, 'Create account');
@@ -214,6 +224,16 @@ export async function PUT(request: Request) {
       request.headers.get('user-agent') || undefined
     );
 
+    // Log activity for audit trail
+    await logActivity({
+      entity: 'Account',
+      entityId: id,
+      action: 'UPDATE',
+      userId: user.id,
+      before: existingAccount,
+      after: updatedAccount,
+    });
+
     return apiSuccess(updatedAccount, 'Account updated successfully');
   } catch (error) {
     return handleApiError(error, 'Update account');
@@ -275,6 +295,15 @@ export async function DELETE(request: Request) {
       request.headers.get('x-forwarded-for') || undefined,
       request.headers.get('user-agent') || undefined
     );
+
+    // Log activity for audit trail
+    await logActivity({
+      entity: 'Account',
+      entityId: id,
+      action: 'DELETE',
+      userId: user.id,
+      before: account,
+    });
 
     return apiSuccess({ id }, 'Account deleted successfully');
   } catch (error) {

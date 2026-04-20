@@ -7,6 +7,7 @@ export const revalidate = 0;
 import { createExpenseEntry, postJournalEntry, reverseJournalEntry } from '@/lib/accounting';
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
+import { logActivity } from '@/lib/activity-log';
 
 // GET - Read expenses
 export async function GET(request: Request) {
@@ -80,6 +81,15 @@ export async function POST(request: Request) {
         request.headers.get('user-agent') || undefined
       );
 
+      // Log activity for audit trail
+      await logActivity({
+        entity: 'Expense',
+        entityId: expense.id,
+        action: 'CREATE',
+        userId: user.id,
+        after: expense,
+      });
+
       return apiSuccess(expense, 'Expense created successfully');
     } catch (error) {
       return handleApiError(error, 'Create expense');
@@ -100,7 +110,13 @@ export async function PUT(request: Request) {
 
     const body = await request.json();
       const { id, expenseType } = body;
-      // STEP 1: Reverse existing journal entry for this expense (if any)
+
+      // STEP 1: Fetch existing expense for activity logging
+      const existingExpense = await prisma.expense.findUnique({
+        where: { id },
+      });
+
+      // STEP 2: Reverse existing journal entry for this expense (if any)
       const existingEntry = await prisma.journalEntry.findFirst({
         where: { referenceType: 'Expense', referenceId: id },
       });
@@ -108,7 +124,7 @@ export async function PUT(request: Request) {
         await reverseJournalEntry(existingEntry.id);
       }
 
-      // STEP 2: Update the expense
+      // STEP 3: Update the expense
       const expense = await prisma.expense.update({
         where: { id },
         data: {
@@ -147,6 +163,16 @@ export async function PUT(request: Request) {
         request.headers.get('user-agent') || undefined
       );
 
+      // Log activity for audit trail
+      await logActivity({
+        entity: 'Expense',
+        entityId: expense.id,
+        action: 'UPDATE',
+        userId: user.id,
+        before: existingExpense,
+        after: expense,
+      });
+
       return apiSuccess(expense, 'Expense updated successfully');
     } catch (error) {
       return handleApiError(error, 'Update expense');
@@ -172,7 +198,12 @@ export async function DELETE(request: Request) {
         return handleApiError(new Error('ID is required'), 'Delete expense');
       }
 
-      // STEP 1: Reverse journal entry to restore account balances
+      // STEP 1: Fetch existing expense for activity logging
+      const existingExpense = await prisma.expense.findUnique({
+        where: { id },
+      });
+
+      // STEP 2: Reverse journal entry to restore account balances
       const existingEntry = await prisma.journalEntry.findFirst({
         where: { referenceType: 'Expense', referenceId: id },
       });
@@ -180,7 +211,7 @@ export async function DELETE(request: Request) {
         await reverseJournalEntry(existingEntry.id);
       }
 
-      // STEP 2: Delete expense
+      // STEP 3: Delete expense
       await prisma.expense.delete({
         where: { id },
       });
@@ -195,6 +226,15 @@ export async function DELETE(request: Request) {
         request.headers.get('x-forwarded-for') || undefined,
         request.headers.get('user-agent') || undefined
       );
+
+      // Log activity for audit trail
+      await logActivity({
+        entity: 'Expense',
+        entityId: id,
+        action: 'DELETE',
+        userId: user.id,
+        before: existingExpense,
+      });
 
       return apiSuccess({ id }, 'Expense deleted successfully');
     } catch (error) {

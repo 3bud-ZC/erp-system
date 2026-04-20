@@ -122,7 +122,6 @@ model Product {
   productionOrderItems ProductionOrderItem[]
   bomItems      BOMItem[]       @relation("BOMProduct")
   bomMaterials  BOMItem[]       @relation("BOMMaterial")
-  stockMovements StockMovement[] @relation("StockMovements")
   inventoryTransactions InventoryTransaction[] @relation("InventoryTransactions")
   inventoryValuation InventoryValuation? @relation("InventoryValuation")
   lineAssignments ProductionLineAssignment[]
@@ -322,22 +321,6 @@ model InventoryTransaction {
   @@index([referenceId])
 }
 
-model StockMovement {
-  id              String   @id @default(cuid())
-  productId       String
-  product         Product  @relation("StockMovements", fields: [productId], references: [id])
-  type            String   // IN, OUT, ADJUSTMENT, MANUFACTURING_IN, MANUFACTURING_OUT
-  quantity        Float
-  reference       String?  // Invoice ID, Order ID, etc.
-  referenceType   String?  // SalesInvoice, PurchaseInvoice, ProductionOrder, etc.
-  notes           String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@index([productId])
-  @@index([referenceType, reference])
-}
-
 model InventoryValuation {
   id              String   @id @default(cuid())
   productId       String   @unique
@@ -490,6 +473,7 @@ model JournalEntry {
   totalCredit   Decimal  @default(0)
   isPosted      Boolean  @default(false)
   postedDate    DateTime?
+  createdBy     String?  // User who created this journal entry
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   lines         JournalEntryLine[]
@@ -641,6 +625,22 @@ model AuditLog {
   @@index([userId])
   @@index([module])
   @@index([entityType])
+  @@index([createdAt])
+}
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  entity      String   // Payment, Invoice, Expense, Account, InventoryItem
+  entityId    String
+  action      String   // CREATE, UPDATE, DELETE
+  performedBy String?
+  beforeData  Json?
+  afterData   Json?
+  createdAt   DateTime @default(now())
+
+  @@index([entity])
+  @@index([entityId])
+  @@index([performedBy])
   @@index([createdAt])
 }
 
