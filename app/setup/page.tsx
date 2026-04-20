@@ -47,8 +47,9 @@ export default function SetupPage() {
         }
 
       } catch (err: any) {
-        console.error('Setup error:', err);
-        setError(err.message);
+        const errorMessage = err?.message || err?.toString() || 'Unknown error';
+        console.error('Setup error:', errorMessage);
+        setError(errorMessage);
         setStatus('حدث خطأ');
       }
     };

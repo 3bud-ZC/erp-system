@@ -39,7 +39,8 @@ export default function LoginPage() {
           throw new Error('لم يتم استلام رمز التوثيق');
         }
       } catch (err: any) {
-        console.error('Auto-login error:', err);
+        const errorMessage = err?.message || err?.toString() || 'Unknown error';
+        console.error('Auto-login error:', errorMessage);
         setError('المستخدم غير موجود. جاري إعداد النظام...');
         // Redirect to setup page to create demo user
         setTimeout(() => {
