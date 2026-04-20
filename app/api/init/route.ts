@@ -12,6 +12,25 @@ export async function GET() {
     await prisma.$queryRaw`SELECT 1`;
     console.log('✅ Database connected');
 
+    // Check if already initialized (prevent re-initialization)
+    const existingDemoUser = await prisma.user.findUnique({
+      where: { email: 'demo@erp-system.com' },
+    });
+
+    if (existingDemoUser) {
+      console.log('⚠️ Database already initialized. Skipping initialization.');
+      return NextResponse.json({
+        success: true,
+        message: 'Database already initialized',
+        data: {
+          demoUser: {
+            email: existingDemoUser.email
+          },
+          skipped: true
+        }
+      });
+    }
+
     // Create demo role
     const demoRole = await prisma.role.upsert({
       where: { code: 'demo' },

@@ -4,13 +4,15 @@ import { prisma } from '@/lib/db';
 // Disable caching for real-time data
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-import { validateStockAvailability, decrementStockInTransaction, incrementStockInTransaction } from '@/lib/inventory';
+import { validateRawMaterialAvailability, validateProductionStatusTransition } from '@/lib/validation';
+import { decrementStockWithTransaction, incrementStockWithTransaction, atomicDecrementStock, createInventoryTransaction } from '@/lib/inventory-transactions';
 import {
   createManufacturingEntry,
   recordRawMaterialConsumption,
   recordManufacturingLabor,
   recordManufacturingOverhead,
   postJournalEntry,
+  reverseJournalEntry,
 } from '@/lib/accounting';
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
@@ -94,12 +96,18 @@ export async function POST(request: Request) {
 
       // STEP 2: Calculate total raw materials needed (BOM explosion)
       const rawMaterialsNeeded = bomItems.map((bom) => ({
-        productId: bom.materialId,
+        materialId: bom.materialId,
         quantity: bom.quantity * quantity,
       }));
 
+      // Convert to inventory transaction format (productId instead of materialId)
+      const inventoryItems = rawMaterialsNeeded.map(rm => ({
+        productId: rm.materialId,
+        quantity: rm.quantity,
+      }));
+
       // STEP 3: Validate stock availability for all raw materials
-      const validation = await validateStockAvailability(rawMaterialsNeeded);
+      const validation = await validateRawMaterialAvailability(rawMaterialsNeeded);
       if (!validation.valid) {
         return apiError(
           'المواد الخام غير كافية للإنتاج',
@@ -109,6 +117,20 @@ export async function POST(request: Request) {
       }
 
       // STEP 4: Create production order, consume raw materials, and record WIP atomically
+      // Calculate raw material cost before transaction
+      let totalRawMaterialCost = 0;
+      for (const rm of rawMaterialsNeeded) {
+        const material = await prisma.product.findUnique({
+          where: { id: rm.materialId },
+          select: { cost: true },
+        });
+        if (material) {
+          totalRawMaterialCost += rm.quantity * material.cost;
+        }
+      }
+
+      const totalManufacturingCost = totalRawMaterialCost + (laborCost || 0) + (overheadCost || 0);
+
       const order = await prisma.$transaction(async (tx) => {
         const newOrder = await tx.productionOrder.create({
           data: {
@@ -116,9 +138,11 @@ export async function POST(request: Request) {
             orderNumber,
             productId,
             quantity,
+            plannedQuantity: quantity,
+            actualOutputQuantity: 0,
             date: new Date(orderData.date),
             items: {
-              create: rawMaterialsNeeded.map((rm) => ({
+              create: inventoryItems.map((rm) => ({
                 productId: rm.productId,
                 quantity: rm.quantity,
                 cost: 0,
@@ -136,49 +160,33 @@ export async function POST(request: Request) {
         const wipEntry = await tx.workInProgress.create({
           data: {
             productionOrderId: newOrder.id,
-            rawMaterialCost: 0,
+            rawMaterialCost: totalRawMaterialCost,
             laborCost: laborCost || 0,
             overheadCost: overheadCost || 0,
-            totalCost: laborCost || overheadCost || 0,
+            totalCost: totalManufacturingCost,
           },
         });
 
-        await decrementStockInTransaction(tx, rawMaterialsNeeded, newOrder.id, 'ProductionOrder');
+        // Only consume raw materials immediately if order is created as 'approved'.
+        // Orders created as 'pending' consume stock when transitioned to 'approved' via PUT.
+        // atomicDecrementStock is race-condition safe (throws + rolls back if stock insufficient).
+        if ((orderData.status || 'pending') === 'approved') {
+          await atomicDecrementStock(tx, inventoryItems, newOrder.id, 'production_out');
+        }
+
+        // Create WIP journal entry inside transaction for atomicity
+        const wipJournal = await recordRawMaterialConsumption(
+          newOrder.id,
+          totalRawMaterialCost,
+          inventoryItems
+        );
+
+        if (wipJournal) {
+          await postJournalEntry(wipJournal.id);
+        }
 
         return newOrder;
       });
-
-      // STEP 5: Calculate raw material cost and create accounting entries
-      let totalRawMaterialCost = 0;
-      for (const rm of rawMaterialsNeeded) {
-        const material = await prisma.product.findUnique({
-          where: { id: rm.productId },
-          select: { cost: true },
-        });
-        if (material) {
-          totalRawMaterialCost += rm.quantity * material.cost;
-        }
-      }
-
-      const totalManufacturingCost = totalRawMaterialCost + (laborCost || 0) + (overheadCost || 0);
-
-      await prisma.workInProgress.update({
-        where: { productionOrderId: order.id },
-        data: {
-          rawMaterialCost: totalRawMaterialCost,
-          totalCost: totalManufacturingCost,
-        },
-      });
-
-      const wipJournal = await recordRawMaterialConsumption(
-        order.id,
-        totalRawMaterialCost,
-        rawMaterialsNeeded
-      );
-
-      if (wipJournal) {
-        await postJournalEntry(wipJournal.id);
-      }
 
       // Log audit action
       await logAuditAction(
@@ -211,7 +219,7 @@ export async function PUT(request: Request) {
     }
 
     const body = await request.json();
-      const { id, status, ...updateData } = body;
+      const { id, status, actualOutputQuantity, ...updateData } = body;
 
       const order = await prisma.productionOrder.findUnique({
         where: { id },
@@ -222,11 +230,39 @@ export async function PUT(request: Request) {
         return apiError('أمر الإنتاج غير موجود', 404);
       }
 
+      // Validate status transition
+      if (status && status !== order.status) {
+        const { valid, error } = validateProductionStatusTransition(order.status, status);
+        if (!valid) {
+          return apiError(error || 'Invalid status transition', 400);
+        }
+      }
+
+      // Handle approval (pending → approved): Deduct raw materials atomically
+      if (status === 'approved' && order.status === 'pending') {
+        const inventoryItems = order.items.map(item => ({
+          productId: item.productId,
+          quantity: item.quantity,
+        }));
+
+        await prisma.$transaction(async (tx) => {
+          await atomicDecrementStock(tx, inventoryItems, order.id, 'production_out');
+        });
+      }
+
+      // Handle completion (waiting → completed): Add finished product, calculate waste
       if (status === 'completed' && order.status !== 'completed') {
+        const outputQuantity = actualOutputQuantity || order.plannedQuantity || order.quantity;
+        const waste = (order.plannedQuantity || order.quantity) - outputQuantity;
+
         const updatedOrder = await prisma.$transaction(async (tx) => {
           const updated = await tx.productionOrder.update({
             where: { id },
-            data: { status, ...updateData },
+            data: { 
+              status, 
+              actualOutputQuantity: outputQuantity,
+              ...updateData 
+            },
             include: { product: true, items: true, workInProgress: true },
           });
 
@@ -235,33 +271,29 @@ export async function PUT(request: Request) {
           });
 
           if (wip) {
-            await tx.product.update({
-              where: { id: updated.productId },
-              data: {
-                stock: {
-                  increment: updated.quantity,
-                },
-              },
-            });
+            // Add finished product to inventory
+            await incrementStockWithTransaction(tx, [{ productId: updated.productId, quantity: outputQuantity }], order.id, 'production_in');
 
-            await tx.stockMovement.create({
-              data: {
-                productId: updated.productId,
-                type: 'MANUFACTURING_IN',
-                quantity: updated.quantity,
-                reference: id,
-                referenceType: 'ProductionOrder',
-                notes: `Finished goods from manufacturing (Cost: ${wip.totalCost})`,
-              },
-            });
+            // Calculate waste and create record
+            if (waste > 0) {
+              await tx.productionWaste.create({
+                data: {
+                  productId: updated.productId,
+                  quantity: waste,
+                  date: new Date(),
+                  productionOrderId: order.id,
+                  notes: 'Production waste calculated on completion'
+                }
+              });
+            }
 
             const existingProduct = await tx.product.findUnique({
               where: { id: updated.productId },
               select: { cost: true },
             });
 
-            if (existingProduct) {
-              const newCost = wip.totalCost / updated.quantity;
+            if (existingProduct && outputQuantity > 0) {
+              const newCost = wip.totalCost / outputQuantity;
               await tx.product.update({
                 where: { id: updated.productId },
                 data: { cost: newCost },
@@ -281,7 +313,7 @@ export async function PUT(request: Request) {
         if (wip) {
           const journalEntry = await createManufacturingEntry(
             id,
-            updatedOrder.quantity,
+            outputQuantity,
             wip.totalCost
           );
           if (journalEntry) {
@@ -296,7 +328,7 @@ export async function PUT(request: Request) {
           'manufacturing',
           'ProductionOrder',
           order.id,
-          { status: 'completed' },
+          { status: 'completed', actualOutputQuantity: outputQuantity, waste },
           request.headers.get('x-forwarded-for') || undefined,
           request.headers.get('user-agent') || undefined
         );
@@ -306,7 +338,7 @@ export async function PUT(request: Request) {
 
       const updated = await prisma.productionOrder.update({
         where: { id },
-        data: { status, ...updateData },
+        data: { status, actualOutputQuantity, ...updateData },
         include: { items: true, workInProgress: true },
       });
 
@@ -347,6 +379,15 @@ export async function DELETE(request: Request) {
         return apiError('معرف أمر الإنتاج مطلوب', 400);
       }
 
+      // STEP 1: Reverse all journal entries for this production order
+      const journalEntries = await prisma.journalEntry.findMany({
+        where: { referenceType: 'ProductionOrder', referenceId: id },
+      });
+      for (const entry of journalEntries) {
+        await reverseJournalEntry(entry.id);
+      }
+
+      // STEP 2: Delete production order and reverse stock in transaction
       await prisma.$transaction(async (tx) => {
         const order = await tx.productionOrder.findUnique({
           where: { id },
@@ -357,26 +398,38 @@ export async function DELETE(request: Request) {
           throw new Error('أمر الإنتاج غير موجود');
         }
 
+        // TASK 4: If the order was completed, the finished product was added to inventory.
+        // Deleting a completed order must reverse that finished product increment.
+        if (order.status === 'completed' && order.actualOutputQuantity > 0) {
+          await tx.product.update({
+            where: { id: order.productId },
+            data: { stock: { decrement: order.actualOutputQuantity } },
+          });
+          await createInventoryTransaction(
+            tx,
+            order.productId,
+            'adjustment',
+            -order.actualOutputQuantity,
+            id,
+            'Deleted completed production order — finished product reversed'
+          );
+        }
+
+        // Restore raw material stock for all consumed items
         for (const item of order.items) {
           await tx.product.update({
             where: { id: item.productId },
-            data: {
-              stock: {
-                increment: item.quantity,
-              },
-            },
+            data: { stock: { increment: item.quantity } },
           });
-
-          await tx.stockMovement.create({
-            data: {
-              productId: item.productId,
-              type: 'MANUFACTURING_OUT',
-              quantity: -item.quantity,
-              reference: id,
-              referenceType: 'ProductionOrder',
-              notes: 'Deleted production order - raw materials restored',
-            },
-          });
+          // TASK 5+6: InventoryTransaction as single source of truth; positive adjustment = stock returning
+          await createInventoryTransaction(
+            tx,
+            item.productId,
+            'adjustment',
+            item.quantity,
+            id,
+            'Deleted production order — raw materials restored'
+          );
         }
 
         await tx.workInProgress.deleteMany({

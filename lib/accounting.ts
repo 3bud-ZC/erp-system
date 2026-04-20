@@ -177,12 +177,23 @@ export async function postJournalEntry(entryId: string): Promise<any> {
         ? Number(line.credit) - Number(line.debit)
         : Number(line.debit) - Number(line.credit);
 
-      await prisma.account.update({
+      const updatedAccount = await prisma.account.update({
         where: { code: line.accountCode },
         data: {
           balance: {
             increment: balanceChange,
           },
+        },
+      });
+
+      // Create balance history record for audit trail
+      await prisma.accountBalanceHistory.create({
+        data: {
+          accountCode: line.accountCode,
+          balance: updatedAccount.balance,
+          changeAmount: balanceChange,
+          journalEntryId: entryId,
+          changeType: balanceChange > 0 ? 'debit' : 'credit',
         },
       });
     }
@@ -191,6 +202,76 @@ export async function postJournalEntry(entryId: string): Promise<any> {
     return journalEntry;
   } catch (error) {
     console.error('Error posting journal entry:', error);
+    throw error;
+  }
+}
+
+/**
+ * Reverse a journal entry and restore account balances
+ * MUST be used in ALL PUT handlers BEFORE new journal creation
+ * MUST be used in ALL DELETE handlers BEFORE removing business records
+ * This ensures accounting balance consistency under all operations
+ */
+export async function reverseJournalEntry(journalEntryId: string, tx?: any): Promise<any> {
+  const prismaClient = tx || prisma;
+  
+  try {
+    // Fetch the journal entry with its lines and account details
+    const journalEntry = await prismaClient.journalEntry.findUnique({
+      where: { id: journalEntryId },
+      include: {
+        lines: {
+          include: {
+            account: true,
+          },
+        },
+      },
+    });
+
+    if (!journalEntry) {
+      throw new Error(`Journal entry ${journalEntryId} not found`);
+    }
+
+    // Only reverse if the entry was posted (i.e., it affected account balances)
+    if (journalEntry.isPosted) {
+      // Reverse account balances using the opposite of the original balance change
+      for (const line of journalEntry.lines) {
+        const accountType = (line as any).account?.type ?? '';
+        const isCreditNormal = ['Liability', 'Equity', 'Revenue'].includes(accountType);
+        
+        // Original balance change
+        const originalBalanceChange = isCreditNormal
+          ? Number(line.credit) - Number(line.debit)
+          : Number(line.debit) - Number(line.credit);
+        
+        // Reverse the balance change (subtract the original change)
+        const reverseBalanceChange = -originalBalanceChange;
+
+        await prismaClient.account.update({
+          where: { code: line.accountCode },
+          data: {
+            balance: {
+              increment: reverseBalanceChange,
+            },
+          },
+        });
+      }
+    }
+
+    // Delete journal entry lines
+    await prismaClient.journalEntryLine.deleteMany({
+      where: { journalEntryId },
+    });
+
+    // Delete the journal entry itself
+    await prismaClient.journalEntry.delete({
+      where: { id: journalEntryId },
+    });
+
+    console.log(`Journal entry reversed: ${journalEntry.entryNumber}`);
+    return journalEntry;
+  } catch (error) {
+    console.error('Error reversing journal entry:', error);
     throw error;
   }
 }
@@ -576,6 +657,70 @@ export async function calculateProfitAndLoss(
       operatingExpenses: 0,
       netProfit: 0,
     };
+  }
+}
+
+/**
+ * Generate journal entry for a payment
+ * Payment booking:
+ *   Incoming payment:  DR Cash/Bank (1001/1010)    CR Accounts Receivable (1020)
+ *   Outgoing payment:  DR Accounts Payable (2010)  CR Cash/Bank (1001/1010)
+ */
+export async function createPaymentJournalEntry(
+  paymentId: string,
+  amount: number,
+  type: 'incoming' | 'outgoing',
+  paymentDate: Date
+): Promise<any> {
+  try {
+    const lines: JournalEntryInput['lines'] = [];
+
+    if (type === 'incoming') {
+      // Incoming payment: Receive cash, reduce AR
+      lines.push(
+        {
+          accountCode: '1001', // Cash
+          debit: amount,
+          credit: 0,
+          description: 'استلام نقد من العميل',
+        },
+        {
+          accountCode: '1020', // Accounts Receivable
+          debit: 0,
+          credit: amount,
+          description: 'تخفيض المستحقات من العملاء',
+        }
+      );
+    } else {
+      // Outgoing payment: Pay cash, reduce AP
+      lines.push(
+        {
+          accountCode: '2010', // Accounts Payable
+          debit: amount,
+          credit: 0,
+          description: 'سداد للمورد',
+        },
+        {
+          accountCode: '1001', // Cash
+          debit: 0,
+          credit: amount,
+          description: 'دفع نقد للمورد',
+        }
+      );
+    }
+
+    const entry: JournalEntryInput = {
+      entryDate: paymentDate,
+      description: type === 'incoming' ? 'دفعة واردة' : 'دفعة صادرة',
+      referenceType: 'Payment',
+      referenceId: paymentId,
+      lines,
+    };
+
+    return await createJournalEntry(entry);
+  } catch (error) {
+    console.error('Error creating payment journal entry:', error);
+    throw error;
   }
 }
 

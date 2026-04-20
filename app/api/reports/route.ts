@@ -90,9 +90,38 @@ async function getProfitAndLossReport(fromDate?: Date, toDate?: Date) {
 async function getBalanceSheet(asOfDate?: Date) {
   const date = asOfDate || new Date();
 
+  // SINGLE QUERY to get all account balances at once
+  const accountBalances = await prisma.journalEntryLine.groupBy({
+    by: ['accountCode'],
+    where: {
+      journalEntry: {
+        isPosted: true,
+        entryDate: { lte: date },
+      },
+    },
+    _sum: {
+      debit: true,
+      credit: true,
+    },
+  });
+
+  // Fetch account details once
   const accounts = await prisma.account.findMany({
     where: { isActive: true },
-    include: { journalLines: true },
+  });
+
+  // Calculate balances in application memory using aggregated data
+  const balanceMap = new Map();
+  accountBalances.forEach(ab => {
+    const account = accounts.find(a => a.code === ab.accountCode);
+    if (!account) return;
+    
+    const isCreditNormal = ['Liability', 'Equity', 'Revenue'].includes(account.type);
+    const balance = isCreditNormal
+      ? Number(ab._sum.credit) - Number(ab._sum.debit)
+      : Number(ab._sum.debit) - Number(ab._sum.credit);
+    
+    balanceMap.set(ab.accountCode, balance);
   });
 
   const assets: any = {};
@@ -100,28 +129,11 @@ async function getBalanceSheet(asOfDate?: Date) {
   const equity: any = {};
 
   for (const account of accounts) {
-    const entries = await prisma.journalEntry.findMany({
-      where: {
-        isPosted: true,
-        entryDate: { lte: date },
-        lines: {
-          some: { accountCode: account.code },
-        },
-      },
-      include: { lines: true },
-    });
-
-    let balance = 0;
-    entries.forEach((entry) => {
-      const line = entry.lines.find((l) => l.accountCode === account.code);
-      if (line) {
-        balance += Number(line.debit) - Number(line.credit);
-      }
-    });
-
+    const balance = balanceMap.get(account.code) || 0;
+    
     const accountData = {
       code: account.code,
-      name: account.nameAr || account.nameEn,
+      nameAr: account.nameAr || account.nameEn,
       balance,
     };
 

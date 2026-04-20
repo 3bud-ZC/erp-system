@@ -17,17 +17,25 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const fromDate = searchParams.get('fromDate');
     const toDate = searchParams.get('toDate');
+    const supplierId = searchParams.get('supplierId');
+    const rawMaterialId = searchParams.get('rawMaterialId');
 
     // Default to current month
     const now = new Date();
     const from = fromDate ? new Date(fromDate) : new Date(now.getFullYear(), now.getMonth(), 1);
     const to = toDate ? new Date(toDate) : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
+    // Build where clause
+    const where: any = {
+      createdAt: { gte: from, lte: to },
+    };
+    if (supplierId) {
+      where.supplierId = supplierId;
+    }
+
     // Get purchase invoices within date range
     const invoices = await prisma.purchaseInvoice.findMany({
-      where: {
-        createdAt: { gte: from, lte: to },
-      },
+      where,
       include: {
         supplier: true,
         items: {
@@ -39,14 +47,50 @@ export async function GET(request: Request) {
       orderBy: { createdAt: 'desc' },
     });
 
+    // Filter by raw material if specified
+    let filteredInvoices = invoices;
+    let rawMaterialDetails = null;
+
+    if (rawMaterialId) {
+      filteredInvoices = invoices.filter(inv => 
+        inv.items.some(item => item.productId === rawMaterialId)
+      );
+
+      // Calculate raw material specific data
+      const materialItems = filteredInvoices.flatMap(inv => 
+        inv.items.filter(item => item.productId === rawMaterialId)
+      );
+
+      const totalQuantity = materialItems.reduce((sum, item) => sum + item.quantity, 0);
+      const suppliers = Array.from(new Set(filteredInvoices.map(inv => inv.supplier?.nameAr).filter(Boolean)));
+      
+      const purchaseDetails = materialItems.map(item => ({
+        price: item.price,
+        quantity: item.quantity,
+        date: invoices.find(inv => inv.items.includes(item))?.createdAt,
+      }));
+
+      // CRITICAL: Calculate average raw material price
+      const avgPrice = purchaseDetails.length > 0 
+        ? purchaseDetails.reduce((sum, p) => sum + p.price, 0) / purchaseDetails.length 
+        : 0;
+
+      rawMaterialDetails = {
+        totalQuantity,
+        suppliers,
+        avgPrice,
+        purchaseDetails
+      };
+    }
+
     // Calculate metrics
-    const totalPurchases = invoices.reduce((sum, inv) => sum + inv.total, 0);
-    const totalInvoices = invoices.length;
+    const totalPurchases = filteredInvoices.reduce((sum, inv) => sum + inv.total, 0);
+    const totalInvoices = filteredInvoices.length;
     const averageOrderValue = totalInvoices > 0 ? totalPurchases / totalInvoices : 0;
 
     // Group by supplier
     const supplierMap = new Map<string, { name: string; total: number; invoiceCount: number }>();
-    invoices.forEach((inv) => {
+    filteredInvoices.forEach((inv) => {
       const key = inv.supplier?.id || 'unknown';
       const supplier = supplierMap.get(key) || {
         name: inv.supplier?.nameAr || 'غير معروف',
@@ -64,7 +108,7 @@ export async function GET(request: Request) {
 
     // Get category breakdown by summing products by unit (since no category field exists)
     const unitMap = new Map<string, number>();
-    invoices.forEach((inv) => {
+    filteredInvoices.forEach((inv) => {
       inv.items?.forEach((item) => {
         const unit = item.product?.unit || 'أخرى';
         unitMap.set(unit, (unitMap.get(unit) || 0) + item.total);
@@ -83,11 +127,14 @@ export async function GET(request: Request) {
       const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
 
+      const monthWhere: any = {
+        createdAt: { gte: monthStart, lte: monthEnd },
+      };
+      if (supplierId) monthWhere.supplierId = supplierId;
+
       const monthData = await prisma.purchaseInvoice.aggregate({
         _sum: { total: true },
-        where: {
-          createdAt: { gte: monthStart, lte: monthEnd },
-        },
+        where: monthWhere,
       });
 
       monthlyTrends.push({
@@ -98,13 +145,14 @@ export async function GET(request: Request) {
 
     return apiSuccess({
       totalPurchases,
-      totalExpenses: totalPurchases, // For backward compatibility
+      totalExpenses: totalPurchases,
       averageOrderValue,
       totalInvoices,
       topSuppliers,
       categoryBreakdown,
       monthlyTrends,
-      invoices,
+      invoices: filteredInvoices,
+      rawMaterialDetails,
       dateRange: {
         from: from.toISOString(),
         to: to.toISOString(),

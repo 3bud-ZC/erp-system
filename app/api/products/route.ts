@@ -6,8 +6,9 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
+import { validateProductType } from '@/lib/validation';
 
-// GET - Read products
+// GET - Read products (finished products only)
 export async function GET(request: Request) {
   try {
     const user = await getAuthenticatedUser(request);
@@ -15,7 +16,11 @@ export async function GET(request: Request) {
       return apiError('لم يتم المصادقة', 401);
     }
 
+    const { searchParams } = new URL(request.url);
+    const type = searchParams.get('type') || 'finished_product';
+
     const products = await prisma.product.findMany({
+      where: { type },
       orderBy: { createdAt: 'desc' },
       include: {
         unitRef: true,
@@ -51,6 +56,9 @@ export async function POST(request: Request) {
     }
     if (!nameAr || typeof nameAr !== 'string' || !nameAr.trim()) {
       return apiError('اسم المنتج بالعربية مطلوب', 400);
+    }
+    if (type && !validateProductType(type)) {
+      return apiError('نوع المنتج يجب أن يكون raw_material أو finished_product', 400);
     }
     if (price !== undefined && (typeof price !== 'number' || price < 0)) {
       return apiError('السعر يجب أن يكون رقماً موجباً أو صفراً', 400);

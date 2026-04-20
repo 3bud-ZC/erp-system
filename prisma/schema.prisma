@@ -70,6 +70,9 @@ model Supplier {
   updatedAt     DateTime        @updatedAt
   purchaseOrders PurchaseOrder[]
   purchaseInvoices PurchaseInvoice[]
+  payments      Payment[]
+
+  @@index([id])
 }
 
 model Customer {
@@ -85,6 +88,9 @@ model Customer {
   updatedAt     DateTime        @updatedAt
   salesOrders   SalesOrder[]
   salesInvoices SalesInvoice[]
+  payments      Payment[]
+
+  @@index([id])
 }
 
 model Product {
@@ -117,8 +123,13 @@ model Product {
   bomItems      BOMItem[]       @relation("BOMProduct")
   bomMaterials  BOMItem[]       @relation("BOMMaterial")
   stockMovements StockMovement[] @relation("StockMovements")
+  inventoryTransactions InventoryTransaction[] @relation("InventoryTransactions")
   inventoryValuation InventoryValuation? @relation("InventoryValuation")
   lineAssignments ProductionLineAssignment[]
+  productionWastes ProductionWaste[] @relation("ProductionWastes")
+
+  @@index([type])
+  @@index([code])
 }
 
 model PurchaseOrder {
@@ -155,11 +166,19 @@ model PurchaseInvoice {
   supplier      Supplier        @relation(fields: [supplierId], references: [id])
   date          DateTime
   status        String          @default("pending")
+  paymentStatus String          @default("cash")  // 'cash' | 'credit'
+  paidAmount    Float           @default(0)
   notes         String?
   total         Float           @default(0)
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   items         PurchaseInvoiceItem[]
+  payments      Payment[]
+
+  @@index([supplierId])
+  @@index([date])
+  @@index([status])
+  @@index([paymentStatus])
 }
 
 model PurchaseInvoiceItem {
@@ -209,11 +228,19 @@ model SalesInvoice {
   customer      Customer        @relation(fields: [customerId], references: [id])
   date          DateTime
   status        String          @default("pending")
+  paymentStatus String          @default("cash")  // 'cash' | 'credit'
+  paidAmount    Float           @default(0)
   notes         String?
   total         Float           @default(0)
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   items         SalesInvoiceItem[]
+  payments      Payment[]
+
+  @@index([customerId])
+  @@index([date])
+  @@index([status])
+  @@index([paymentStatus])
 }
 
 model SalesInvoiceItem {
@@ -277,6 +304,23 @@ model BOMItem {
 }
 
 // ==================== INVENTORY MODELS ====================
+
+model InventoryTransaction {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation("InventoryTransactions", fields: [productId], references: [id])
+  type        String   // 'purchase' | 'sale' | 'production_in' | 'production_out' | 'adjustment'
+  quantity    Float
+  referenceId String?  // Invoice ID, Production Order ID, etc.
+  date        DateTime
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@index([productId])
+  @@index([type])
+  @@index([date])
+  @@index([referenceId])
+}
 
 model StockMovement {
   id              String   @id @default(cuid())
@@ -353,23 +397,103 @@ model ProductionLineAssignment {
 
 // Update ProductionOrder to include production line
 model ProductionOrder {
-  id              String          @id @default(cuid())
-  orderNumber     String          @unique
-  productId       String
-  product         Product         @relation(fields: [productId], references: [id])
-  quantity        Float
-  produced        Float           @default(0)
-  remaining       Float
-  cost            Float           @default(0)
-  status          String          @default("pending")  // pending, in_progress, completed, cancelled
-  date            DateTime
-  notes           String?
-  productionLineId String?
-  productionLine  ProductionLine? @relation(fields: [productionLineId], references: [id])
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  items           ProductionOrderItem[]
-  workInProgress  WorkInProgress?
+  id                String          @id @default(cuid())
+  orderNumber       String          @unique
+  productId         String
+  product           Product         @relation(fields: [productId], references: [id])
+  quantity          Float
+  plannedQuantity   Float
+  actualOutputQuantity Float         @default(0)
+  produced          Float           @default(0)
+  remaining         Float
+  cost              Float           @default(0)
+  status            String          @default("pending")  // pending, approved, waiting, completed, cancelled
+  date              DateTime
+  notes             String?
+  productionLineId  String?
+  productionLine    ProductionLine? @relation(fields: [productionLineId], references: [id])
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  items             ProductionOrderItem[]
+  workInProgress    WorkInProgress?
+  productionWastes  ProductionWaste[]
+}
+
+// ==================== FINANCIAL MODELS ====================
+
+model Payment {
+  id                 String          @id @default(cuid())
+  amount             Float
+  date               DateTime
+  type               String          // 'incoming' | 'outgoing'
+  customerId         String?
+  customer           Customer?       @relation(fields: [customerId], references: [id])
+  supplierId         String?
+  supplier           Supplier?       @relation(fields: [supplierId], references: [id])
+  salesInvoiceId     String?
+  salesInvoice       SalesInvoice?   @relation(fields: [salesInvoiceId], references: [id])
+  purchaseInvoiceId  String?
+  purchaseInvoice    PurchaseInvoice? @relation(fields: [purchaseInvoiceId], references: [id])
+  journalEntryId     String?
+  journalEntry       JournalEntry?   @relation("PaymentJournalEntry", fields: [journalEntryId], references: [id])
+  notes              String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  @@index([customerId])
+  @@index([supplierId])
+  @@index([date])
+  @@index([journalEntryId])
+}
+
+model ProductionWaste {
+  id                String          @id @default(cuid())
+  productId         String
+  product           Product         @relation("ProductionWastes", fields: [productId], references: [id])
+  quantity          Float
+  date              DateTime
+  productionOrderId String?
+  productionOrder   ProductionOrder? @relation(fields: [productionOrderId], references: [id])
+  notes             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([productId])
+  @@index([date])
+  @@index([productionOrderId])
+}
+
+model JournalEntryLine {
+  id              String   @id @default(cuid())
+  journalEntryId  String
+  journalEntry    JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  accountCode     String
+  account         Account @relation(fields: [accountCode], references: [code], onDelete: Restrict)
+  debit           Decimal  @default(0)
+  credit          Decimal  @default(0)
+  description     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([journalEntryId])
+  @@index([accountCode])
+}
+
+model JournalEntry {
+  id            String   @id @default(cuid())
+  entryNumber   String   @unique
+  entryDate     DateTime
+  description   String?
+  referenceType String?  // SalesInvoice, PurchaseInvoice, Expense, etc.
+  referenceId   String?
+  totalDebit    Decimal  @default(0)
+  totalCredit   Decimal  @default(0)
+  isPosted      Boolean  @default(false)
+  postedDate    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  lines         JournalEntryLine[]
+  payments      Payment[] @relation("PaymentJournalEntry")
 }
 
 // ==================== ACCOUNTING MODELS ====================
@@ -387,38 +511,22 @@ model Account {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   journalLines  JournalEntryLine[]
+  balanceHistory AccountBalanceHistory[]
 }
 
-model JournalEntry {
-  id            String   @id @default(cuid())
-  entryNumber   String   @unique
-  entryDate     DateTime
-  description   String?
-  referenceType String?  // SalesInvoice, PurchaseInvoice, Expense, etc.
-  referenceId   String?
-  totalDebit    Decimal  @default(0)
-  totalCredit   Decimal  @default(0)
-  isPosted      Boolean  @default(false)
-  postedDate    DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  lines         JournalEntryLine[]
-}
-
-model JournalEntryLine {
-  id              String   @id @default(cuid())
-  journalEntryId  String
-  journalEntry    JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
-  accountCode     String
-  account         Account @relation(fields: [accountCode], references: [code], onDelete: Restrict)
-  debit           Decimal  @default(0)
-  credit          Decimal  @default(0)
-  description     String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@index([journalEntryId])
+model AccountBalanceHistory {
+  id          String   @id @default(cuid())
+  accountCode String
+  account     Account  @relation(fields: [accountCode], references: [code], onDelete: Cascade)
+  balance     Decimal
+  changeAmount Decimal
+  journalEntryId String?
+  changeType  String   // 'debit', 'credit', 'adjustment'
+  changedAt   DateTime @default(now())
+  changedBy   String?  // User ID
+  
   @@index([accountCode])
+  @@index([changedAt])
 }
 
 // ==================== AUTHENTICATION & AUTHORIZATION MODELS ====================

@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db';
 // Disable caching for real-time data
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-import { createExpenseEntry, postJournalEntry } from '@/lib/accounting';
+import { createExpenseEntry, postJournalEntry, reverseJournalEntry } from '@/lib/accounting';
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
 
@@ -39,24 +39,28 @@ export async function POST(request: Request) {
 
     const body = await request.json();
       const { expenseType } = body;
-      const expense = await prisma.expense.create({
-        data: {
-          expenseNumber: body.expenseNumber,
-          category: body.category || '',
-          description: body.description || '',
-          amount: body.amount || 0,
-          tax: body.tax || 0,
-          total: body.total || 0,
-          date: new Date(body.date),
-          notes: body.notes || null,
-          supplierId: body.supplierId || null,
-          branch: body.branch || null,
-          taxNumber: body.taxNumber || null,
-          invoiceNumber: body.invoiceNumber || null,
-          status: body.status || 'pending',
-          costCenter: body.costCenter || null,
-          accountNumber: body.accountNumber || null,
-        },
+      const expense = await prisma.$transaction(async (tx) => {
+        const newExpense = await tx.expense.create({
+          data: {
+            expenseNumber: body.expenseNumber,
+            category: body.category || '',
+            description: body.description || '',
+            amount: body.amount || 0,
+            tax: body.tax || 0,
+            total: body.total || 0,
+            date: new Date(body.date),
+            notes: body.notes || null,
+            supplierId: body.supplierId || null,
+            branch: body.branch || null,
+            taxNumber: body.taxNumber || null,
+            invoiceNumber: body.invoiceNumber || null,
+            status: body.status || 'pending',
+            costCenter: body.costCenter || null,
+            accountNumber: body.accountNumber || null,
+          },
+        });
+
+        return newExpense;
       });
 
       // Create and post accounting journal entry (DR Expense / CR Cash)
@@ -101,8 +105,7 @@ export async function PUT(request: Request) {
         where: { referenceType: 'Expense', referenceId: id },
       });
       if (existingEntry) {
-        await prisma.journalEntryLine.deleteMany({ where: { journalEntryId: existingEntry.id } });
-        await prisma.journalEntry.delete({ where: { id: existingEntry.id } });
+        await reverseJournalEntry(existingEntry.id);
       }
 
       // STEP 2: Update the expense
@@ -169,6 +172,15 @@ export async function DELETE(request: Request) {
         return handleApiError(new Error('ID is required'), 'Delete expense');
       }
 
+      // STEP 1: Reverse journal entry to restore account balances
+      const existingEntry = await prisma.journalEntry.findFirst({
+        where: { referenceType: 'Expense', referenceId: id },
+      });
+      if (existingEntry) {
+        await reverseJournalEntry(existingEntry.id);
+      }
+
+      // STEP 2: Delete expense
       await prisma.expense.delete({
         where: { id },
       });

@@ -4,8 +4,8 @@ import { prisma } from '@/lib/db';
 // Disable caching for real-time data
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-import { incrementStockInTransaction } from '@/lib/inventory';
-import { createPurchaseInvoiceEntry, postJournalEntry } from '@/lib/accounting';
+import { incrementStockWithTransaction, createInventoryTransaction } from '@/lib/inventory-transactions';
+import { createPurchaseInvoiceEntry, postJournalEntry, reverseJournalEntry } from '@/lib/accounting';
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
 
@@ -70,16 +70,16 @@ export async function POST(request: Request) {
         });
 
         // Increment stock for all purchased items
-        await incrementStockInTransaction(tx, items, newInvoice.id, 'PurchaseInvoice');
+        await incrementStockWithTransaction(tx, items, newInvoice.id, 'purchase');
+
+        // Create and post accounting journal entry inside transaction for atomicity
+        const journalEntry = await createPurchaseInvoiceEntry(newInvoice.id, total);
+        if (journalEntry) {
+          await postJournalEntry(journalEntry.id);
+        }
 
         return newInvoice;
       });
-
-      // Create and post accounting journal entry (DR Inventory / CR Payables)
-      const journalEntry = await createPurchaseInvoiceEntry(invoice.id, total);
-      if (journalEntry) {
-        await postJournalEntry(journalEntry.id);
-      }
 
       // Log audit action
       await logAuditAction(
@@ -140,7 +140,15 @@ export async function PUT(request: Request) {
         }
       }
 
-      // STEP 3: Execute update atomically with stock delta adjustments
+      // STEP 3: Reverse existing journal entry (prevents stale accounting records)
+      const existingJournalEntry = await prisma.journalEntry.findFirst({
+        where: { referenceType: 'PurchaseInvoice', referenceId: id },
+      });
+      if (existingJournalEntry) {
+        await reverseJournalEntry(existingJournalEntry.id);
+      }
+
+      // STEP 4: Execute update atomically with stock delta adjustments
       const invoice = await prisma.$transaction(async (tx) => {
         await tx.purchaseInvoiceItem.deleteMany({
           where: { purchaseInvoiceId: id },
@@ -163,26 +171,27 @@ export async function PUT(request: Request) {
         for (const delta of stockDeltas) {
           await tx.product.update({
             where: { id: delta.productId },
-            data: {
-              stock: {
-                increment: delta.delta,
-              },
-            },
+            data: { stock: { increment: delta.delta } },
           });
-
-          await tx.stockMovement.create({
-            data: {
-              productId: delta.productId,
-              type: 'IN',
-              quantity: delta.delta,
-              reference: id,
-              referenceType: 'PurchaseInvoice',
-            },
-          });
+          await createInventoryTransaction(
+            tx,
+            delta.productId,
+            'adjustment',
+            delta.delta,
+            id,
+            'Purchase invoice updated — stock quantity adjusted'
+          );
         }
 
         return updatedInvoice;
       });
+
+      // STEP 5: Create and post new journal entry with updated total
+      const newTotal = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
+      const newJournalEntry = await createPurchaseInvoiceEntry(invoice.id, newTotal);
+      if (newJournalEntry) {
+        await postJournalEntry(newJournalEntry.id);
+      }
 
       // Log audit action
       await logAuditAction(
@@ -221,6 +230,15 @@ export async function DELETE(request: Request) {
         return handleApiError(new Error('ID is required'), 'Delete purchase invoice');
       }
 
+      // STEP 1: Reverse journal entry to restore account balances
+      const existingJournalEntry = await prisma.journalEntry.findFirst({
+        where: { referenceType: 'PurchaseInvoice', referenceId: id },
+      });
+      if (existingJournalEntry) {
+        await reverseJournalEntry(existingJournalEntry.id);
+      }
+
+      // STEP 2: Delete invoice and reverse stock in transaction
       await prisma.$transaction(async (tx) => {
         const invoice = await tx.purchaseInvoice.findUnique({
           where: { id },
@@ -235,23 +253,16 @@ export async function DELETE(request: Request) {
         for (const item of invoice.items) {
           await tx.product.update({
             where: { id: item.productId },
-            data: {
-              stock: {
-                decrement: item.quantity,
-              },
-            },
+            data: { stock: { decrement: item.quantity } },
           });
-
-          await tx.stockMovement.create({
-            data: {
-              productId: item.productId,
-              type: 'IN',
-              quantity: -item.quantity,
-              reference: id,
-              referenceType: 'PurchaseInvoice',
-              notes: 'Deleted invoice reversal',
-            },
-          });
+          await createInventoryTransaction(
+            tx,
+            item.productId,
+            'adjustment',
+            -item.quantity,
+            id,
+            'Deleted purchase invoice — stock reversed'
+          );
         }
 
         // Delete items first to avoid foreign key constraints
