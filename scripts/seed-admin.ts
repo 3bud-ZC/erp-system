@@ -43,7 +43,7 @@ async function seedAdmin() {
 
     // Assign ADMIN role
     const adminRole = await prisma.role.findUnique({
-      where: { code: 'ADMIN' },
+      where: { code: 'admin' },
     });
 
     if (adminRole) {
