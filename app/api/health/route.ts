@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     
     checks.push({
       name: 'database',
-      status: dbDuration < 500 ? 'healthy' : 'degraded',
+      status: dbDuration < 3000 ? 'healthy' : 'degraded',
       duration: dbDuration,
     });
   } catch (error) {

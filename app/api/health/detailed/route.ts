@@ -54,8 +54,9 @@ export async function GET(request: Request) {
 
     for (const table of criticalTables) {
       try {
-        // @ts-ignore - dynamic table access
-        await prisma[table.toLowerCase()].count();
+        // @ts-ignore - dynamic table access (PascalCase → camelCase)
+        const key = table.charAt(0).toLowerCase() + table.slice(1);
+        await (prisma as any)[key].count();
         checks.tables[table] = true;
       } catch (e: any) {
         checks.tables[table] = false;
