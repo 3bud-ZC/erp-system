@@ -21,6 +21,9 @@ const nextConfig = {
   // Experimental features
   experimental: {
     optimizePackageImports: ['lucide-react', 'chart.js', 'react-chartjs-2'],
+    // Prevent webpack from bundling pino — it uses worker threads
+    // that break when paths are resolved inside webpack chunks.
+    serverComponentsExternalPackages: ['pino', 'pino-pretty', 'thread-stream'],
   },
   
   // Environment variables that should be available on the client
