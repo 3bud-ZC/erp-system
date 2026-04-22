@@ -96,8 +96,7 @@ export default function LoginPage() {
         </form>
 
         <div className="mt-6 text-center text-sm text-gray-500">
-          <p>المسؤول الافتراضي:</p>
-          <p className="font-medium">admin@erp.com / admin123</p>
+          <p>للحصول على بيانات الدخول، يرجى الاتصال بالمسؤول</p>
         </div>
       </div>
     </div>

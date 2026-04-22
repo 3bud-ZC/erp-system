@@ -75,8 +75,13 @@ export async function POST(request: Request) {
       return handleApiError(new Error('الاسم العربي مطلوب'), 'Create warehouse');
     }
 
+    if (!user.tenantId) {
+      return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    }
+
+    // @ts-ignore - Prisma type mismatch - tenant relation not in generated types
     const warehouse = await prisma.warehouse.create({
-      data: { code, nameAr, nameEn, address, phone, manager },
+      data: { code, nameAr, nameEn, address, phone, manager, tenant: { connect: { id: user.tenantId } } },
     });
 
     await logAuditAction(

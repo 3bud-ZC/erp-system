@@ -183,43 +183,22 @@ async function main() {
     }
     console.log(`✅ Created ${roles.length} roles with permissions`);
 
-    // Create default admin user
+    // Create default admin user - simple version
     console.log('👤 Creating admin user...');
-    const adminRole = await prisma.role.findUnique({
-      where: { code: 'admin' },
+    const hashedPassword = await bcrypt.hash('admin', 10);
+
+    const adminUser = await prisma.user.upsert({
+      where: { email: 'admin@erp.com' },
+      update: {},
+      create: {
+        email: 'admin@erp.com',
+        name: 'مدير النظام',
+        password: hashedPassword,
+        isActive: true,
+      },
     });
 
-    if (adminRole) {
-      const hashedPassword = await bcrypt.hash('admin12345', 10);
-
-      const adminUser = await prisma.user.upsert({
-        where: { email: 'admin@example.com' },
-        update: {},
-        create: {
-          email: 'admin@example.com',
-          name: 'مدير النظام',
-          password: hashedPassword,
-          isActive: true,
-        },
-      });
-
-      // Assign admin role to user
-      await prisma.userRole.upsert({
-        where: {
-          userId_roleId: {
-            userId: adminUser.id,
-            roleId: adminRole.id,
-          },
-        },
-        update: {},
-        create: {
-          userId: adminUser.id,
-          roleId: adminRole.id,
-        },
-      });
-
-      console.log('✅ Admin user created: admin@example.com / admin12345');
-    }
+    console.log('✅ Admin user created: admin@erp.com / admin');
 
     console.log('✨ Authentication data seeding completed successfully!');
   } catch (error) {

@@ -5,6 +5,13 @@
 
 import { NextResponse } from 'next/server';
 
+export function apiOnboardingRequired() {
+  return NextResponse.json(
+    { success: false, message: 'يجب إكمال إعداد النظام أولاً', code: 428, onboardingRequired: true },
+    { status: 428 }
+  );
+}
+
 export interface ApiErrorResponse {
   success: false;
   message: string;
@@ -49,6 +56,14 @@ export function apiSuccess<T>(data: T, message?: string): NextResponse<ApiSucces
  */
 export function handleApiError(error: any, context: string = 'Operation'): NextResponse<ApiErrorResponse> {
   console.error(`${context} error:`, error);
+
+  if (error?.message === 'ONBOARDING_REQUIRED') {
+    return NextResponse.json(
+      { success: false, message: 'يجب إكمال إعداد النظام أولاً', code: 428, onboardingRequired: true } as any,
+      { status: 428 }
+    ) as NextResponse<ApiErrorResponse>;
+  }
+  if (error?.message === 'NO_TENANT') return apiError('لا يوجد مستأجر مرتبط بالمستخدم', 403);
 
   // Prisma table does not exist
   if (error.code === 'P2021') {

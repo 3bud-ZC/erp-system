@@ -12,6 +12,7 @@ export interface JournalEntryInput {
   description: string;
   referenceType: string; // SalesInvoice, PurchaseInvoice, Expense
   referenceId: string;
+  tenantId?: string;
   lines: Array<{
     accountCode: string;
     debit: number;
@@ -28,11 +29,13 @@ export const chartOfAccounts = {
   '1001': { nameAr: 'النقد وما يعادله', nameEn: 'Cash & Equivalents', type: 'Asset', subType: 'Cash' },
   '1010': { nameAr: 'حساب بنكي', nameEn: 'Bank Account', type: 'Asset', subType: 'Bank' },
   '1020': { nameAr: 'المستحقات من العملاء', nameEn: 'Accounts Receivable', type: 'Asset', subType: 'Receivable' },
+  '1021': { nameAr: 'الذمم المدينة غير المحصلة', nameEn: 'Unbilled Accounts Receivable', type: 'Asset', subType: 'Receivable' },
   '1030': { nameAr: 'المخزون', nameEn: 'Inventory', type: 'Asset', subType: 'Inventory' },
   '1040': { nameAr: 'الممتلكات والمنشآت والمعدات', nameEn: 'Fixed Assets', type: 'Asset', subType: 'FixedAsset' },
 
   // Liabilities - الالتزامات
   '2010': { nameAr: 'المستحقات للموردين', nameEn: 'Accounts Payable', type: 'Liability', subType: 'Payable' },
+  '2011': { nameAr: 'الذمم الدائنة غير المحصلة', nameEn: 'Unbilled Accounts Payable', type: 'Liability', subType: 'Payable' },
   '2020': { nameAr: 'قرض قصير الأجل', nameEn: 'Short-term Loan', type: 'Liability', subType: 'Loan' },
   '2030': { nameAr: 'ضريبة المبيعات المستحقة', nameEn: 'Sales Tax Payable', type: 'Liability', subType: 'Tax' },
 
@@ -43,6 +46,7 @@ export const chartOfAccounts = {
   // Revenue - الإيرادات
   '4010': { nameAr: 'إيرادات المبيعات', nameEn: 'Sales Revenue', type: 'Revenue', subType: 'Sales' },
   '4020': { nameAr: 'خصم المبيعات', nameEn: 'Sales Discount', type: 'Revenue', subType: 'Discount' },
+  '4030': { nameAr: 'الإيراد غير المحقق', nameEn: 'Unearned Revenue', type: 'Liability', subType: 'UnearnedRevenue' },
 
   // Expenses - المصروفات
   '5010': { nameAr: 'تكلفة البضاعة المباعة', nameEn: 'Cost of Goods Sold', type: 'Expense', subType: 'COGS' },
@@ -51,6 +55,7 @@ export const chartOfAccounts = {
   '5040': { nameAr: 'مصروفات الكهرباء والماء', nameEn: 'Utilities', type: 'Expense', subType: 'Operating' },
   '5050': { nameAr: 'مصروفات التسويق والإعلان', nameEn: 'Marketing', type: 'Expense', subType: 'Operating' },
   '5060': { nameAr: 'مصروفات متنوعة', nameEn: 'Miscellaneous', type: 'Expense', subType: 'Operating' },
+  '5070': { nameAr: 'تعديلات المخزون', nameEn: 'Inventory Adjustment', type: 'Expense', subType: 'Inventory' },
 
   // Manufacturing - الإنتاج
   '6001': { nameAr: 'الإنتاج قيد التنفيذ (WIP)', nameEn: 'Work In Progress', type: 'Asset', subType: 'WIP' },
@@ -59,11 +64,11 @@ export const chartOfAccounts = {
 /**
  * Seed the chart of accounts into the database
  */
-export async function seedChartOfAccounts() {
+export async function seedChartOfAccounts(tenantId: string = 'default') {
   try {
     for (const [code, account] of Object.entries(chartOfAccounts)) {
       await prisma.account.upsert({
-        where: { code },
+        where: { tenantId_code: { tenantId, code } },
         update: {},
         create: {
           code,
@@ -72,6 +77,7 @@ export async function seedChartOfAccounts() {
           type: account.type,
           subType: account.subType,
           isActive: true,
+          tenantId,
         },
       });
     }
@@ -117,6 +123,7 @@ export async function createJournalEntry(entry: JournalEntryInput, createdBy?: s
 
     // Create journal entry with lines in transaction
     const journalEntry = await prisma.journalEntry.create({
+      // @ts-ignore - TODO: Fix tenant relation type issue
       data: {
         entryNumber,
         entryDate: entry.entryDate,
@@ -126,9 +133,11 @@ export async function createJournalEntry(entry: JournalEntryInput, createdBy?: s
         totalDebit,
         totalCredit,
         isPosted: false,
-        createdBy,
         lines: {
-          create: entry.lines,
+          create: entry.lines.map((line: any) => ({
+            ...line,
+            tenantId: entry.tenantId || 'default',
+          })),
         },
       },
       include: {
@@ -169,7 +178,7 @@ export async function postJournalEntry(entryId: string, userId?: string): Promis
     // Update account balances for each line
     for (const line of journalEntry.lines) {
       const account = await prisma.account.findUnique({
-        where: { code: line.accountCode },
+        where: { tenantId_code: { tenantId: line.tenantId, code: line.accountCode } },
       });
 
       if (!account) {
@@ -177,11 +186,11 @@ export async function postJournalEntry(entryId: string, userId?: string): Promis
       }
 
       const isCreditNormal = ['Liability', 'Equity', 'Revenue'].includes(account.type);
-      const balanceChange = isCreditNormal ? line.credit - line.debit : line.debit - line.credit;
+      const balanceChange = isCreditNormal ? Number(line.credit) - Number(line.debit) : Number(line.debit) - Number(line.credit);
 
       // Update account balance
       const updatedAccount = await prisma.account.update({
-        where: { code: line.accountCode },
+        where: { tenantId_code: { tenantId: line.tenantId, code: line.accountCode } },
         data: {
           balance: {
             increment: balanceChange,
@@ -196,8 +205,10 @@ export async function postJournalEntry(entryId: string, userId?: string): Promis
           balance: updatedAccount.balance,
           changeAmount: balanceChange,
           journalEntryId: entryId,
-          changeType: balanceChange > 0 ? 'debit' : 'credit',
+          changeType: Number(line.debit) > 0 ? 'debit' : 'credit',
+          changedAt: new Date(),
           changedBy: userId,
+          tenantId: line.tenantId,
         },
       });
     }
@@ -217,6 +228,144 @@ export async function postJournalEntry(entryId: string, userId?: string): Promis
     console.error('Error posting journal entry:', error);
     throw error;
   }
+}
+
+/**
+ * Create journal entry for Sales Order confirmation
+ * DR: Unbilled Accounts Receivable (1021)
+ * CR: Unearned Revenue (4030)
+ */
+export async function createSalesOrderJournalEntry(
+  orderId: string,
+  orderNumber: string,
+  customerId: string,
+  total: number,
+  date: Date,
+  createdBy?: string
+): Promise<any> {
+  return createJournalEntry({
+    entryDate: date,
+    description: `Sales Order ${orderNumber} - Customer ${customerId}`,
+    referenceType: 'SalesOrder',
+    referenceId: orderId,
+    lines: [
+      {
+        accountCode: '1021', // Unbilled Accounts Receivable
+        debit: total,
+        credit: 0,
+        description: `Unbilled AR for Sales Order ${orderNumber}`,
+      },
+      {
+        accountCode: '4030', // Unearned Revenue
+        debit: 0,
+        credit: total,
+        description: `Unearned Revenue for Sales Order ${orderNumber}`,
+      },
+    ],
+  }, createdBy);
+}
+
+/**
+ * Reverse journal entry for Sales Order (when deleted or cancelled)
+ */
+export async function reverseSalesOrderJournalEntry(orderId: string, userId?: string): Promise<any> {
+  const journalEntry = await prisma.journalEntry.findFirst({
+    where: {
+      referenceType: 'SalesOrder',
+      referenceId: orderId,
+      isPosted: true,
+    },
+    include: { lines: true },
+  });
+
+  if (!journalEntry) {
+    return null; // No journal entry to reverse
+  }
+
+  // Create reversal entry with opposite amounts
+  const reversalLines = journalEntry.lines.map((line) => ({
+    accountCode: line.accountCode,
+    debit: Number(line.credit),
+    credit: Number(line.debit),
+    description: `Reversal of ${line.description}`,
+  }));
+
+  return createJournalEntry({
+    entryDate: new Date(),
+    description: `Reversal of Journal Entry ${journalEntry.entryNumber}`,
+    referenceType: 'SalesOrder',
+    referenceId: orderId,
+    lines: reversalLines,
+  }, userId);
+}
+
+/**
+ * Create journal entry for Purchase Order confirmation
+ * DR: Unbilled Inventory (Asset - could use 1030 or create new)
+ * CR: Unbilled Accounts Payable (2011)
+ */
+export async function createPurchaseOrderJournalEntry(
+  orderId: string,
+  orderNumber: string,
+  supplierId: string,
+  total: number,
+  date: Date,
+  createdBy?: string
+): Promise<any> {
+  return createJournalEntry({
+    entryDate: date,
+    description: `Purchase Order ${orderNumber} - Supplier ${supplierId}`,
+    referenceType: 'PurchaseOrder',
+    referenceId: orderId,
+    lines: [
+      {
+        accountCode: '1030', // Inventory (using existing inventory account)
+        debit: total,
+        credit: 0,
+        description: `Unbilled Inventory for Purchase Order ${orderNumber}`,
+      },
+      {
+        accountCode: '2011', // Unbilled Accounts Payable
+        debit: 0,
+        credit: total,
+        description: `Unbilled AP for Purchase Order ${orderNumber}`,
+      },
+    ],
+  }, createdBy);
+}
+
+/**
+ * Reverse journal entry for Purchase Order (when deleted or cancelled)
+ */
+export async function reversePurchaseOrderJournalEntry(orderId: string, userId?: string): Promise<any> {
+  const journalEntry = await prisma.journalEntry.findFirst({
+    where: {
+      referenceType: 'PurchaseOrder',
+      referenceId: orderId,
+      isPosted: true,
+    },
+    include: { lines: true },
+  });
+
+  if (!journalEntry) {
+    return null; // No journal entry to reverse
+  }
+
+  // Create reversal entry with opposite amounts
+  const reversalLines = journalEntry.lines.map((line) => ({
+    accountCode: line.accountCode,
+    debit: Number(line.credit),
+    credit: Number(line.debit),
+    description: `Reversal of ${line.description}`,
+  }));
+
+  return createJournalEntry({
+    entryDate: new Date(),
+    description: `Reversal of Journal Entry ${journalEntry.entryNumber}`,
+    referenceType: 'PurchaseOrder',
+    referenceId: orderId,
+    lines: reversalLines,
+  }, userId);
 }
 
 /**

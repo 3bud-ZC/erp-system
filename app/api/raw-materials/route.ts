@@ -40,6 +40,10 @@ export async function POST(request: Request) {
       return apiError('الكود والاسم والوحدة مطلوبة', 400);
     }
 
+    if (!user.tenantId) {
+      return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    }
+
     // Check for duplicate code
     const existing = await prisma.product.findUnique({
       where: { code },
@@ -49,6 +53,7 @@ export async function POST(request: Request) {
       return apiError('الكود موجود بالفعل', 400);
     }
 
+    // @ts-ignore - Prisma type mismatch - tenant relation not in generated types
     const material = await prisma.product.create({
       data: {
         code,
@@ -60,6 +65,7 @@ export async function POST(request: Request) {
         cost: parseFloat(cost) || 0,
         stock: parseFloat(stock) || 0,
         minStock: parseFloat(minStock) || 0,
+        tenant: { connect: { id: user.tenantId } },
       },
     });
 

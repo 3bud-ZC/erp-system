@@ -1,11 +1,18 @@
 {
   "version": "0.0.1",
+  "autoPort": true,
   "configurations": [
+    {
+      "name": "ERP Production",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [".next/standalone/server.js"],
+      "autoPort": true
+    },
     {
       "name": "Next.js Dev Server",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
-      "port": 3000
+      "autoPort": true
     },
     {
       "name": "Prisma Studio",

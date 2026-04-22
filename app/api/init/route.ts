@@ -1,228 +1,172 @@
+/**
+ * PRODUCTION SYSTEM INITIALIZATION
+ * 
+ * Security controls:
+ * - Requires SETUP_TOKEN for initialization (env var)
+ * - Concurrency lock prevents parallel initialization
+ * - NO auto-bootstrap on GET
+ * - System state validation
+ * - Idempotent with lock protection
+ */
+
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
+import { 
+  getSystemState, 
+  acquireInitLock, 
+  releaseInitLock, 
+  markInitialized,
+  isSeedingAllowed,
+  lockSystem
+} from '@/lib/system-state';
+import { bootstrapSystem } from '@/lib/system-bootstrap';
+import { logger } from '@/lib/logger';
 
-const prisma = new PrismaClient();
+// Force dynamic to prevent static generation
+export const dynamic = 'force-dynamic';
 
+/**
+ * GET /api/init
+ * Check system status ONLY - NO modification
+ */
 export async function GET() {
   try {
-    console.log('🚀 Starting database initialization...');
-
-    // Test database connection
-    await prisma.$queryRaw`SELECT 1`;
-    console.log('✅ Database connected');
-
-    // Check if already initialized (prevent re-initialization)
-    const existingDemoUser = await prisma.user.findUnique({
-      where: { email: 'demo@erp-system.com' },
-    });
-
-    if (existingDemoUser) {
-      console.log('⚠️ Database already initialized. Skipping initialization.');
-      return NextResponse.json({
-        success: true,
-        message: 'Database already initialized',
-        data: {
-          demoUser: {
-            email: existingDemoUser.email
-          },
-          skipped: true
-        }
-      });
-    }
-
-    // Create demo role
-    const demoRole = await prisma.role.upsert({
-      where: { code: 'demo' },
-      update: {},
-      create: {
-        code: 'demo',
-        nameAr: 'مستخدم تجريبي',
-        nameEn: 'Demo User',
-        description: 'Demo access for testing',
-      },
-    });
-    console.log('✅ Demo role created');
-
-    // Create all permissions
-    const permissions = [
-      // Dashboard
-      'view_dashboard',
-      // Products & Inventory
-      'view_products', 'create_product', 'update_product', 'delete_product',
-      // Warehouses
-      'view_warehouses', 'create_warehouse', 'update_warehouse', 'delete_warehouse',
-      // Customers
-      'view_customers', 'create_customer', 'update_customer', 'delete_customer',
-      // Suppliers
-      'view_suppliers', 'create_supplier', 'update_supplier', 'delete_supplier',
-      // Sales Invoices
-      'view_sales', 'read_sales_invoice', 'create_sales_invoice', 'update_sales_invoice', 'delete_sales_invoice',
-      // Purchase Invoices
-      'view_purchases', 'read_purchase_invoice', 'create_purchase_invoice', 'update_purchase_invoice', 'delete_purchase_invoice',
-      // Production Orders
-      'view_manufacturing', 'read_production_order', 'create_production_order', 'update_production_order', 'delete_production_order',
-      // Accounting
-      'view_accounting', 'manage_accounts',
-      // Reports
-      'view_reports', 'view_financial_reports',
-    ];
-
-    for (const permCode of permissions) {
-      const moduleName = permCode.includes('dashboard') ? 'dashboard' :
-                    permCode.includes('product') || permCode.includes('warehouse') ? 'inventory' :
-                    permCode.includes('customer') ? 'sales' :
-                    permCode.includes('sales') ? 'sales' :
-                    permCode.includes('supplier') ? 'purchases' :
-                    permCode.includes('purchase') ? 'purchases' :
-                    permCode.includes('production') || permCode.includes('manufacturing') ? 'manufacturing' :
-                    permCode.includes('report') || permCode.includes('financial') ? 'reports' :
-                    permCode.includes('accounting') || permCode.includes('account') ? 'accounting' : 'general';
-      
-      const action = permCode.includes('create') ? 'create' :
-                    permCode.includes('update') ? 'update' :
-                    permCode.includes('delete') ? 'delete' : 'read';
-
-      const permission = await prisma.permission.upsert({
-        where: { code: permCode },
-        update: {},
-        create: {
-          code: permCode,
-          nameAr: permCode,
-          nameEn: permCode,
-          description: `Permission for ${permCode}`,
-          module: moduleName,
-          action,
-        },
-      });
-
-      // Link permission to role
-      await prisma.rolePermission.upsert({
-        where: {
-          roleId_permissionId: {
-            roleId: demoRole.id,
-            permissionId: permission.id,
-          },
-        },
-        update: {},
-        create: {
-          roleId: demoRole.id,
-          permissionId: permission.id,
-        },
-      });
-    }
-    console.log('✅ Permissions created and linked');
-
-    // Create demo user
-    const hashedPassword = await bcrypt.hash('demo12345', 10);
+    const { state, settings, blocked } = await getSystemState();
     
-    const demoUser = await prisma.user.upsert({
-      where: { email: 'demo@erp-system.com' },
-      update: {},
-      create: {
-        email: 'demo@erp-system.com',
-        name: 'Demo User',
-        password: hashedPassword,
-        isActive: true,
-      },
-    });
-    console.log('✅ Demo user created');
-
-    // Assign role to user
-    await prisma.userRole.upsert({
-      where: { userId_roleId: { userId: demoUser.id, roleId: demoRole.id } },
-      update: {},
-      create: {
-        userId: demoUser.id,
-        roleId: demoRole.id,
-      },
-    });
-    console.log('✅ Role assigned to user');
-
-    // Create sample data
-    const sampleProducts = [
-      { code: 'PROD-001', nameAr: 'منتج تجريبي 1', nameEn: 'Sample Product 1', type: 'finished', unit: 'piece', price: 100, cost: 50, stock: 10, minStock: 5 },
-      { code: 'PROD-002', nameAr: 'منتج تجريبي 2', nameEn: 'Sample Product 2', type: 'raw', unit: 'kg', price: 50, cost: 25, stock: 20, minStock: 10 },
-    ];
-
-    for (const product of sampleProducts) {
-      await prisma.product.upsert({
-        where: { code: product.code },
-        update: {},
-        create: product,
-      });
-    }
-    console.log('✅ Sample products created');
-
-    // Create sample warehouse
-    await prisma.warehouse.upsert({
-      where: { code: 'MAIN' },
-      update: {},
-      create: {
-        code: 'MAIN',
-        nameAr: 'المخزن الرئيسي',
-        nameEn: 'Main Warehouse',
-        address: 'شارع التحرير، القاهرة',
-        phone: '01000000000',
-        manager: 'مدير المخزن',
-      },
-    });
-    console.log('✅ Sample warehouse created');
-
-    // Create sample customers
-    await prisma.customer.upsert({
-      where: { id: 'customer-1' },
-      update: {},
-      create: {
-        id: 'customer-1',
-        code: 'CUST-001',
-        nameAr: 'عميل تجريبي',
-        nameEn: 'Demo Customer',
-        email: 'customer@example.com',
-        phone: '01001234567',
-        address: 'القاهرة',
-      },
-    });
-    console.log('✅ Sample customer created');
-
-    // Create sample suppliers
-    await prisma.supplier.upsert({
-      where: { id: 'supplier-1' },
-      update: {},
-      create: {
-        id: 'supplier-1',
-        code: 'SUP-001',
-        nameAr: 'مورد تجريبي',
-        nameEn: 'Demo Supplier',
-        email: 'supplier@example.com',
-        phone: '01101234567',
-        address: 'القاهرة',
-      },
-    });
-    console.log('✅ Sample supplier created');
+    logger.info({ state, blocked }, 'System status check');
 
     return NextResponse.json({
       success: true,
-      message: 'Database initialized successfully',
-      data: {
-        demoUser: {
-          email: 'demo@erp-system.com'
-        },
-        products: 2,
-        warehouse: 1,
-        customer: 1,
-        supplier: 1
-      }
+      state,
+      blocked,
+      initialized: settings?.initialized || false,
+      locked: settings?.locked || false,
+      productionMode: settings?.productionMode || false,
+      message: blocked 
+        ? 'System not initialized' 
+        : 'System ready',
     });
 
   } catch (error: any) {
-    console.error('❌ Initialization error:', error);
+    logger.error({ error: error.message }, 'Status check failed');
     return NextResponse.json({
       success: false,
-      message: 'فشل في تهيئة قاعدة البيانات',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: 'Failed to check system status',
     }, { status: 500 });
-  } finally {
-    await prisma.$disconnect();
+  }
+}
+
+/**
+ * POST /api/init
+ * Initialize system with authorization token
+ */
+export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
+  
+  try {
+    // Verify authorization
+    const authHeader = request.headers.get('authorization');
+    const setupToken = process.env.SETUP_TOKEN;
+    
+    if (!setupToken) {
+      logger.error('SETUP_TOKEN not configured');
+      return NextResponse.json({
+        success: false,
+        message: 'System not configured for initialization',
+      }, { status: 500 });
+    }
+    
+    if (authHeader !== `Bearer ${setupToken}`) {
+      logger.warn({ requestId }, 'Unauthorized initialization attempt');
+      return NextResponse.json({
+        success: false,
+        message: 'Unauthorized',
+      }, { status: 401 });
+    }
+
+    // Check if seeding is allowed
+    const { allowed, reason } = await isSeedingAllowed();
+    
+    if (!allowed) {
+      logger.warn({ requestId, reason }, 'Seeding not allowed');
+      return NextResponse.json({
+        success: false,
+        message: reason || 'Seeding not allowed',
+      }, { status: 403 });
+    }
+
+    // Acquire lock (prevents concurrent initialization)
+    const { acquired, lockId, error: lockError } = await acquireInitLock();
+    
+    if (!acquired || !lockId) {
+      logger.warn({ requestId, lockError }, 'Failed to acquire init lock');
+      return NextResponse.json({
+        success: false,
+        message: lockError || 'Initialization in progress or system already initialized',
+      }, { status: 423 });
+    }
+
+    logger.info({ requestId, lockId }, 'Lock acquired, starting initialization');
+
+    try {
+      // Run bootstrap
+      const result = await bootstrapSystem();
+
+      if (!result.success) {
+        logger.error({ requestId, errors: result.errors }, 'Bootstrap failed');
+        return NextResponse.json({
+          success: false,
+          message: 'System initialization failed',
+          errors: result.errors,
+        }, { status: 500 });
+      }
+
+      // Mark system as initialized
+      const marked = await markInitialized(lockId);
+      
+      if (!marked) {
+        logger.error({ requestId }, 'Failed to mark system initialized');
+        return NextResponse.json({
+          success: false,
+          message: 'Failed to finalize initialization',
+        }, { status: 500 });
+      }
+
+      // Lock system in production mode (IRREVERSIBLE)
+      if (process.env.NODE_ENV === 'production') {
+        await lockSystem();
+        logger.warn({ requestId }, '🔒 PRODUCTION LOCK APPLIED - System locked');
+      }
+
+      logger.info({ 
+        requestId, 
+        created: result.created,
+        state: process.env.NODE_ENV === 'production' ? 'LOCKED' : 'INITIALIZED',
+        locked: process.env.NODE_ENV === 'production',
+      }, '✅ System initialized successfully');
+
+      return NextResponse.json({
+        success: true,
+        message: 'System initialized successfully',
+        state: process.env.NODE_ENV === 'production' ? 'LOCKED' : 'INITIALIZED',
+        locked: process.env.NODE_ENV === 'production',
+        created: result.created,
+        warning: process.env.NODE_ENV === 'production' 
+          ? '🔒 PRODUCTION MODE: System locked. Change default credentials immediately!' 
+          : undefined,
+      });
+
+    } finally {
+      // Always release lock
+      if (lockId) {
+        await releaseInitLock(lockId);
+      }
+    }
+
+  } catch (error: any) {
+    logger.error({ requestId, error: error.message }, 'Initialization error');
+    return NextResponse.json({
+      success: false,
+      message: 'Initialization failed',
+    }, { status: 500 });
   }
 }

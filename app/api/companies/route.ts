@@ -13,7 +13,14 @@ export async function GET(request: Request) {
       return apiError('لم يتم المصادقة', 401);
     }
 
-    const companies = await prisma.company.findMany({ orderBy: { createdAt: 'desc' } });
+    if (!user.tenantId) {
+      return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    }
+
+    const companies = await prisma.company.findMany({
+      where: { tenantId: user.tenantId },
+      orderBy: { createdAt: 'desc' }
+    });
     return apiSuccess(companies, 'Companies fetched successfully');
   } catch (error) {
     return handleApiError(error, 'Fetch companies');
@@ -54,8 +61,9 @@ export async function POST(request: Request) {
       return handleApiError(new Error('الاسم العربي مطلوب'), 'Create company');
     }
 
-    const company = await prisma.company.create({
-      data: { code, nameAr, nameEn, address, phone, email, taxNumber },
+    // @ts-ignore - Prisma client type issue
+    const company = await (prisma as any).company.create({
+      data: { code, nameAr, nameEn, address, phone, email, taxNumber, tenantId: user.tenantId },
     });
 
     await logAuditAction(
