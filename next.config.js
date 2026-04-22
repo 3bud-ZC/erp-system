@@ -18,12 +18,15 @@ const nextConfig = {
     unoptimized: true,
   },
   
+  // Packages that must NOT be bundled by webpack (use native Node.js require).
+  // pino/thread-stream spawn worker threads; bundled paths break in Next.js.
+  serverExternalPackages: ['pino', 'pino-pretty', 'thread-stream', 'sonic-boom'],
+
   // Experimental features
   experimental: {
     optimizePackageImports: ['lucide-react', 'chart.js', 'react-chartjs-2'],
-    // Prevent webpack from bundling pino — it uses worker threads
-    // that break when paths are resolved inside webpack chunks.
-    serverComponentsExternalPackages: ['pino', 'pino-pretty', 'thread-stream'],
+    // Legacy alias kept for Next.js 14 compatibility
+    serverComponentsExternalPackages: ['pino', 'pino-pretty', 'thread-stream', 'sonic-boom'],
   },
   
   // Environment variables that should be available on the client
