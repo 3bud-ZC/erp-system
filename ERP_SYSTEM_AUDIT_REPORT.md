@@ -1,3 +1,10 @@
+- Add period lock mechanism
+- Files: prisma/schema.prisma, app/api/accounting-periods/route.ts (NEW)
+
+### Task 2.2: Bank Reconciliation
+- Create BankReconciliation model
+- Add matching logic
+- Files: prisma/schema.prisma, app/api/bank-reconciliation/route.ts (NEW)
 # COMPLETE SYSTEM AUDIT AND FIX PLAN
 ## Production-Grade ERP System
 
@@ -248,13 +255,6 @@ Account.balance updated directly without audit trail. Should be calculated from 
 
 ### Task 2.1: Implement Period Closing
 - Create AccountingPeriod model
-- Add period lock mechanism
-- Files: prisma/schema.prisma, app/api/accounting-periods/route.ts (NEW)
-
-### Task 2.2: Bank Reconciliation
-- Create BankReconciliation model
-- Add matching logic
-- Files: prisma/schema.prisma, app/api/bank-reconciliation/route.ts (NEW)
 
 ### Task 2.3: Accrual Accounting for Orders
 - Add accrual journal entries to order handlers

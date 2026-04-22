@@ -5,6 +5,9 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   
+  // Use standalone output to avoid static generation issues
+  output: 'standalone',
+  
   // Optimize for production
   compress: true,
   

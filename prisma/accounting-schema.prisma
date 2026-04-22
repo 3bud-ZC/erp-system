@@ -1,0 +1,294 @@
+// ============================================================================
+// ACCOUNTING SYSTEM SCHEMA
+// Multi-tenant, double-entry bookkeeping with event-driven integration
+// ============================================================================
+
+// ============================================================================
+// CHART OF ACCOUNTS
+// ============================================================================
+
+model ChartOfAccount {
+  id              String   @id @default(cuid())
+  tenantId        String
+  code            String   // Account code (e.g., "1001", "2010")
+  nameAr          String   // Arabic name
+  nameEn          String?  // English name
+  type            AccountType
+  subType         String?  // Sub-type for detailed classification
+  parentId        String?  // For hierarchical accounts
+  parent          ChartOfAccount? @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children        ChartOfAccount[] @relation("AccountHierarchy")
+  normalBalance   BalanceType @default(DEBIT) // Normal balance for this account type
+  isActive        Boolean  @default(true)
+  allowManualEntry Boolean  @default(true) // Allow manual journal entries to this account
+  currencyId      String?  // Multi-currency support
+  description     String?
+  level           Int      @default(0) // Hierarchy level (0 = root)
+  path            String?  // Materialized path for hierarchy (e.g., "1000/1100/1101")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  currency        Currency? @relation(fields: [currencyId], references: [id])
+  journalLines    JournalEntryLine[]
+  balances        AccountBalance[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, type])
+  @@index([tenantId, parentId])
+  @@index([tenantId, isActive])
+  @@map("ChartOfAccount")
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+enum BalanceType {
+  DEBIT
+  CREDIT
+}
+
+// ============================================================================
+// JOURNAL ENTRY
+// ============================================================================
+
+model JournalEntry {
+  id              String   @id @default(cuid())
+  tenantId        String
+  entryNumber     String   // Auto-generated sequential number per tenant
+  entryDate       DateTime
+  description     String
+  referenceType   String?  // Source document type (SalesInvoice, PurchaseInvoice, Payment, etc.)
+  referenceId     String?  // Source document ID
+  totalDebit      Decimal  @db.Decimal(20, 2)
+  totalCredit     Decimal  @db.Decimal(20, 2)
+  status          EntryStatus @default(DRAFT)
+  postedAt        DateTime?
+  postedBy        String?  // User who posted the entry
+  fiscalYearId    String?
+  fiscalYear      FiscalYear? @relation(fields: [fiscalYearId], references: [id])
+  accountingPeriodId String?
+  accountingPeriod AccountingPeriod? @relation(fields: [accountingPeriodId], references: [id])
+  reversalEntryId String?  // If this is a reversal, points to original entry
+  reversalEntry   JournalEntry? @relation("EntryReversal", fields: [reversalEntryId], references: [id])
+  reversedBy      JournalEntry? @relation("EntryReversal")
+  sourceEventId   String?  // ID of the domain event that triggered this entry
+  correlationId   String?  // For tracing related operations
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdBy       String?
+  updatedBy       String?
+
+  // Relations
+  lines           JournalEntryLine[]
+
+  @@unique([tenantId, entryNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, entryDate])
+  @@index([tenantId, referenceType, referenceId])
+  @@index([tenantId, fiscalYearId])
+  @@index([tenantId, accountingPeriodId])
+  @@index([tenantId, sourceEventId])
+  @@map("JournalEntry")
+}
+
+enum EntryStatus {
+  DRAFT
+  POSTED
+  REVERSED
+}
+
+// ============================================================================
+// JOURNAL ENTRY LINE
+// ============================================================================
+
+model JournalEntryLine {
+  id              String   @id @default(cuid())
+  tenantId        String
+  journalEntryId  String
+  journalEntry    JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  accountCode     String
+  account         ChartOfAccount @relation(fields: [accountCode], references: [code])
+  debit           Decimal  @db.Decimal(20, 2)
+  credit          Decimal  @db.Decimal(20, 2)
+  description     String?
+  lineNumber      Int      // Order within the entry
+  amount          Decimal  @db.Decimal(20, 2) // Absolute value for easier queries
+  currencyId      String?  // If different from account currency
+  exchangeRate    Decimal? @db.Decimal(10, 6) // Exchange rate if multi-currency
+  createdAt       DateTime @default(now())
+
+  @@index([tenantId, journalEntryId])
+  @@index([tenantId, accountCode])
+  @@index([tenantId, accountCode, createdAt])
+  @@map("JournalEntryLine")
+}
+
+// ============================================================================
+// FISCAL YEAR
+// ============================================================================
+
+model FiscalYear {
+  id              String   @id @default(cuid())
+  tenantId        String
+  name            String   // e.g., "FY 2024"
+  startDate       DateTime
+  endDate         DateTime
+  isClosed        Boolean  @default(false)
+  closedAt        DateTime?
+  closedBy        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  accountingPeriods AccountingPeriod[]
+  journalEntries  JournalEntry[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, startDate])
+  @@index([tenantId, endDate])
+  @@map("FiscalYear")
+}
+
+// ============================================================================
+// ACCOUNTING PERIOD
+// ============================================================================
+
+model AccountingPeriod {
+  id              String   @id @default(cuid())
+  tenantId        String
+  fiscalYearId    String
+  fiscalYear      FiscalYear @relation(fields: [fiscalYearId], references: [id])
+  name            String   // e.g., "Jan 2024", "Q1 2024"
+  periodType      PeriodType @default(MONTHLY)
+  startDate       DateTime
+  endDate         DateTime
+  status          PeriodStatus @default(OPEN)
+  closedAt        DateTime?
+  closedBy        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  journalEntries  JournalEntry[]
+
+  @@unique([tenantId, fiscalYearId, name])
+  @@index([tenantId, fiscalYearId])
+  @@index([tenantId, startDate])
+  @@index([tenantId, endDate])
+  @@index([tenantId, status])
+  @@map("AccountingPeriod")
+}
+
+enum PeriodType {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+  CUSTOM
+}
+
+enum PeriodStatus {
+  OPEN
+  CLOSED
+}
+
+// ============================================================================
+// ACCOUNT BALANCE (Cached for performance)
+// ============================================================================
+
+model AccountBalance {
+  id              String   @id @default(cuid())
+  tenantId        String
+  accountCode     String
+  account         ChartOfAccount @relation(fields: [accountCode], references: [code])
+  fiscalYearId    String?
+  accountingPeriodId String?
+  balance         Decimal  @db.Decimal(20, 2) // Net balance (debit - credit)
+  debitTotal      Decimal  @db.Decimal(20, 2)
+  creditTotal     Decimal  @db.Decimal(20, 2)
+  asOfDate        DateTime
+  lastEntryId     String?  // Last journal entry affecting this balance
+  lastEntryDate   DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([tenantId, accountCode, fiscalYearId, accountingPeriodId])
+  @@index([tenantId, accountCode])
+  @@index([tenantId, fiscalYearId])
+  @@index([tenantId, accountingPeriodId])
+  @@index([tenantId, asOfDate])
+  @@map("AccountBalance")
+}
+
+// ============================================================================
+// CURRENCY (Multi-currency support)
+// ============================================================================
+
+model Currency {
+  id              String   @id @default(cuid())
+  code            String   @unique // ISO 4217 code (USD, EUR, SAR, etc.)
+  name            String
+  symbol          String
+  decimalPlaces   Int      @default(2)
+  isActive        Boolean  @default(true)
+  exchangeRate    Decimal? @db.Decimal(10, 6) // Base currency rate
+  baseCurrency    Boolean  @default(false) // Is this the base currency?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  accounts        ChartOfAccount[]
+
+  @@index([isActive])
+  @@map("Currency")
+}
+
+// ============================================================================
+// DATABASE CONSTRAINTS (PostgreSQL)
+// ============================================================================
+
+/*
+-- Add these constraints via migration:
+
+-- Journal entry balance check
+ALTER TABLE "JournalEntry" 
+  ADD CONSTRAINT "JournalEntry_BalanceCheck" 
+  CHECK ("totalDebit" = "totalCredit");
+
+-- Journal entry line mutual exclusivity
+ALTER TABLE "JournalEntryLine" 
+  ADD CONSTRAINT "JournalEntryLine_MutualExclusivity" 
+  CHECK (
+    ("debit" > 0 AND "credit" = 0) OR 
+    ("credit" > 0 AND "debit" = 0)
+  );
+
+-- Journal entry line non-zero
+ALTER TABLE "JournalEntryLine" 
+  ADD CONSTRAINT "JournalEntryLine_NonZero" 
+  CHECK ("debit" > 0 OR "credit" > 0);
+
+-- Posted entries cannot be modified
+ALTER TABLE "JournalEntry" 
+  ADD CONSTRAINT "JournalEntry_ImmutablePosted" 
+  CHECK (
+    NOT ("status" = 'POSTED' AND "updatedAt" > "postedAt")
+  );
+
+-- Period date validation
+ALTER TABLE "AccountingPeriod" 
+  ADD CONSTRAINT "AccountingPeriod_DateOrder" 
+  CHECK ("startDate" < "endDate");
+
+-- Fiscal year date validation
+ALTER TABLE "FiscalYear" 
+  ADD CONSTRAINT "FiscalYear_DateOrder" 
+  CHECK ("startDate" < "endDate");
+
+-- Account hierarchy cannot create cycles (trigger needed)
+*/

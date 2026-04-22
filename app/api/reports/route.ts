@@ -178,29 +178,10 @@ async function getCashFlowReport(fromDate?: Date, toDate?: Date) {
   const startDate = fromDate || new Date(new Date().getFullYear(), 0, 1);
   const endDate = toDate || new Date();
 
-  const operatingEntries = await prisma.journalEntry.findMany({
+  const allEntries = await prisma.journalEntry.findMany({
     where: {
       isPosted: true,
       entryDate: { gte: startDate, lte: endDate },
-      referenceType: { in: ['SalesInvoice', 'Expense'] },
-    },
-    include: { lines: true },
-  });
-
-  const investingEntries = await prisma.journalEntry.findMany({
-    where: {
-      isPosted: true,
-      entryDate: { gte: startDate, lte: endDate },
-      referenceType: { in: ['FixedAsset', 'Equipment'] },
-    },
-    include: { lines: true },
-  });
-
-  const financingEntries = await prisma.journalEntry.findMany({
-    where: {
-      isPosted: true,
-      entryDate: { gte: startDate, lte: endDate },
-      referenceType: { in: ['Loan', 'Capital'] },
     },
     include: { lines: true },
   });
@@ -209,10 +190,37 @@ async function getCashFlowReport(fromDate?: Date, toDate?: Date) {
   let investingCash = 0;
   let financingCash = 0;
 
-  operatingEntries.forEach((entry) => {
-    entry.lines.forEach((line) => {
-      if (['1001', '1010'].includes(line.accountCode)) {
-        operatingCash += Number(line.debit) - Number(line.credit);
+  allEntries.forEach((entry: any) => {
+    entry.lines.forEach((line: any) => {
+      const accountCode = line.accountCode;
+      const debit = Number(line.debit);
+      const credit = Number(line.credit);
+      const netCash = debit - credit;
+
+      // Operating activities: Revenue, expenses, AR/AP changes
+      // Accounts: 1001 (Cash), 1010 (Bank), 1021 (AR), 2011 (AP), 4xxx (Revenue), 5xxx (Expenses)
+      if (['1001', '1010'].includes(accountCode)) {
+        // Cash and bank accounts - determine activity type based on reference type
+        if (['SalesInvoice', 'SalesReturn', 'PurchaseInvoice', 'PurchaseReturn', 'Payment'].includes(entry.referenceType || '')) {
+          operatingCash += netCash;
+        } else if (['FixedAsset', 'AssetSale'].includes(entry.referenceType || '')) {
+          investingCash += netCash;
+        } else if (['Loan', 'Capital', 'Dividend'].includes(entry.referenceType || '')) {
+          financingCash += netCash;
+        } else {
+          // Default to operating for manual entries
+          operatingCash += netCash;
+        }
+      }
+
+      // Investing activities: Fixed assets (account 12xx)
+      if (accountCode.startsWith('12')) {
+        investingCash += netCash;
+      }
+
+      // Financing activities: Loans (account 20xx), Capital (account 30xx), Dividends (account 4020)
+      if (accountCode.startsWith('20') || accountCode.startsWith('30') || accountCode === '4020') {
+        financingCash += netCash;
       }
     });
   });

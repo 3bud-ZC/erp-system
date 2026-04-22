@@ -15,7 +15,12 @@ export async function GET(request: Request) {
       return apiError('لم يتم المصادقة', 401);
     }
 
+    if (!user.tenantId) {
+      return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    }
+
     const customers = await prisma.customer.findMany({
+      where: { tenantId: user.tenantId },
       orderBy: { createdAt: 'desc' },
     });
     return apiSuccess(customers, 'Customers fetched successfully');
@@ -37,8 +42,29 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
+    
+    if (!user.tenantId) {
+      return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    }
+    
+    // Remove tenantId from body if present - will be set from user context
+    const { tenantId, ...customerData } = body;
+    
+    console.log('Creating customer with data:', customerData);
+    console.log('Setting tenantId:', user.tenantId);
+    
     const customer = await prisma.customer.create({
-      data: body,
+      data: { 
+        code: customerData.code,
+        nameAr: customerData.nameAr,
+        nameEn: customerData.nameEn,
+        email: customerData.email,
+        phone: customerData.phone,
+        address: customerData.address,
+        creditLimit: customerData.creditLimit,
+        taxNumber: customerData.taxNumber,
+        tenantId: user.tenantId
+      },
     });
 
     await logAuditAction(
@@ -53,7 +79,8 @@ export async function POST(request: Request) {
     );
 
     return apiSuccess(customer, 'Customer created successfully');
-  } catch (error) {
+  } catch (error: any) {
+    console.error('Create customer error:', error);
     return handleApiError(error, 'Create customer');
   }
 }

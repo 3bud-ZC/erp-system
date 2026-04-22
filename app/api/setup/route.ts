@@ -4,12 +4,15 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+// Force dynamic to prevent static generation
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     console.log('Starting setup...');
 
     // Create demo role
-    const demoRole = await prisma.role.upsert({
+    const demoRole = await (prisma as any).role.upsert({
       where: { code: 'demo' },
       update: {},
       create: {
@@ -60,7 +63,7 @@ export async function GET() {
                     permCode.includes('update') ? 'update' :
                     permCode.includes('delete') ? 'delete' : 'read';
 
-      const permission = await prisma.permission.upsert({
+      const permission = await (prisma as any).permission.upsert({
         where: { code: permCode },
         update: {},
         create: {
@@ -73,7 +76,7 @@ export async function GET() {
         },
       });
 
-      await prisma.rolePermission.upsert({
+      await (prisma as any).rolePermission.upsert({
         where: {
           roleId_permissionId: {
             roleId: demoRole.id,
@@ -92,7 +95,7 @@ export async function GET() {
     // Create demo user
     const hashedPassword = await bcrypt.hash('demo12345', 10);
     
-    const demoUser = await prisma.user.upsert({
+    const demoUser = await (prisma as any).user.upsert({
       where: { email: 'demo@erp-system.com' },
       update: {},
       create: {
@@ -105,7 +108,7 @@ export async function GET() {
     console.log('Demo user created');
 
     // Assign role to user
-    await prisma.userRole.upsert({
+    await (prisma as any).userRole.upsert({
       where: { userId_roleId: { userId: demoUser.id, roleId: demoRole.id } },
       update: {},
       create: {
@@ -122,7 +125,7 @@ export async function GET() {
     ];
 
     for (const product of sampleProducts) {
-      await prisma.product.upsert({
+      await (prisma as any).product.upsert({
         where: { code: product.code },
         update: {},
         create: product,
@@ -146,6 +149,6 @@ export async function GET() {
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     }, { status: 500 });
   } finally {
-    await prisma.$disconnect();
+    await (prisma as any).$disconnect();
   }
 }

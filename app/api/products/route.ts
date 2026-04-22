@@ -17,11 +17,18 @@ export async function GET(request: Request) {
       return apiError('لم يتم المصادقة', 401);
     }
 
+    if (!user.tenantId) {
+      return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    }
+
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') || 'finished_product';
 
     const products = await prisma.product.findMany({
-      where: { type },
+      where: {
+        type,
+        tenantId: user.tenantId,
+      },
       orderBy: { createdAt: 'desc' },
       include: {
         unitRef: true,
@@ -74,11 +81,17 @@ export async function POST(request: Request) {
       return apiError('الحد الأدنى للمخزون يجب أن يكون رقماً موجباً أو صفراً', 400);
     }
 
+    // Check tenantId exists
+    if (!user.tenantId) {
+      return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    }
+
     // Whitelist allowed fields — prevent injection of unexpected Prisma fields
     const productData: any = {
       code: code.trim(),
       nameAr: nameAr.trim(),
       unit: body.unit?.toString()?.trim() || 'piece', // Required field with default
+      tenantId: user.tenantId, // Direct tenantId assignment
       ...(nameEn && { nameEn: String(nameEn).trim() }),
       ...(type && { type: String(type) }),
       ...(price !== undefined && { price: Number(price) }),

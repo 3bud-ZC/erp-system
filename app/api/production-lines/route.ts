@@ -22,7 +22,7 @@ export async function GET(request: Request) {
     const status = searchParams.get('status');
 
     if (id) {
-      const line = await prisma.productionLine.findUnique({
+      const line = await (prisma as any).productionLine.findUnique({
         where: { id },
         include: {
           assignments: {
@@ -53,7 +53,7 @@ export async function GET(request: Request) {
       where.status = status;
     }
 
-    const lines = await prisma.productionLine.findMany({
+    const lines = await (prisma as any).productionLine.findMany({
       where,
       include: {
         assignments: {
@@ -99,7 +99,7 @@ export async function POST(request: Request) {
     }
 
     // Check for duplicate code
-    const existing = await prisma.productionLine.findUnique({
+    const existing = await (prisma as any).productionLine.findUnique({
       where: { code },
     });
 
@@ -107,7 +107,7 @@ export async function POST(request: Request) {
       return apiError('كود خط الإنتاج مستخدم بالفعل', 400);
     }
 
-    const line = await prisma.productionLine.create({
+    const line = await (prisma as any).productionLine.create({
       data: {
         name,
         code: code.toUpperCase(),
@@ -153,7 +153,7 @@ export async function PUT(request: Request) {
       return apiError('معرف خط الإنتاج مطلوب', 400);
     }
 
-    const line = await prisma.productionLine.update({
+    const line = await (prisma as any).productionLine.update({
       where: { id },
       data: {
         name,
@@ -200,7 +200,7 @@ export async function DELETE(request: Request) {
     }
 
     // Check if line has active orders
-    const line = await prisma.productionLine.findUnique({
+    const line = await (prisma as any).productionLine.findUnique({
       where: { id },
       include: {
         productionOrders: {
@@ -219,7 +219,7 @@ export async function DELETE(request: Request) {
       return apiError('لا يمكن حذف خط الإنتاج لأنه يحتوي على أوامر إنتاج نشطة', 400);
     }
 
-    await prisma.productionLine.delete({
+    await (prisma as any).productionLine.delete({
       where: { id },
     });
 

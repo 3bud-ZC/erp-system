@@ -18,6 +18,7 @@ export async function recordStockMovement(
   productId: string,
   type: string, // IN, OUT, ADJUSTMENT, MANUFACTURING_IN, MANUFACTURING_OUT
   quantity: number,
+  tenantId: string,
   reference?: string,
   referenceType?: string,
   notes?: string
@@ -31,6 +32,7 @@ export async function recordStockMovement(
         referenceId: reference,
         notes,
         date: new Date(),
+        tenantId,
       },
     });
   } catch (error) {
@@ -94,6 +96,7 @@ export async function validateStockAvailability(
 export async function decrementStockInTransaction(
   tx: any, // Prisma transaction client
   items: { productId: string; quantity: number }[],
+  tenantId: string,
   referenceId?: string,
   referenceType?: string
 ): Promise<void> {
@@ -116,6 +119,7 @@ export async function decrementStockInTransaction(
           quantity: -item.quantity,
           referenceId: referenceId,
           date: new Date(),
+          tenantId,
         },
       });
     }
@@ -128,6 +132,7 @@ export async function decrementStockInTransaction(
 export async function incrementStockInTransaction(
   tx: any, // Prisma transaction client
   items: { productId: string; quantity: number }[],
+  tenantId: string,
   referenceId?: string,
   referenceType?: string
 ): Promise<void> {
@@ -150,6 +155,7 @@ export async function incrementStockInTransaction(
           quantity: item.quantity,
           referenceId: referenceId,
           date: new Date(),
+          tenantId,
         },
       });
     }

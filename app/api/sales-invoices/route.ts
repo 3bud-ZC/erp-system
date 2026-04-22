@@ -5,11 +5,16 @@ import { prisma } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 import { validateStockAvailability } from '@/lib/inventory';
-import { decrementStockWithTransaction, atomicDecrementStock, createInventoryTransaction } from '@/lib/inventory-transactions';
 import { createSalesInvoiceEntry, postJournalEntry, reverseJournalEntry } from '@/lib/accounting';
+import { createInventoryTransaction } from '@/lib/inventory-transactions';
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
 import { logActivity } from '@/lib/activity-log';
+import { 
+  createSalesInvoiceAtomic, 
+  TransactionError,
+  handleTransactionError 
+} from '@/lib/erp-execution-engine/services/atomic-transaction-service';
 
 // GET - Read sales invoices (requires read_sales_invoice permission)
 export async function GET(request: Request) {
@@ -19,7 +24,12 @@ export async function GET(request: Request) {
       return apiError('لم يتم المصادقة', 401);
     }
 
-    const invoices = await prisma.salesInvoice.findMany({
+    if (!user.tenantId) {
+      return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    }
+
+    const invoices = await (prisma as any).salesInvoice.findMany({
+      where: { tenantId: user.tenantId },
       include: {
         customer: true,
         items: {
@@ -51,6 +61,13 @@ export async function POST(request: Request) {
     const body = await request.json();
       const { items, ...invoiceData } = body;
 
+      // Ensure tenantId comes from user context, not request body
+      const { tenantId, ...safeInvoiceData } = invoiceData;
+
+      if (!user.tenantId) {
+        return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+      }
+
       // STEP 1: Quick pre-check for early user-friendly error (outside transaction)
       const validation = await validateStockAvailability(items);
       if (!validation.valid) {
@@ -61,32 +78,16 @@ export async function POST(request: Request) {
         );
       }
 
-      // STEP 2: Create invoice, atomically decrement stock, and create journal entry in one transaction.
-      // This ensures atomicity: if journal entry fails, stock update also rolls back.
-      const total = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
-      const invoice = await prisma.$transaction(async (tx) => {
-        const newInvoice = await tx.salesInvoice.create({
-          data: {
-            ...invoiceData,
-            items: {
-              create: items,
-            },
-          },
-          include: {
-            items: true,
-          },
-        });
-
-        // Atomic stock decrement: throws and rolls back if stock becomes insufficient
-        await atomicDecrementStock(tx, items, newInvoice.id, 'sale');
-
-        // Create journal entry inside transaction for atomicity
-        const journalEntry = await createSalesInvoiceEntry(newInvoice.id, total);
-        if (journalEntry) {
-          await postJournalEntry(journalEntry.id);
-        }
-
-        return newInvoice;
+      // STEP 2: Create invoice + update inventory + create journal entry ATOMICALLY
+      // All operations succeed or all rollback - NO partial writes allowed
+      const { invoice, journalEntry } = await createSalesInvoiceAtomic({
+        invoiceData: {
+          ...safeInvoiceData,
+          invoiceNumber: safeInvoiceData.invoiceNumber || `INV-${Date.now()}`,
+        },
+        items,
+        tenantId: user.tenantId,
+        userId: user.id,
       });
 
       // Log audit action
@@ -111,7 +112,9 @@ export async function POST(request: Request) {
       });
 
       return apiSuccess(invoice, 'Sales invoice created successfully');
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Sales invoice creation error:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
       return handleApiError(error, 'Create sales invoice');
     }
   }
@@ -182,7 +185,7 @@ export async function PUT(request: Request) {
       }
 
       // STEP 4: Execute update atomically with stock delta adjustments
-      const invoice = await prisma.$transaction(async (tx) => {
+      const invoice = await (prisma as any).$transaction(async (tx: any) => {
         await tx.salesInvoiceItem.deleteMany({
           where: { salesInvoiceId: id },
         });

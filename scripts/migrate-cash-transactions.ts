@@ -143,10 +143,10 @@ function clearCheckpoint(): void {
 // ACCOUNT VALIDATION SYSTEM
 // ============================================================================
 
-async function validateOrCreateAccount(accountCode: string, autoCreate: boolean): Promise<{ valid: boolean; created: boolean; error?: string }> {
+async function validateOrCreateAccount(accountCode: string, autoCreate: boolean, tenantId: string = 'default'): Promise<{ valid: boolean; created: boolean; error?: string }> {
   try {
     const account = await prisma.account.findUnique({
-      where: { code: accountCode },
+      where: { tenantId_code: { tenantId, code: accountCode } },
     });
 
     if (account) {
@@ -160,7 +160,7 @@ async function validateOrCreateAccount(accountCode: string, autoCreate: boolean)
     const defaultAccount = DEFAULT_ACCOUNTS[accountCode as keyof typeof DEFAULT_ACCOUNTS];
     if (defaultAccount) {
       await prisma.account.create({
-        data: defaultAccount,
+        data: { ...defaultAccount, tenantId },
       });
       console.log(`  [AUTO-CREATE] Created account: ${accountCode} - ${defaultAccount.nameEn}`);
       return { valid: true, created: true };

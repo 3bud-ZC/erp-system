@@ -16,8 +16,15 @@ export async function GET(request: Request) {
       return apiError('لم يتم المصادقة', 401);
     }
 
+    if (!user.tenantId) {
+      return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    }
+
     const accounts = await prisma.account.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        tenantId: user.tenantId,
+      },
       include: {
         journalLines: {
           where: {
@@ -84,7 +91,7 @@ export async function POST(request: Request) {
 
     // Check if code already exists
     const existingAccount = await prisma.account.findUnique({
-      where: { code },
+      where: { tenantId_code: { tenantId: user.tenantId!, code } },
     });
 
     if (existingAccount) {
@@ -112,6 +119,7 @@ export async function POST(request: Request) {
         description,
         isActive: true,
         balance: 0,
+        tenantId: user.tenantId!,
       },
     });
 
@@ -162,7 +170,7 @@ export async function PUT(request: Request) {
 
     // Check if account exists
     const existingAccount = await prisma.account.findUnique({
-      where: { id },
+      where: { tenantId_code: { tenantId: user.tenantId!, code } },
     });
 
     if (!existingAccount) {
@@ -172,7 +180,7 @@ export async function PUT(request: Request) {
     // Check if code is being changed and if new code already exists
     if (code && code !== existingAccount.code) {
       const codeExists = await prisma.account.findUnique({
-        where: { code },
+        where: { tenantId_code: { tenantId: user.tenantId!, code } },
       });
 
       if (codeExists) {

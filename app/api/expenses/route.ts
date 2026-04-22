@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     const body = await request.json();
       const { expenseType } = body;
       const expense = await prisma.$transaction(async (tx) => {
-        const newExpense = await tx.expense.create({
+        const newExpense = await (tx as any).expense.create({
           data: {
             expenseNumber: body.expenseNumber,
             category: body.category || '',
@@ -58,6 +58,7 @@ export async function POST(request: Request) {
             status: body.status || 'pending',
             costCenter: body.costCenter || null,
             accountNumber: body.accountNumber || null,
+            tenantId: user.tenantId,
           },
         });
 

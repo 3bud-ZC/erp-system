@@ -15,7 +15,12 @@ export async function GET(request: Request) {
       return apiError('لم يتم المصادقة', 401);
     }
 
+    if (!user.tenantId) {
+      return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    }
+
     const suppliers = await prisma.supplier.findMany({
+      where: { tenantId: user.tenantId },
       orderBy: { createdAt: 'desc' },
     });
     return apiSuccess(suppliers, 'Suppliers fetched successfully');
@@ -36,9 +41,14 @@ export async function POST(request: Request) {
       return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
 
+    if (!user.tenantId) {
+      return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    }
+
     const body = await request.json();
+    // @ts-ignore - Prisma type mismatch - tenant relation not in generated types
     const supplier = await prisma.supplier.create({
-      data: body,
+      data: { ...body, tenant: { connect: { id: user.tenantId } } },
     });
 
     await logAuditAction(

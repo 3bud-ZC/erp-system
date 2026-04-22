@@ -29,7 +29,7 @@ export async function GET(request: Request) {
       return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
 
-    const orders = await prisma.productionOrder.findMany({
+    const orders = await (prisma as any).productionOrder.findMany({
       include: {
         product: true,
         productionLine: true,
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
 
       // Auto-generate orderNumber in format PO-YYYY-XXXX
       const year = new Date().getFullYear();
-      const lastOrder = await prisma.productionOrder.findFirst({
+      const lastOrder = await (prisma as any).productionOrder.findFirst({
         where: {
           orderNumber: {
             startsWith: `PO-${year}-`
@@ -85,7 +85,7 @@ export async function POST(request: Request) {
       const orderNumber = `PO-${year}-${String(nextNumber).padStart(4, '0')}`;
 
       // STEP 1: Fetch the BOM for this product
-      const bomItems = await prisma.bOMItem.findMany({
+      const bomItems = await (prisma as any).bOMItem.findMany({
         where: { productId },
         include: { material: true },
       });
@@ -95,13 +95,13 @@ export async function POST(request: Request) {
       }
 
       // STEP 2: Calculate total raw materials needed (BOM explosion)
-      const rawMaterialsNeeded = bomItems.map((bom) => ({
+      const rawMaterialsNeeded = bomItems.map((bom: any) => ({
         materialId: bom.materialId,
         quantity: bom.quantity * quantity,
       }));
 
       // Convert to inventory transaction format (productId instead of materialId)
-      const inventoryItems = rawMaterialsNeeded.map(rm => ({
+      const inventoryItems = rawMaterialsNeeded.map((rm: any) => ({
         productId: rm.materialId,
         quantity: rm.quantity,
       }));
@@ -120,7 +120,7 @@ export async function POST(request: Request) {
       // Calculate raw material cost before transaction
       let totalRawMaterialCost = 0;
       for (const rm of rawMaterialsNeeded) {
-        const material = await prisma.product.findUnique({
+        const material = await (prisma as any).product.findUnique({
           where: { id: rm.materialId },
           select: { cost: true },
         });
@@ -131,8 +131,8 @@ export async function POST(request: Request) {
 
       const totalManufacturingCost = totalRawMaterialCost + (laborCost || 0) + (overheadCost || 0);
 
-      const order = await prisma.$transaction(async (tx) => {
-        const newOrder = await tx.productionOrder.create({
+      const order = await (prisma as any).$transaction(async (tx: any) => {
+        const newOrder = await (tx as any).productionOrder.create({
           data: {
             ...orderData,
             orderNumber,
@@ -141,8 +141,9 @@ export async function POST(request: Request) {
             plannedQuantity: quantity,
             actualOutputQuantity: 0,
             date: new Date(orderData.date),
+            tenantId: user.tenantId,
             items: {
-              create: inventoryItems.map((rm) => ({
+              create: inventoryItems.map((rm: any) => ({
                 productId: rm.productId,
                 quantity: rm.quantity,
                 cost: 0,
@@ -157,13 +158,14 @@ export async function POST(request: Request) {
           },
         });
 
-        const wipEntry = await tx.workInProgress.create({
+        const wipEntry = await (tx as any).workInProgress.create({
           data: {
             productionOrderId: newOrder.id,
             rawMaterialCost: totalRawMaterialCost,
             laborCost: laborCost || 0,
             overheadCost: overheadCost || 0,
             totalCost: totalManufacturingCost,
+            tenantId: user.tenantId,
           },
         });
 
@@ -171,7 +173,7 @@ export async function POST(request: Request) {
         // Orders created as 'pending' consume stock when transitioned to 'approved' via PUT.
         // atomicDecrementStock is race-condition safe (throws + rolls back if stock insufficient).
         if ((orderData.status || 'pending') === 'approved') {
-          await atomicDecrementStock(tx, inventoryItems, newOrder.id, 'production_out');
+          await atomicDecrementStock(tx, inventoryItems, newOrder.id, 'production_out', user.tenantId || orderData.tenantId);
         }
 
         // Create WIP journal entry inside transaction for atomicity
@@ -221,7 +223,7 @@ export async function PUT(request: Request) {
     const body = await request.json();
       const { id, status, actualOutputQuantity, ...updateData } = body;
 
-      const order = await prisma.productionOrder.findUnique({
+      const order = await (prisma as any).productionOrder.findUnique({
         where: { id },
         include: { items: true, workInProgress: true },
       });
@@ -240,13 +242,13 @@ export async function PUT(request: Request) {
 
       // Handle approval (pending → approved): Deduct raw materials atomically
       if (status === 'approved' && order.status === 'pending') {
-        const inventoryItems = order.items.map(item => ({
+        const inventoryItems = order.items.map((item: any) => ({
           productId: item.productId,
           quantity: item.quantity,
         }));
 
-        await prisma.$transaction(async (tx) => {
-          await atomicDecrementStock(tx, inventoryItems, order.id, 'production_out');
+        await (prisma as any).$transaction(async (tx: any) => {
+          await atomicDecrementStock(tx, inventoryItems, order.id, 'production_out', user.tenantId || order.tenantId);
         });
       }
 
@@ -255,8 +257,8 @@ export async function PUT(request: Request) {
         const outputQuantity = actualOutputQuantity || order.plannedQuantity || order.quantity;
         const waste = (order.plannedQuantity || order.quantity) - outputQuantity;
 
-        const updatedOrder = await prisma.$transaction(async (tx) => {
-          const updated = await tx.productionOrder.update({
+        const updatedOrder = await (prisma as any).$transaction(async (tx: any) => {
+          const updated = await (tx as any).productionOrder.update({
             where: { id },
             data: { 
               status, 
@@ -272,7 +274,7 @@ export async function PUT(request: Request) {
 
           if (wip) {
             // Add finished product to inventory
-            await incrementStockWithTransaction(tx, [{ productId: updated.productId, quantity: outputQuantity }], order.id, 'production_in');
+            await incrementStockWithTransaction(tx, [{ productId: updated.productId, quantity: outputQuantity }], order.id, 'production_in', user.tenantId || order.tenantId);
 
             // Calculate waste and create record
             if (waste > 0) {
@@ -336,7 +338,7 @@ export async function PUT(request: Request) {
         return apiSuccess(updatedOrder, 'Production order completed successfully');
       }
 
-      const updated = await prisma.productionOrder.update({
+      const updated = await (prisma as any).productionOrder.update({
         where: { id },
         data: { status, actualOutputQuantity, ...updateData },
         include: { items: true, workInProgress: true },
@@ -389,7 +391,7 @@ export async function DELETE(request: Request) {
 
       // STEP 2: Delete production order and reverse stock in transaction
       await prisma.$transaction(async (tx) => {
-        const order = await tx.productionOrder.findUnique({
+        const order = await (tx as any).productionOrder.findUnique({
           where: { id },
           include: { items: true },
         });
@@ -436,7 +438,7 @@ export async function DELETE(request: Request) {
           where: { productionOrderId: id },
         });
 
-        await tx.productionOrder.delete({
+        await (tx as any).productionOrder.delete({
           where: { id },
         });
       });

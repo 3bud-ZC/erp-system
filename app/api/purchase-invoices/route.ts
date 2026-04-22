@@ -18,7 +18,12 @@ export async function GET(request: Request) {
       return apiError('لم يتم المصادقة', 401);
     }
 
-    const invoices = await prisma.purchaseInvoice.findMany({
+    if (!user.tenantId) {
+      return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    }
+
+    const invoices = await (prisma as any).purchaseInvoice.findMany({
+      where: { tenantId: user.tenantId },
       include: {
         supplier: true,
         items: {
@@ -54,7 +59,7 @@ export async function POST(request: Request) {
       const total = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
 
       const invoice = await prisma.$transaction(async (tx) => {
-        const newInvoice = await tx.purchaseInvoice.create({
+        const newInvoice = await (tx as any).purchaseInvoice.create({
           data: {
             ...invoiceData,
             total,
@@ -71,7 +76,7 @@ export async function POST(request: Request) {
         });
 
         // Increment stock for all purchased items
-        await incrementStockWithTransaction(tx, items, newInvoice.id, 'purchase');
+        await incrementStockWithTransaction(tx, items, newInvoice.id, 'purchase', user.tenantId || invoiceData.tenantId);
 
         // Create and post accounting journal entry inside transaction for atomicity
         const journalEntry = await createPurchaseInvoiceEntry(newInvoice.id, total);
@@ -125,7 +130,7 @@ export async function PUT(request: Request) {
       const { id, items, ...invoiceData } = body;
 
       // STEP 1: Fetch existing invoice to calculate stock delta
-      const existingInvoice = await prisma.purchaseInvoice.findUnique({
+      const existingInvoice = await (prisma as any).purchaseInvoice.findUnique({
         where: { id },
         include: { items: true },
       });
@@ -144,14 +149,14 @@ export async function PUT(request: Request) {
       for (const productId of Array.from(allProductIds)) {
         const oldQty = oldItemMap.get(productId) || 0;
         const newQty = newItemMap.get(productId) || 0;
-        const delta = (newQty as number) - (oldQty as number);
+        const delta = Number(newQty) - Number(oldQty);
         if (delta !== 0) {
-          stockDeltas.push({ productId, delta });
+          stockDeltas.push({ productId: productId as string, delta });
         }
       }
 
       // STEP 3: Reverse existing journal entry (prevents stale accounting records)
-      const existingJournalEntry = await prisma.journalEntry.findFirst({
+      const existingJournalEntry = await (prisma as any).journalEntry.findFirst({
         where: { referenceType: 'PurchaseInvoice', referenceId: id },
       });
       if (existingJournalEntry) {
@@ -160,11 +165,11 @@ export async function PUT(request: Request) {
 
       // STEP 4: Execute update atomically with stock delta adjustments
       const invoice = await prisma.$transaction(async (tx) => {
-        await tx.purchaseInvoiceItem.deleteMany({
+        await (tx as any).purchaseInvoiceItem.deleteMany({
           where: { purchaseInvoiceId: id },
         });
 
-        const updatedInvoice = await tx.purchaseInvoice.update({
+        const updatedInvoice = await (tx as any).purchaseInvoice.update({
           where: { id },
           data: {
             ...invoiceData,
@@ -179,7 +184,7 @@ export async function PUT(request: Request) {
 
         // Apply net stock delta adjustments for changed quantities
         for (const delta of stockDeltas) {
-          await tx.product.update({
+          await (tx as any).product.update({
             where: { id: delta.productId },
             data: { stock: { increment: delta.delta } },
           });
@@ -251,7 +256,7 @@ export async function DELETE(request: Request) {
       }
 
       // STEP 1: Reverse journal entry to restore account balances
-      const existingJournalEntry = await prisma.journalEntry.findFirst({
+      const existingJournalEntry = await (prisma as any).journalEntry.findFirst({
         where: { referenceType: 'PurchaseInvoice', referenceId: id },
       });
       if (existingJournalEntry) {
@@ -260,7 +265,7 @@ export async function DELETE(request: Request) {
 
       // STEP 2: Delete invoice and reverse stock in transaction
       const deletedInvoice = await prisma.$transaction(async (tx) => {
-        const invoice = await tx.purchaseInvoice.findUnique({
+        const invoice = await (tx as any).purchaseInvoice.findUnique({
           where: { id },
           include: { items: true },
         });
@@ -271,7 +276,7 @@ export async function DELETE(request: Request) {
 
         // Reverse stock: remove the quantities that were added by this invoice
         for (const item of invoice.items) {
-          await tx.product.update({
+          await (tx as any).product.update({
             where: { id: item.productId },
             data: { stock: { decrement: item.quantity } },
           });
@@ -286,11 +291,11 @@ export async function DELETE(request: Request) {
         }
 
         // Delete items first to avoid foreign key constraints
-        await tx.purchaseInvoiceItem.deleteMany({
+        await (tx as any).purchaseInvoiceItem.deleteMany({
           where: { purchaseInvoiceId: id },
         });
 
-        await tx.purchaseInvoice.delete({
+        await (tx as any).purchaseInvoice.delete({
           where: { id },
         });
 

@@ -6,11 +6,20 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 import { apiSuccess, apiError, handleApiError } from '@/lib/api-response';
 import { getAuthenticatedUser, checkPermission, logAuditAction } from '@/lib/auth';
+import { workflowEngine, transitionEntity } from '@/lib/workflow-engine';
+import { registerAllEventHandlers } from '@/lib/event-handlers';
+
+// Register event handlers on module load
+registerAllEventHandlers();
 
 /**
  * Purchase Orders API
- * Important: Purchase orders do NOT affect stock.
- * Stock is only affected when a Purchase Invoice is created/received.
+ * ERP Workflow Engine Integration
+ * - Uses workflow state machine for all state transitions
+ * - Events trigger journal entries and stock reservations
+ * - DR: Unbilled Inventory (1030) on confirmation
+ * - CR: Accrued Payables (2011) on confirmation
+ * - Stock inflow reservation on confirmation (NOT actual stock until receipt)
  */
 
 export async function GET(request: Request) {
@@ -24,7 +33,7 @@ export async function GET(request: Request) {
       return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
 
-    const orders = await prisma.purchaseOrder.findMany({
+    const orders = await (prisma as any).purchaseOrder.findMany({
       include: {
         supplier: true,
         items: {
@@ -70,7 +79,7 @@ export async function POST(request: Request) {
     }
 
     // Verify supplier exists
-    const supplier = await prisma.supplier.findUnique({
+    const supplier = await (prisma as any).supplier.findUnique({
       where: { id: supplierId },
     });
 
@@ -80,7 +89,7 @@ export async function POST(request: Request) {
 
     // Check for duplicate order number
     if (orderNumber) {
-      const existing = await prisma.purchaseOrder.findUnique({
+      const existing = await (prisma as any).purchaseOrder.findUnique({
         where: { orderNumber },
       });
       if (existing) {
@@ -88,40 +97,56 @@ export async function POST(request: Request) {
       }
     }
 
-    // Create order with items - use connect for supplier relation
-    const order = await prisma.purchaseOrder.create({
-      data: {
-        orderNumber,
-        date: new Date(date),
-        status: status || 'pending',
-        notes: notes || null,
-        total: total || 0,
-        supplier: {
-          connect: { id: supplierId }
-        },
-        items: {
-          create: items.map((item: any) => {
-            const quantity = item.quantity || 0;
-            const price = item.unitPrice || item.price || 0;
-            const total = quantity * price;
-            return {
-              productId: item.productId,
-              quantity,
-              price,
-              total,
-            };
-          }),
-        },
-      },
-      include: {
-        supplier: true,
-        items: {
-          include: {
-            product: true,
+    // Calculate total if not provided
+    const calculatedTotal = total || items.reduce((sum: number, item: any) => {
+      const quantity = item.quantity || 0;
+      const price = item.unitPrice || item.price || 0;
+      return sum + (quantity * price);
+    }, 0);
+
+    // Create order with items in transaction
+    const order = await prisma.$transaction(async (tx) => {
+      const newOrder = await (tx as any).purchaseOrder.create({
+        data: {
+          orderNumber,
+          date: new Date(date),
+          status: status || 'pending',
+          notes: notes || null,
+          total: calculatedTotal,
+          supplier: {
+            connect: { id: supplierId }
+          },
+          items: {
+            create: items.map((item: any) => {
+              const quantity = item.quantity || 0;
+              const price = item.unitPrice || item.price || 0;
+              const total = quantity * price;
+              return {
+                productId: item.productId,
+                quantity,
+                price,
+                total,
+              };
+            }),
           },
         },
-      },
+        include: {
+          supplier: true,
+          items: {
+            include: {
+              product: true,
+            },
+          },
+        },
+      });
+
+      return newOrder;
     });
+
+    // Trigger workflow transition if status is 'confirmed'
+    if (status === 'confirmed') {
+      await transitionEntity('PurchaseOrder', order.id, 'ordered', user.id, { calculatedTotal });
+    }
 
     await logAuditAction(
       user.id, 'CREATE', 'purchases', 'PurchaseOrder', order.id, { order },
@@ -170,7 +195,7 @@ export async function PUT(request: Request) {
 
     // Check for duplicate order number (if changed)
     if (orderNumber && orderNumber !== existingOrder.orderNumber) {
-      const existing = await prisma.purchaseOrder.findUnique({
+      const existing = await (prisma as any).purchaseOrder.findUnique({
         where: { orderNumber },
       });
       if (existing) {
@@ -178,44 +203,63 @@ export async function PUT(request: Request) {
       }
     }
 
-    // Update order
-    const order = await prisma.purchaseOrder.update({
-      where: { id },
-      data: {
-        orderNumber,
-        date: new Date(date),
-        status: status || 'pending',
-        notes: notes || null,
-        total: total || 0,
-        ...(supplierId && {
-          supplier: {
-            connect: { id: supplierId }
-          }
-        }),
-        items: {
-          deleteMany: {},
-          create: items.map((item: any) => {
-            const quantity = item.quantity || 0;
-            const price = item.unitPrice || item.price || 0;
-            const total = quantity * price;
-            return {
-              productId: item.productId,
-              quantity,
-              price,
-              total,
-            };
+    // Calculate total if items are provided
+    const calculatedTotal = items ? items.reduce((sum: number, item: any) => {
+      const quantity = item.quantity || 0;
+      const price = item.unitPrice || item.price || 0;
+      return sum + (quantity * price);
+    }, 0) : (total || existingOrder.total);
+
+    // Update order with workflow transition handling
+    const order = await prisma.$transaction(async (tx) => {
+      // Update order
+      const updatedOrder = await (tx as any).purchaseOrder.update({
+        where: { id },
+        data: {
+          orderNumber,
+          date: new Date(date),
+          status: status || 'pending',
+          notes: notes || null,
+          total: calculatedTotal,
+          ...(supplierId && {
+            supplier: {
+              connect: { id: supplierId }
+            }
+          }),
+          ...(items && {
+            items: {
+              deleteMany: {},
+              create: items.map((item: any) => {
+                const quantity = item.quantity || 0;
+                const price = item.unitPrice || item.price || 0;
+                const total = quantity * price;
+                return {
+                  productId: item.productId,
+                  quantity,
+                  price,
+                  total,
+                };
+              }),
+            },
           }),
         },
-      },
-      include: {
-        supplier: true,
-        items: {
-          include: {
-            product: true,
+        include: {
+          supplier: true,
+          items: {
+            include: {
+              product: true,
+            },
           },
         },
-      },
+      });
+
+      return updatedOrder;
     });
+
+    // Trigger workflow transition if status changed
+    if (status && status !== existingOrder.status) {
+      await transitionEntity('PurchaseOrder', order.id, status, user.id, { calculatedTotal });
+    }
 
     await logAuditAction(
       user.id, 'UPDATE', 'purchases', 'PurchaseOrder', order.id, { order },
@@ -248,9 +292,21 @@ export async function DELETE(request: Request) {
       return apiError('ID is required', 400);
     }
 
-    await prisma.$transaction([
-      prisma.purchaseOrderItem.deleteMany({ where: { purchaseOrderId: id } }),
-      prisma.purchaseOrder.delete({ where: { id } }),
+    // Check if order exists
+    const existingOrder = await prisma.purchaseOrder.findUnique({
+      where: { id },
+    });
+
+    if (!existingOrder) {
+      return apiError('Purchase order not found', 404);
+    }
+
+    // Trigger workflow transition to cancelled before deletion
+    await transitionEntity('PurchaseOrder', id, 'cancelled', user.id);
+
+    await (prisma as any).$transaction([
+      (prisma as any).purchaseOrderItem.deleteMany({ where: { purchaseOrderId: id } }),
+      (prisma as any).purchaseOrder.delete({ where: { id } }),
     ]);
 
     await logAuditAction(
