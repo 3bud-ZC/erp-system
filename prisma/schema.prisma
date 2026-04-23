@@ -1530,3 +1530,13 @@ model IdempotencyKey {
   @@index([expiresAt])
   @@index([tenantId, createdAt])
 }
+
+model SystemSettings {
+  id            String    @id @default(cuid())
+  initialized   Boolean   @default(false)
+  locked        Boolean   @default(false)
+  initLock      DateTime?
+  initLockId    String?
+  productionMode Boolean  @default(false)
+  lastUpdated   DateTime  @default(now()) @updatedAt
+}

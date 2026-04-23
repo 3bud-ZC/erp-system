@@ -13,9 +13,11 @@
 import pino from 'pino';
 
 // Logger configuration
+// NOTE: pino-pretty transport uses worker threads which are incompatible
+// with Next.js webpack bundling — use plain JSON output instead.
 const loggerConfig = {
   level: process.env.LOG_LEVEL || 'info',
-  
+
   // Redact sensitive fields
   redact: {
     paths: [
@@ -32,25 +34,16 @@ const loggerConfig = {
     ],
     remove: true,
   },
-  
+
   // Base metadata for all logs
   base: {
     pid: process.pid,
     env: process.env.NODE_ENV,
     version: process.env.npm_package_version,
   },
-  
-  // Pretty print in development
-  transport: process.env.NODE_ENV === 'development' 
-    ? {
-        target: 'pino-pretty',
-        options: {
-          colorize: true,
-          translateTime: 'SYS:standard',
-          ignore: 'pid,hostname,env,version',
-        },
-      }
-    : undefined,
+
+  // No transport — output JSON to stdout directly (Next.js compatible)
+  transport: undefined as any,
 };
 
 // Create main logger instance
