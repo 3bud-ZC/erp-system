@@ -16,14 +16,14 @@ interface JournalEntry {
   status?: string;
 }
 
-function formatSAR(v?: number) {
+function formatEGP(v?: number) {
   if (v == null) return '—';
-  return `${v.toLocaleString('ar-SA')} ر.س`;
+  return `${v.toLocaleString('ar-EG')} ج.م`;
 }
 
 function formatDate(d?: string) {
   if (!d) return '—';
-  return new Date(d).toLocaleDateString('ar-SA');
+  return new Date(d).toLocaleDateString('ar-EG');
 }
 
 export default function JournalEntriesPage() {
@@ -93,8 +93,8 @@ export default function JournalEntriesPage() {
                   <td className="px-5 py-3 text-sm font-semibold text-slate-700">{e.entryNumber ?? e.id.slice(-6)}</td>
                   <td className="px-5 py-3 text-sm text-slate-500">{formatDate(e.date ?? e.createdAt)}</td>
                   <td className="px-5 py-3 text-sm text-slate-700 max-w-xs truncate">{e.description ?? e.notes ?? '—'}</td>
-                  <td className="px-5 py-3 text-sm text-slate-600">{formatSAR(e.totalDebit)}</td>
-                  <td className="px-5 py-3 text-sm text-slate-600">{formatSAR(e.totalCredit)}</td>
+                  <td className="px-5 py-3 text-sm text-slate-600">{formatEGP(e.totalDebit)}</td>
+                  <td className="px-5 py-3 text-sm text-slate-600">{formatEGP(e.totalCredit)}</td>
                   <td className="px-5 py-3">
                     {e.isPosted ? (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">

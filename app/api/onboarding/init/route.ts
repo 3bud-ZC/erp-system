@@ -62,7 +62,7 @@ export async function POST(req: Request) {
     const {
       companyName = 'شركتي',
       companyNameAr,
-      currency = 'SAR',
+      currency = 'EGP',
       taxRate = 15,
       country = 'SA',
     } = body;
@@ -84,7 +84,7 @@ export async function POST(req: Request) {
         subscriptionPlan: 'trial',
         settings: {
           currency,
-          currencySymbol: currency === 'SAR' ? 'ر.س' : currency,
+          currencySymbol: 'ج.م',
           taxRate,
           fiscalYearStartMonth: 1,
           language: 'ar',

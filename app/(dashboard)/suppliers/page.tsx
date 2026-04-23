@@ -14,9 +14,9 @@ interface Supplier {
   balance?: number;
 }
 
-function formatSAR(v?: number) {
+function formatEGP(v?: number) {
   if (v == null) return '—';
-  return `${v.toLocaleString('ar-SA')} ر.س`;
+  return `${v.toLocaleString('ar-EG')} ج.م`;
 }
 
 export default function SuppliersPage() {
@@ -81,8 +81,8 @@ export default function SuppliersPage() {
                   <td className="px-5 py-3 text-sm font-medium text-slate-900">{s.nameAr}</td>
                   <td className="px-5 py-3 text-sm text-slate-500">{s.phone ?? '—'}</td>
                   <td className="px-5 py-3 text-sm text-slate-500">{s.email ?? '—'}</td>
-                  <td className="px-5 py-3 text-sm text-slate-600">{formatSAR(s.creditLimit)}</td>
-                  <td className="px-5 py-3 text-sm text-slate-600">{formatSAR(s.balance)}</td>
+                  <td className="px-5 py-3 text-sm text-slate-600">{formatEGP(s.creditLimit)}</td>
+                  <td className="px-5 py-3 text-sm text-slate-600">{formatEGP(s.balance)}</td>
                 </tr>
               ))}
             </tbody>

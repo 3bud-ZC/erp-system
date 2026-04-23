@@ -16,14 +16,14 @@ interface SalesInvoice {
   paymentStatus?: string;
 }
 
-function formatSAR(v?: number) {
+function formatEGP(v?: number) {
   if (v == null) return '—';
-  return `${v.toLocaleString('ar-SA')} ر.س`;
+  return `${v.toLocaleString('ar-EG')} ج.م`;
 }
 
 function formatDate(d?: string) {
   if (!d) return '—';
-  return new Date(d).toLocaleDateString('ar-SA');
+  return new Date(d).toLocaleDateString('ar-EG');
 }
 
 const statusLabels: Record<string, { label: string; cls: string }> = {
@@ -100,8 +100,8 @@ export default function SalesInvoicesPage() {
                     <td className="px-5 py-3 text-sm font-semibold text-blue-600">{inv.invoiceNumber}</td>
                     <td className="px-5 py-3 text-sm text-slate-800">{inv.customer?.nameAr ?? '—'}</td>
                     <td className="px-5 py-3 text-sm text-slate-500">{formatDate(inv.date ?? inv.createdAt)}</td>
-                    <td className="px-5 py-3 text-sm text-slate-700">{formatSAR(inv.total)}</td>
-                    <td className="px-5 py-3 text-sm font-semibold text-slate-900">{formatSAR(inv.grandTotal ?? inv.total)}</td>
+                    <td className="px-5 py-3 text-sm text-slate-700">{formatEGP(inv.total)}</td>
+                    <td className="px-5 py-3 text-sm font-semibold text-slate-900">{formatEGP(inv.grandTotal ?? inv.total)}</td>
                     <td className="px-5 py-3">
                       <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${st.cls}`}>
                         {st.label}

@@ -11,8 +11,8 @@ export interface TenantSettings {
 }
 
 export const DEFAULT_SETTINGS: TenantSettings = {
-  currency: 'SAR',
-  currencySymbol: 'ر.س',
+  currency: 'EGP',
+  currencySymbol: 'ج.م',
   taxRate: 15,
   fiscalYearStartMonth: 1,
   language: 'ar',

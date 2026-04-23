@@ -49,10 +49,10 @@ interface DashboardData {
   alerts: any[];
 }
 
-function formatSAR(amount: number): string {
-  if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(1)} م.ر`;
-  if (amount >= 1_000) return `${(amount / 1_000).toFixed(1)} ألف ر.س`;
-  return `${amount.toLocaleString('ar-SA')} ر.س`;
+function formatEGP(amount: number): string {
+  if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(1)} م.ج`;
+  if (amount >= 1_000) return `${(amount / 1_000).toFixed(1)} ألف ج.م`;
+  return `${amount.toLocaleString('ar-EG')} ج.م`;
 }
 
 export default function DashboardPage() {
@@ -116,34 +116,34 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <KPICard
           title="إجمالي المبيعات (الشهر الحالي)"
-          value={formatSAR(data?.totalSales ?? 0)}
+          value={formatEGP(data?.totalSales ?? 0)}
           trend={data?.salesTrend}
           icon={<ShoppingCart className="w-5 h-5 text-blue-600" />}
           color="bg-blue-50"
         />
         <KPICard
           title="إجمالي المشتريات"
-          value={formatSAR(data?.totalPurchases ?? 0)}
+          value={formatEGP(data?.totalPurchases ?? 0)}
           trend={data?.purchasesTrend}
           icon={<DollarSign className="w-5 h-5 text-orange-600" />}
           color="bg-orange-50"
         />
         <KPICard
           title="إجمالي المصروفات"
-          value={formatSAR(data?.totalExpenses ?? 0)}
+          value={formatEGP(data?.totalExpenses ?? 0)}
           trend={data?.expensesTrend}
           icon={<FileText className="w-5 h-5 text-red-600" />}
           color="bg-red-50"
         />
         <KPICard
           title="صافي الربح"
-          value={formatSAR(data?.netProfit ?? 0)}
+          value={formatEGP(data?.netProfit ?? 0)}
           icon={<TrendingUp className="w-5 h-5 text-green-600" />}
           color="bg-green-50"
         />
         <KPICard
           title="قيمة المخزون"
-          value={formatSAR(data?.totalInventoryValue ?? 0)}
+          value={formatEGP(data?.totalInventoryValue ?? 0)}
           icon={<Package className="w-5 h-5 text-purple-600" />}
           color="bg-purple-50"
         />
@@ -186,7 +186,7 @@ export default function DashboardPage() {
                     <p className="text-xs text-slate-400">{activity.description}</p>
                   </div>
                   <div className="text-left">
-                    <p className="font-semibold text-slate-700">{formatSAR(activity.amount)}</p>
+                    <p className="font-semibold text-slate-700">{formatEGP(activity.amount)}</p>
                     <p className="text-xs text-slate-400">{activity.date}</p>
                   </div>
                 </div>
@@ -203,11 +203,11 @@ export default function DashboardPage() {
         <h2 className="text-base font-semibold text-slate-900 mb-4">ملخص الربحية — الشهر الحالي</h2>
         <div className="grid grid-cols-3 gap-6 text-center">
           <div>
-            <p className="text-2xl font-bold text-green-600">{formatSAR(data?.grossProfit ?? 0)}</p>
+            <p className="text-2xl font-bold text-green-600">{formatEGP(data?.grossProfit ?? 0)}</p>
             <p className="text-sm text-slate-500 mt-1">إجمالي الربح</p>
           </div>
           <div>
-            <p className="text-2xl font-bold text-blue-600">{formatSAR(data?.netProfit ?? 0)}</p>
+            <p className="text-2xl font-bold text-blue-600">{formatEGP(data?.netProfit ?? 0)}</p>
             <p className="text-sm text-slate-500 mt-1">صافي الربح</p>
           </div>
           <div>

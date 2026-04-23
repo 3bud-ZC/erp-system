@@ -14,9 +14,9 @@ interface Customer {
   balance?: number;
 }
 
-function formatSAR(amount?: number): string {
+function formatEGP(amount?: number): string {
   if (!amount) return '—';
-  return `${amount.toLocaleString('ar-SA')} ر.س`;
+  return `${amount.toLocaleString('ar-EG')} ج.م`;
 }
 
 export default function CustomersPage() {
@@ -92,8 +92,8 @@ export default function CustomersPage() {
                   <td className="px-6 py-4 text-sm font-medium text-slate-900">{c.nameAr}</td>
                   <td className="px-6 py-4 text-sm text-slate-500">{c.email || '—'}</td>
                   <td className="px-6 py-4 text-sm text-slate-500">{c.phone || '—'}</td>
-                  <td className="px-6 py-4 text-sm text-slate-600">{formatSAR(c.creditLimit)}</td>
-                  <td className="px-6 py-4 text-sm text-slate-600">{formatSAR(c.balance)}</td>
+                  <td className="px-6 py-4 text-sm text-slate-600">{formatEGP(c.creditLimit)}</td>
+                  <td className="px-6 py-4 text-sm text-slate-600">{formatEGP(c.balance)}</td>
                   <td className="px-6 py-4 text-sm">
                     <div className="flex items-center gap-2">
                       <Link

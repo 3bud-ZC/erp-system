@@ -16,9 +16,9 @@ interface Product {
   price: number;
 }
 
-function formatSAR(v?: number) {
+function formatEGP(v?: number) {
   if (v == null) return '—';
-  return `${v.toLocaleString('ar-SA')} ر.س`;
+  return `${v.toLocaleString('ar-EG')} ج.م`;
 }
 
 const typeLabels: Record<string, string> = {
@@ -94,8 +94,8 @@ export default function ProductsPage() {
                     <td className="px-5 py-3 text-sm text-slate-500">{typeLabels[p.type ?? ''] ?? p.type ?? '—'}</td>
                     <td className="px-5 py-3 text-sm text-slate-700 font-semibold">{p.stock} {p.unit ?? ''}</td>
                     <td className="px-5 py-3 text-sm text-slate-500">{p.minStock ?? '—'}</td>
-                    <td className="px-5 py-3 text-sm text-slate-600">{formatSAR(p.cost)}</td>
-                    <td className="px-5 py-3 text-sm text-slate-600">{formatSAR(p.price)}</td>
+                    <td className="px-5 py-3 text-sm text-slate-600">{formatEGP(p.cost)}</td>
+                    <td className="px-5 py-3 text-sm text-slate-600">{formatEGP(p.price)}</td>
                     <td className="px-5 py-3 text-sm">
                       {lowStock ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-xs font-medium">
