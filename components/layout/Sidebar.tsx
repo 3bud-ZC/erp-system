@@ -16,6 +16,7 @@ import {
   Factory,
   Warehouse,
   Building2,
+  BarChart3,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -62,9 +63,14 @@ const navItems: NavItem[] = [
     icon: <Warehouse className="w-5 h-5" />,
   },
   {
-    title: 'المحاسبة',
+    title: 'القيود المحاسبية',
     href: '/accounting/journal-entries',
     icon: <Scale className="w-5 h-5" />,
+  },
+  {
+    title: 'ميزان المراجعة',
+    href: '/accounting/trial-balance',
+    icon: <BarChart3 className="w-5 h-5" />,
   },
   {
     title: 'التصنيع',

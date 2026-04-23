@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Pencil, Trash2 } from 'lucide-react';
 
 interface Supplier {
   id: string;
@@ -25,10 +25,22 @@ export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Add modal
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+
+  // Edit modal
+  const [editItem, setEditItem] = useState<Supplier | null>(null);
+  const [editForm, setEditForm] = useState(emptyForm);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  // Delete confirm
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   function load() {
     setLoading(true);
@@ -63,6 +75,55 @@ export default function SuppliersPage() {
     finally { setSaving(false); }
   }
 
+  function openEdit(s: Supplier) {
+    setEditItem(s);
+    setEditForm({
+      code: s.code || '',
+      nameAr: s.nameAr || '',
+      nameEn: s.nameEn || '',
+      email: s.email || '',
+      phone: s.phone || '',
+      creditLimit: s.creditLimit != null ? String(s.creditLimit) : '',
+    });
+    setEditError(null);
+  }
+
+  async function handleEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editItem) return;
+    setEditSaving(true); setEditError(null);
+    try {
+      const res = await fetch('/api/suppliers', {
+        method: 'PUT', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editItem.id,
+          code: editForm.code, nameAr: editForm.nameAr,
+          nameEn: editForm.nameEn || null,
+          email: editForm.email || null,
+          phone: editForm.phone || null,
+          creditLimit: editForm.creditLimit ? Number(editForm.creditLimit) : null,
+        }),
+      });
+      const j = await res.json();
+      if (j.success) { setEditItem(null); load(); }
+      else setEditError(j.message || j.error || 'فشل الحفظ');
+    } catch { setEditError('تعذر الاتصال بالخادم'); }
+    finally { setEditSaving(false); }
+  }
+
+  async function handleDelete() {
+    if (!deleteId) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/suppliers?id=${deleteId}`, { method: 'DELETE', credentials: 'include' });
+      const j = await res.json();
+      if (j.success) { setDeleteId(null); load(); }
+      else alert(j.message || j.error || 'فشل الحذف');
+    } catch { alert('تعذر الاتصال بالخادم'); }
+    finally { setDeleting(false); }
+  }
+
   if (loading) return <div className="flex items-center justify-center h-64" dir="rtl"><div className="text-slate-500">جاري تحميل الموردين…</div></div>;
   if (error) return <div className="flex items-center justify-center h-64" dir="rtl"><div className="text-red-500">{error}</div></div>;
 
@@ -75,6 +136,7 @@ export default function SuppliersPage() {
         </button>
       </div>
 
+      {/* Add Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" dir="rtl">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
@@ -133,6 +195,88 @@ export default function SuppliersPage() {
         </div>
       )}
 
+      {/* Edit Modal */}
+      {editItem && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" dir="rtl">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-5 border-b border-slate-200">
+              <h2 className="text-lg font-semibold text-slate-900">تعديل بيانات المورد</h2>
+              <button onClick={() => setEditItem(null)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleEdit} className="p-5 space-y-4">
+              {editError && <div className="text-red-600 text-sm bg-red-50 border border-red-200 p-3 rounded-lg">{editError}</div>}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">الرمز *</label>
+                  <input required value={editForm.code} onChange={e => setEditForm(f => ({ ...f, code: e.target.value }))}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">حد الائتمان (ج.م)</label>
+                  <input type="number" min="0" value={editForm.creditLimit} onChange={e => setEditForm(f => ({ ...f, creditLimit: e.target.value }))}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">الاسم بالعربية *</label>
+                <input required value={editForm.nameAr} onChange={e => setEditForm(f => ({ ...f, nameAr: e.target.value }))}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">الاسم بالإنجليزية</label>
+                <input value={editForm.nameEn} onChange={e => setEditForm(f => ({ ...f, nameEn: e.target.value }))}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">الهاتف</label>
+                  <input value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">البريد الإلكتروني</label>
+                  <input type="email" value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button type="submit" disabled={editSaving}
+                  className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                  {editSaving ? 'جاري الحفظ…' : 'حفظ التعديلات'}
+                </button>
+                <button type="button" onClick={() => setEditItem(null)}
+                  className="flex-1 bg-slate-100 text-slate-700 rounded-lg py-2 text-sm font-medium hover:bg-slate-200 transition-colors">
+                  إلغاء
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirm */}
+      {deleteId && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" dir="rtl">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 text-center">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-6 h-6 text-red-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-slate-900 mb-2">تأكيد الحذف</h3>
+            <p className="text-sm text-slate-500 mb-6">هل أنت متأكد من حذف هذا المورد؟ لا يمكن حذف مورد مرتبط بفواتير أو طلبات.</p>
+            <div className="flex gap-3">
+              <button onClick={handleDelete} disabled={deleting}
+                className="flex-1 bg-red-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors">
+                {deleting ? 'جاري الحذف…' : 'حذف'}
+              </button>
+              <button onClick={() => setDeleteId(null)}
+                className="flex-1 bg-slate-100 text-slate-700 rounded-lg py-2 text-sm font-medium hover:bg-slate-200 transition-colors">
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {suppliers.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-12 text-center text-slate-400">لا يوجد موردون حتى الآن</div>
       ) : (
@@ -145,7 +289,7 @@ export default function SuppliersPage() {
                 <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">الهاتف</th>
                 <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">البريد الإلكتروني</th>
                 <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">حد الائتمان</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">الرصيد</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">إجراءات</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -156,7 +300,18 @@ export default function SuppliersPage() {
                   <td className="px-5 py-3 text-sm text-slate-500">{s.phone ?? '—'}</td>
                   <td className="px-5 py-3 text-sm text-slate-500">{s.email ?? '—'}</td>
                   <td className="px-5 py-3 text-sm text-slate-600">{formatEGP(s.creditLimit)}</td>
-                  <td className="px-5 py-3 text-sm text-slate-600">{formatEGP(s.balance)}</td>
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => openEdit(s)}
+                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="تعديل">
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => setDeleteId(s.id)}
+                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="حذف">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
