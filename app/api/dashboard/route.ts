@@ -8,18 +8,20 @@ import { getAuthenticatedUser } from '@/lib/auth';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// Safe aggregate query with fallback
+// Safe aggregate query with fallback — always tenant-scoped
 async function safeAggregate(
   modelName: 'salesInvoice' | 'purchaseInvoice' | 'expense',
   sumField: string,
   startDate: Date,
-  endDate: Date
+  endDate: Date,
+  tenantId: string
 ): Promise<number> {
   try {
     const model = prisma[modelName] as any;
     const result = await model.aggregate({
       _sum: { [sumField]: true },
       where: {
+        tenantId,
         createdAt: { gte: startDate, lte: endDate },
       },
     });
@@ -34,30 +36,30 @@ async function safeAggregate(
 }
 
 // Helper: Calculate totals for a given date range
-async function getFinancialData(startDate: Date, endDate: Date) {
-  const sales = await safeAggregate('salesInvoice', 'total', startDate, endDate);
-  const purchases = await safeAggregate('purchaseInvoice', 'total', startDate, endDate);
-  const expenses = await safeAggregate('expense', 'amount', startDate, endDate);
+async function getFinancialData(startDate: Date, endDate: Date, tenantId: string) {
+  const sales = await safeAggregate('salesInvoice', 'total', startDate, endDate, tenantId);
+  const purchases = await safeAggregate('purchaseInvoice', 'total', startDate, endDate, tenantId);
+  const expenses = await safeAggregate('expense', 'amount', startDate, endDate, tenantId);
 
   return { sales, purchases, expenses };
 }
 
 // Helper: Get monthly data for charts (last 6 months)
-async function getMonthlyChartData() {
+async function getMonthlyChartData(tenantId: string) {
   const months: string[] = [];
   const sales: number[] = [];
   const purchases: number[] = [];
 
   const now = new Date();
-  
+
   for (let i = 5; i >= 0; i--) {
     const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
-    
+
     const monthName = monthStart.toLocaleDateString('ar-EG', { month: 'short' });
     months.push(monthName);
 
-    const data = await getFinancialData(monthStart, monthEnd);
+    const data = await getFinancialData(monthStart, monthEnd, tenantId);
     sales.push(data.sales);
     purchases.push(data.purchases);
   }
@@ -65,13 +67,18 @@ async function getMonthlyChartData() {
   return { labels: months, sales, purchases };
 }
 
-// Safe find many with fallback
+// Safe find many with fallback — always tenant-scoped
 async function safeFindMany<T>(
   modelName: 'product' | 'salesInvoice' | 'purchaseInvoice',
-  args?: any
+  tenantId: string,
+  extraArgs?: any
 ): Promise<T[]> {
   try {
     const model = prisma[modelName] as any;
+    const args = {
+      ...extraArgs,
+      where: { ...(extraArgs?.where ?? {}), tenantId },
+    };
     return await model.findMany(args);
   } catch (error: any) {
     if (error.code === 'P2021') {
@@ -83,25 +90,25 @@ async function safeFindMany<T>(
 }
 
 // Helper: Get inventory breakdown by type
-async function getInventoryBreakdown() {
-  const products = await safeFindMany('product');
+async function getInventoryBreakdown(tenantId: string) {
+  const products = await safeFindMany('product', tenantId);
 
-  const rawMaterials = products.filter((p: any) => p.type === 'raw').length;
-  const finishedGoods = products.filter((p: any) => p.type === 'finished').length;
+  const rawMaterials = products.filter((p: any) => p.type === 'raw_material').length;
+  const finishedGoods = products.filter((p: any) => p.type === 'finished_product').length;
   const packaging = products.filter((p: any) => p.type === 'packaging').length;
 
   return { rawMaterials, finishedGoods, packaging };
 }
 
-// Helper: Generate recent activities
-async function getRecentActivities() {
+// Helper: Generate recent activities — always tenant-scoped
+async function getRecentActivities(tenantId: string) {
   const activities: any[] = [];
 
   try {
-    // Recent sales invoices
     const salesInvoices = await prisma.salesInvoice.findMany({
       take: 3,
       orderBy: { createdAt: 'desc' },
+      where: { tenantId },
       include: { customer: true },
     });
 
@@ -123,10 +130,10 @@ async function getRecentActivities() {
   }
 
   try {
-    // Recent purchase invoices
     const purchaseInvoices = await prisma.purchaseInvoice.findMany({
       take: 3,
       orderBy: { createdAt: 'desc' },
+      where: { tenantId },
       include: { supplier: true },
     });
 
@@ -147,7 +154,6 @@ async function getRecentActivities() {
     }
   }
 
-  // Sort by date descending and limit to 5
   return activities
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, 5);
@@ -178,8 +184,13 @@ export async function GET(request: Request) {
     const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
 
-    const currentData = await getFinancialData(currentMonthStart, currentMonthEnd);
-    const previousData = await getFinancialData(prevMonthStart, prevMonthEnd);
+    const tenantId = user.tenantId;
+    if (!tenantId) {
+      return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    }
+
+    const currentData = await getFinancialData(currentMonthStart, currentMonthEnd, tenantId);
+    const previousData = await getFinancialData(prevMonthStart, prevMonthEnd, tenantId);
 
     // Calculate percentage changes
     const calculateChange = (current: number, previous: number): number => {
@@ -187,7 +198,7 @@ export async function GET(request: Request) {
       return ((current - previous) / previous) * 100;
     };
 
-    const lowStockProducts = await safeFindMany('product');
+    const lowStockProducts = await safeFindMany('product', tenantId);
 
     const lowStockFilteredCount = lowStockProducts.filter(
       (p: any) => p.stock <= (p.minStock ?? 0)
@@ -214,18 +225,18 @@ export async function GET(request: Request) {
     }
 
     // Get total inventory value and count
-    const inventory = await safeFindMany('product');
+    const inventory = await safeFindMany('product', tenantId);
     const totalInventoryValue = inventory.reduce((sum: number, p: any) => sum + p.stock * p.cost, 0);
     const totalProducts = inventory.length;
 
     // Get chart data
-    const chartData = await getMonthlyChartData();
+    const chartData = await getMonthlyChartData(tenantId);
 
     // Get inventory breakdown
-    const inventoryData = await getInventoryBreakdown();
+    const inventoryData = await getInventoryBreakdown(tenantId);
 
     // Get recent activities
-    const recentActivities = await getRecentActivities();
+    const recentActivities = await getRecentActivities(tenantId);
 
     // Build alerts
     const alerts: any[] = [];

@@ -2,6 +2,7 @@ import { apiSuccess, apiError } from '@/lib/api-response';
 import { getAuthenticatedUser, generateToken } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { cookies } from 'next/headers';
+import { seedDemoData } from '@/lib/seed-demo-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -179,8 +180,16 @@ export async function POST(req: Request) {
       path: '/',
     });
 
+    // 10. Seed demo data (non-blocking — errors don't fail onboarding)
+    let seedResult = null;
+    try {
+      seedResult = await seedDemoData(tenant.id);
+    } catch (seedErr) {
+      console.error('Demo seed failed (non-fatal):', seedErr);
+    }
+
     return apiSuccess(
-      { tenantId: tenant.id, tenantCode, companyName: companyName.trim() },
+      { tenantId: tenant.id, tenantCode, companyName: companyName.trim(), seed: seedResult },
       'تم إعداد الشركة بنجاح'
     );
   } catch (e: any) {
