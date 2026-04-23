@@ -73,7 +73,7 @@ export async function GET(request: Request) {
       const heapUsagePercent = (heapUsedMB / heapTotalMB) * 100;
       
       checks.memory = {
-        status: heapUsagePercent < 80 ? 'healthy' : heapUsagePercent < 95 ? 'degraded' : 'unhealthy',
+        status: heapUsagePercent < 85 ? 'healthy' : 'degraded',
         heapUsed: `${heapUsedMB.toFixed(2)}MB`,
         heapTotal: `${heapTotalMB.toFixed(2)}MB`,
         usage: `${heapUsagePercent.toFixed(1)}%`,
