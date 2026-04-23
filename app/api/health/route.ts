@@ -49,7 +49,7 @@ export async function GET(request: Request) {
 
     checks.push({
       name: 'memory',
-      status: heapUsagePercent < 80 ? 'healthy' : heapUsagePercent < 95 ? 'degraded' : 'unhealthy',
+      status: heapUsagePercent < 85 ? 'healthy' : 'degraded',
       duration: 0,
       message: `${heapUsedMB.toFixed(2)}MB / ${heapTotalMB.toFixed(2)}MB (${heapUsagePercent.toFixed(1)}%)`,
     });

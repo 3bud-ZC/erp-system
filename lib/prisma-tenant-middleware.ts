@@ -32,6 +32,7 @@ export const tenantMiddleware: Prisma.Middleware = async (params: Prisma.Middlew
     'AccountingPeriod',
     'Tenant',
     'UserTenantRole',
+    'SystemSettings',
   ];
 
   const model = params.model;

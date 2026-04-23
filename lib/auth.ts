@@ -227,6 +227,7 @@ export async function loginUser(
       permissions,
       token,
       sessionId: session.id,
+      hasTenant: !!tenantId,
     };
   } catch (error) {
     console.error('Error logging in user:', error);

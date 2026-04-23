@@ -2,9 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/lib/store/auth';
 
 export default function LoginPage() {
   const router = useRouter();
+  const setUser = useAuthStore((s) => s.setUser);
+  const setToken = useAuthStore((s) => s.setToken);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -22,7 +25,7 @@ export default function LoginPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ email, password }),
-        credentials: 'include', // Important for cookies
+        credentials: 'include',
       });
 
       const data = await response.json();
@@ -31,8 +34,13 @@ export default function LoginPage() {
         throw new Error(data.message || 'فشل تسجيل الدخول');
       }
 
-      // Token is now set in HttpOnly cookie, no localStorage needed
-      router.replace('/dashboard');
+      // Sync user into Zustand store so dashboard layout sees isAuthenticated=true
+      const { id, email: userEmail, name, roles, permissions, hasTenant } = data.data;
+      setUser({ id, email: userEmail, name, roles, permissions });
+      useAuthStore.setState({ isAuthenticated: true });
+
+      // New users without a tenant go through onboarding first
+      router.replace(hasTenant ? '/dashboard' : '/onboarding');
     } catch (err: any) {
       const errorMessage = err?.message || err?.toString() || 'Unknown error';
       setError(errorMessage);

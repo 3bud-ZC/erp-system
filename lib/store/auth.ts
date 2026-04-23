@@ -42,18 +42,18 @@ export const useAuthStore = create<AuthState>()(
         }
 
         const data = await response.json();
+        const { id, email: userEmail, name, roles, permissions } = data.data;
         set({
-          user: data.user,
-          token: data.token,
+          user: { id, email: userEmail, name, roles, permissions },
+          token: null,
           isAuthenticated: true,
         });
       },
-      logout: () => {
-        set({
-          user: null,
-          token: null,
-          isAuthenticated: false,
-        });
+      logout: async () => {
+        try {
+          await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+        } catch { /* ignore */ }
+        set({ user: null, token: null, isAuthenticated: false });
       },
       setUser: (user) => set({ user }),
       setToken: (token) => set({ token }),
