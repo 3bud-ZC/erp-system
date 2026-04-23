@@ -79,9 +79,8 @@ export async function POST(request: Request) {
       return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
     }
 
-    // @ts-ignore - Prisma type mismatch - tenant relation not in generated types
     const warehouse = await prisma.warehouse.create({
-      data: { code, nameAr, nameEn, address, phone, manager, tenant: { connect: { id: user.tenantId } } },
+      data: { code, nameAr, nameEn, address, phone, manager, tenantId: user.tenantId },
     });
 
     await logAuditAction(

@@ -29,7 +29,7 @@ export default function CommandPalette() {
     { id: 'logs', label: 'سجل الأنشطة', hint: '/dashboard/activity', icon: <FileText size={16} />, action: go('/dashboard/activity'), keywords: 'activity logs audit' },
     { id: 'users', label: 'المستخدمون', hint: '/dashboard/users', icon: <Users size={16} />, action: go('/dashboard/users'), keywords: 'users team' },
     { id: 'settings', label: 'الإعدادات', hint: '/onboarding', icon: <Settings size={16} />, action: go('/onboarding'), keywords: 'settings onboarding' },
-    { id: 'logout', label: 'تسجيل الخروج', icon: <LogOut size={16} />, action: async () => { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); window.location.href = '/login'; }, keywords: 'logout signout' },
+    { id: 'logout', label: 'تسجيل الخروج', icon: <LogOut size={16} />, action: async () => { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); router.push('/login'); }, keywords: 'logout signout' },
   ], [router]);
 
   const filtered = useMemo(() => {

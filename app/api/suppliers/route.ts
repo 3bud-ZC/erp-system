@@ -46,9 +46,18 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    // @ts-ignore - Prisma type mismatch - tenant relation not in generated types
+    const { tenantId: _t, ...supplierData } = body;
     const supplier = await prisma.supplier.create({
-      data: { ...body, tenant: { connect: { id: user.tenantId } } },
+      data: {
+        code: supplierData.code,
+        nameAr: supplierData.nameAr,
+        ...(supplierData.nameEn && { nameEn: supplierData.nameEn }),
+        ...(supplierData.phone && { phone: supplierData.phone }),
+        ...(supplierData.email && { email: supplierData.email }),
+        ...(supplierData.creditLimit != null && { creditLimit: Number(supplierData.creditLimit) }),
+        ...(supplierData.address && { address: supplierData.address }),
+        tenantId: user.tenantId,
+      },
     });
 
     await logAuditAction(

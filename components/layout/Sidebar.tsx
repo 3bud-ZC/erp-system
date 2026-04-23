@@ -48,7 +48,7 @@ const navItems: NavItem[] = [
   },
   {
     title: 'المشتريات',
-    href: '/erp/purchases/invoices',
+    href: '/purchases/invoices',
     icon: <Truck className="w-5 h-5" />,
   },
   {
@@ -68,7 +68,7 @@ const navItems: NavItem[] = [
   },
   {
     title: 'التصنيع',
-    href: '/erp/dashboard',
+    href: '/analytics/production',
     icon: <Factory className="w-5 h-5" />,
   },
   {
