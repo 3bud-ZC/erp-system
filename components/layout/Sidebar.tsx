@@ -11,10 +11,11 @@ import {
   Truck,
   Users,
   FileText,
-  Settings,
   ChevronRight,
   ChevronLeft,
   Factory,
+  Warehouse,
+  Building2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -36,6 +37,11 @@ const navItems: NavItem[] = [
     icon: <Users className="w-5 h-5" />,
   },
   {
+    title: 'الموردون',
+    href: '/suppliers',
+    icon: <Building2 className="w-5 h-5" />,
+  },
+  {
     title: 'المبيعات',
     href: '/sales/invoices',
     icon: <ShoppingCart className="w-5 h-5" />,
@@ -49,6 +55,11 @@ const navItems: NavItem[] = [
     title: 'المخزون',
     href: '/inventory/products',
     icon: <Package className="w-5 h-5" />,
+  },
+  {
+    title: 'المستودعات',
+    href: '/warehouses',
+    icon: <Warehouse className="w-5 h-5" />,
   },
   {
     title: 'المحاسبة',

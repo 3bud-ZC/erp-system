@@ -1,122 +1,119 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { inventoryApi } from '@/lib/api/inventory';
-import type { Product } from '@/lib/types/inventory';
-import { formatCurrency } from '@/lib/utils';
-import { Plus, Eye, Edit } from 'lucide-react';
-import Link from 'next/link';
+import { Plus, Eye, AlertTriangle } from 'lucide-react';
+
+interface Product {
+  id: string;
+  code: string;
+  nameAr: string;
+  nameEn?: string;
+  type?: string;
+  unit?: string;
+  stock: number;
+  minStock?: number;
+  cost: number;
+  price: number;
+}
+
+function formatSAR(v?: number) {
+  if (v == null) return '—';
+  return `${v.toLocaleString('ar-SA')} ر.س`;
+}
+
+const typeLabels: Record<string, string> = {
+  finished_product: 'منتج نهائي',
+  raw_material: 'مواد خام',
+  packaging: 'تغليف',
+};
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadProducts() {
-      try {
-        const response = await inventoryApi.getProducts();
-        setProducts(response.data);
-      } catch (error) {
-        console.error('Failed to load products:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadProducts();
+    fetch('/api/products', { credentials: 'include' })
+      .then(r => r.json())
+      .then(j => {
+        if (j.success) setProducts(j.data ?? []);
+        else setError(j.message || 'فشل تحميل المنتجات');
+      })
+      .catch(() => setError('تعذر الاتصال بالخادم'))
+      .finally(() => setLoading(false));
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-slate-600">Loading products...</div>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="flex items-center justify-center h-64" dir="rtl">
+      <div className="text-slate-500">جاري تحميل المنتجات…</div>
+    </div>
+  );
+
+  if (error) return (
+    <div className="flex items-center justify-center h-64" dir="rtl">
+      <div className="text-red-500">{error}</div>
+    </div>
+  );
 
   return (
-    <div>
+    <div dir="rtl">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Products</h1>
-        <Link
-          href="/inventory/products/new"
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
+        <h1 className="text-2xl font-bold text-slate-900">المنتجات والمخزون</h1>
+        <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
           <Plus className="w-4 h-4" />
-          Add Product
-        </Link>
+          إضافة منتج
+        </button>
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">
-                Code
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">
-                Name
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">
-                Stock
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">
-                Cost
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">
-                Price
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">
-                Min Stock
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {products.map((product) => (
-              <tr key={product.id} className="hover:bg-slate-50">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">
-                  {product.code}
-                </td>
-                <td className="px-6 py-4 text-sm text-slate-600">
-                  {product.nameAr}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
-                  {product.stock}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
-                  {formatCurrency(product.cost)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
-                  {formatCurrency(product.price)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
-                  {product.minStock}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  <div className="flex items-center gap-2">
-                    <Link
-                      href={`/inventory/products/${product.id}`}
-                      className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded"
-                      title="View"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </Link>
-                    <button
-                      className="p-2 text-slate-600 hover:text-green-600 hover:bg-green-50 rounded"
-                      title="Edit"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                  </div>
-                </td>
+      {products.length === 0 ? (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-12 text-center text-slate-400">
+          لا توجد منتجات حتى الآن
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">الرمز</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">الاسم</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">النوع</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">المخزون</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">الحد الأدنى</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">التكلفة</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">سعر البيع</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">حالة</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {products.map(p => {
+                const lowStock = p.stock <= (p.minStock ?? 0);
+                return (
+                  <tr key={p.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-5 py-3 text-sm font-mono text-slate-600">{p.code}</td>
+                    <td className="px-5 py-3 text-sm font-medium text-slate-900">{p.nameAr}</td>
+                    <td className="px-5 py-3 text-sm text-slate-500">{typeLabels[p.type ?? ''] ?? p.type ?? '—'}</td>
+                    <td className="px-5 py-3 text-sm text-slate-700 font-semibold">{p.stock} {p.unit ?? ''}</td>
+                    <td className="px-5 py-3 text-sm text-slate-500">{p.minStock ?? '—'}</td>
+                    <td className="px-5 py-3 text-sm text-slate-600">{formatSAR(p.cost)}</td>
+                    <td className="px-5 py-3 text-sm text-slate-600">{formatSAR(p.price)}</td>
+                    <td className="px-5 py-3 text-sm">
+                      {lowStock ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-xs font-medium">
+                          <AlertTriangle className="w-3 h-3" /> مخزون منخفض
+                        </span>
+                      ) : (
+                        <span className="inline-flex px-2 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">
+                          متاح
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
