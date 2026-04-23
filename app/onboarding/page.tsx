@@ -1,216 +1,204 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Card from '@/components/ui/card';
-import Loader from '@/components/ui/Loader';
-import ErrorState from '@/components/ui/ErrorState';
-
-interface Form {
-  companyName: string;
-  companyNameAr: string;
-  email: string;
-  phone: string;
-  address: string;
-  currency: string;
-  currencySymbol: string;
-  taxRate: number;
-  fiscalYearStartMonth: number;
-  language: 'ar' | 'en';
-  initializeCoA: boolean;
-}
-
-const DEFAULT: Form = {
-  companyName: '',
-  companyNameAr: '',
-  email: '',
-  phone: '',
-  address: '',
-  currency: 'SAR',
-  currencySymbol: 'ر.س',
-  taxRate: 15,
-  fiscalYearStartMonth: 1,
-  language: 'ar',
-  initializeCoA: true,
-};
+import { useAuthStore } from '@/lib/store/auth';
 
 export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState<Form>(DEFAULT);
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch('/api/onboarding', { credentials: 'include' });
-        const j = await res.json();
-        if (j.success) {
-          if (j.data.completed) return router.push('/dashboard');
-          setForm(f => ({ ...f, ...(j.data.settings || {}) }));
-        }
-      } catch {}
-      setLoading(false);
-    })();
-  }, [router]);
+  const [companyName, setCompanyName] = useState('');
+  const [companyNameAr, setCompanyNameAr] = useState('');
+  const [currency, setCurrency] = useState('SAR');
+  const [taxRate, setTaxRate] = useState(15);
 
-  const update = (k: keyof Form, v: any) => setForm(f => ({ ...f, [k]: v }));
+  const canProceed = companyName.trim().length > 0;
 
-  const submit = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
     setSubmitting(true);
-    setError(null);
+
     try {
-      const res = await fetch('/api/onboarding', {
+      const res = await fetch('/api/onboarding/init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          companyName: companyName.trim(),
+          companyNameAr: companyNameAr.trim() || companyName.trim(),
+          currency,
+          taxRate: Number(taxRate),
+        }),
       });
-      const j = await res.json();
-      if (!res.ok || !j.success) throw new Error(j.message || 'فشل الإعداد');
-      router.push('/dashboard');
-    } catch (e: any) {
-      setError(e.message);
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'فشل إعداد الشركة');
+      }
+
+      // Cookie was refreshed server-side with tenantId — go straight to dashboard
+      useAuthStore.setState({ isAuthenticated: true });
+      router.replace('/dashboard');
+    } catch (err: any) {
+      setError(err.message || 'حدث خطأ غير متوقع');
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader /></div>;
-
   return (
-    <div className="min-h-screen bg-gray-50 py-10 px-4" dir="rtl">
-      <div className="max-w-2xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">مرحباً بك في النظام</h1>
-          <p className="text-sm text-gray-500 mt-1">لنقم بإعداد شركتك في 3 خطوات</p>
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4" dir="rtl">
+      <div className="w-full max-w-lg bg-white rounded-2xl shadow-lg overflow-hidden">
+
+        {/* Header */}
+        <div className="bg-blue-600 px-8 py-6 text-white">
+          <h1 className="text-xl font-bold">مرحباً بك في نظام ERP</h1>
+          <p className="text-blue-100 text-sm mt-1">أكمل إعداد شركتك للبدء</p>
         </div>
 
-        <Stepper current={step} />
+        {/* Steps indicator */}
+        <div className="flex border-b border-gray-100">
+          {['بيانات الشركة', 'الإعدادات المالية', 'تأكيد'].map((label, i) => {
+            const n = i + 1;
+            return (
+              <div key={n} className={`flex-1 py-3 text-center text-xs font-medium ${step === n ? 'text-blue-600 border-b-2 border-blue-600' : step > n ? 'text-green-600' : 'text-gray-400'}`}>
+                {step > n ? '✓ ' : ''}{label}
+              </div>
+            );
+          })}
+        </div>
 
-        <Card className="mt-6">
-          {error && <div className="mb-4"><ErrorState message={error} /></div>}
+        <form onSubmit={handleSubmit} className="p-8">
+          {/* Step 1: Company Info */}
+          {step === 1 && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  اسم الشركة (بالإنجليزية) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={companyName}
+                  onChange={e => setCompanyName(e.target.value)}
+                  placeholder="My Company"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                  dir="ltr"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  اسم الشركة (بالعربية)
+                </label>
+                <input
+                  type="text"
+                  value={companyNameAr}
+                  onChange={e => setCompanyNameAr(e.target.value)}
+                  placeholder="شركتي"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+          )}
 
-          {step === 1 && <StepCompany form={form} update={update} />}
-          {step === 2 && <StepFinancial form={form} update={update} />}
-          {step === 3 && <StepConfirm form={form} />}
+          {/* Step 2: Financial settings */}
+          {step === 2 && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">العملة</label>
+                <select
+                  value={currency}
+                  onChange={e => setCurrency(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="SAR">ريال سعودي (SAR)</option>
+                  <option value="AED">درهم إماراتي (AED)</option>
+                  <option value="KWD">دينار كويتي (KWD)</option>
+                  <option value="BHD">دينار بحريني (BHD)</option>
+                  <option value="QAR">ريال قطري (QAR)</option>
+                  <option value="OMR">ريال عماني (OMR)</option>
+                  <option value="EGP">جنيه مصري (EGP)</option>
+                  <option value="USD">دولار أمريكي (USD)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">نسبة ضريبة القيمة المضافة (%)</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.01}
+                  value={taxRate}
+                  onChange={e => setTaxRate(Number(e.target.value))}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          )}
 
-          <div className="flex justify-between mt-6 pt-4 border-t border-gray-100">
+          {/* Step 3: Confirm */}
+          {step === 3 && (
+            <div className="space-y-3">
+              <h3 className="font-semibold text-gray-800 mb-4">مراجعة البيانات</h3>
+              {[
+                ['اسم الشركة (EN)', companyName],
+                ['اسم الشركة (AR)', companyNameAr || companyName],
+                ['العملة', currency],
+                ['نسبة الضريبة', `${taxRate}%`],
+              ].map(([k, v]) => (
+                <div key={k} className="flex justify-between py-2.5 border-b border-gray-100 text-sm">
+                  <span className="text-gray-500">{k}</span>
+                  <span className="font-medium text-gray-900">{v}</span>
+                </div>
+              ))}
+              <p className="text-xs text-gray-400 mt-4">
+                سيتم إنشاء حساب الشركة ومنحك صلاحيات المدير الكامل
+              </p>
+            </div>
+          )}
+
+          {error && (
+            <div className="mt-4 bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-lg">
+              {error}
+            </div>
+          )}
+
+          {/* Navigation */}
+          <div className="flex justify-between mt-8">
             <button
+              type="button"
               onClick={() => setStep(s => s - 1)}
               disabled={step === 1}
-              className="px-4 py-2 text-sm font-medium text-gray-600 disabled:opacity-40"
-            >السابق</button>
+              className="px-5 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              السابق
+            </button>
+
             {step < 3 ? (
               <button
+                type="button"
                 onClick={() => setStep(s => s + 1)}
-                disabled={step === 1 && !form.companyName}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40"
-              >التالي</button>
+                disabled={!canProceed}
+                className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                التالي
+              </button>
             ) : (
               <button
-                onClick={submit}
+                type="submit"
                 disabled={submitting}
-                className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-40"
-              >{submitting ? 'جاري الحفظ...' : 'إنهاء الإعداد'}</button>
+                className="px-6 py-2.5 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {submitting ? 'جاري الإعداد...' : 'إنهاء الإعداد والدخول'}
+              </button>
             )}
           </div>
-        </Card>
+        </form>
       </div>
-    </div>
-  );
-}
-
-function Stepper({ current }: { current: number }) {
-  const steps = ['بيانات الشركة', 'الإعداد المالي', 'التأكيد'];
-  return (
-    <div className="flex items-center justify-between">
-      {steps.map((label, i) => {
-        const n = i + 1;
-        const active = n === current;
-        const done = n < current;
-        return (
-          <div key={n} className="flex items-center flex-1">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${done ? 'bg-green-600 text-white' : active ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'}`}>{done ? '✓' : n}</div>
-            <span className={`mx-2 text-xs ${active ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>{label}</span>
-            {n < steps.length && <div className="flex-1 h-px bg-gray-200" />}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block mb-4">
-      <span className="block text-xs font-medium text-gray-600 mb-1">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-const input = 'w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500';
-
-function StepCompany({ form, update }: { form: Form; update: (k: keyof Form, v: any) => void }) {
-  return (
-    <div>
-      <h2 className="font-semibold text-gray-800 mb-4">بيانات الشركة</h2>
-      <Field label="اسم الشركة (عربي) *"><input className={input} value={form.companyNameAr} onChange={e => update('companyNameAr', e.target.value)} /></Field>
-      <Field label="اسم الشركة (إنجليزي) *"><input className={input} value={form.companyName} onChange={e => update('companyName', e.target.value)} /></Field>
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="البريد الإلكتروني"><input type="email" className={input} value={form.email} onChange={e => update('email', e.target.value)} /></Field>
-        <Field label="الهاتف"><input className={input} value={form.phone} onChange={e => update('phone', e.target.value)} /></Field>
-      </div>
-      <Field label="العنوان"><textarea className={input} rows={2} value={form.address} onChange={e => update('address', e.target.value)} /></Field>
-    </div>
-  );
-}
-
-function StepFinancial({ form, update }: { form: Form; update: (k: keyof Form, v: any) => void }) {
-  return (
-    <div>
-      <h2 className="font-semibold text-gray-800 mb-4">الإعداد المالي</h2>
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="العملة"><input className={input} value={form.currency} onChange={e => update('currency', e.target.value)} /></Field>
-        <Field label="رمز العملة"><input className={input} value={form.currencySymbol} onChange={e => update('currencySymbol', e.target.value)} /></Field>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="نسبة الضريبة %"><input type="number" className={input} value={form.taxRate} onChange={e => update('taxRate', Number(e.target.value))} /></Field>
-        <Field label="شهر بداية السنة المالية">
-          <select className={input} value={form.fiscalYearStartMonth} onChange={e => update('fiscalYearStartMonth', Number(e.target.value))}>
-            {Array.from({ length: 12 }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
-          </select>
-        </Field>
-      </div>
-      <label className="flex items-center gap-2 mt-3">
-        <input type="checkbox" checked={form.initializeCoA} onChange={e => update('initializeCoA', e.target.checked)} />
-        <span className="text-sm text-gray-700">إنشاء شجرة الحسابات الافتراضية</span>
-      </label>
-    </div>
-  );
-}
-
-function StepConfirm({ form }: { form: Form }) {
-  const Row = ({ k, v }: { k: string; v: any }) => (
-    <div className="flex justify-between py-2 border-b border-gray-100 text-sm">
-      <span className="text-gray-500">{k}</span>
-      <span className="text-gray-900 font-medium">{v || '—'}</span>
-    </div>
-  );
-  return (
-    <div>
-      <h2 className="font-semibold text-gray-800 mb-4">تأكيد البيانات</h2>
-      <Row k="الشركة (عربي)" v={form.companyNameAr} />
-      <Row k="الشركة (إنجليزي)" v={form.companyName} />
-      <Row k="البريد" v={form.email} />
-      <Row k="الهاتف" v={form.phone} />
-      <Row k="العملة" v={`${form.currency} (${form.currencySymbol})`} />
-      <Row k="نسبة الضريبة" v={`${form.taxRate}%`} />
-      <Row k="بداية السنة المالية" v={`الشهر ${form.fiscalYearStartMonth}`} />
-      <Row k="شجرة الحسابات" v={form.initializeCoA ? 'سيتم إنشاؤها' : 'لن يتم إنشاؤها'} />
     </div>
   );
 }

@@ -223,11 +223,13 @@ export function middleware(request: NextRequest) {
   // ==========================================================================
   
   const publicRoutes = [
-    '/login', 
-    '/api/auth/login', 
-    '/api/auth/register', 
-    '/api/auth/logout', 
-    '/setup', 
+    '/login',
+    '/onboarding',
+    '/api/auth/login',
+    '/api/auth/register',
+    '/api/auth/logout',
+    '/api/onboarding/init',
+    '/setup',
     '/api/init',
     '/api/health',
   ];

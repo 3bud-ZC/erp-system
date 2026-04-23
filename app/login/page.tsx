@@ -35,12 +35,12 @@ export default function LoginPage() {
       }
 
       // Sync user into Zustand store so dashboard layout sees isAuthenticated=true
-      const { id, email: userEmail, name, roles, permissions } = data.data;
+      const { id, email: userEmail, name, roles, permissions, hasTenant } = data.data;
       setUser({ id, email: userEmail, name, roles, permissions });
-      // Mark authenticated via persisted store (token lives in HttpOnly cookie)
       useAuthStore.setState({ isAuthenticated: true });
 
-      router.replace('/dashboard');
+      // New users without a tenant go through onboarding first
+      router.replace(hasTenant ? '/dashboard' : '/onboarding');
     } catch (err: any) {
       const errorMessage = err?.message || err?.toString() || 'Unknown error';
       setError(errorMessage);
