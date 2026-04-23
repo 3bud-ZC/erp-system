@@ -3,13 +3,13 @@
 import { useEffect, useState } from 'react';
 import { Plus, X, Pencil, Trash2 } from 'lucide-react';
 
-interface Customer {
+interface Supplier {
   id: string;
   code: string;
   nameAr: string;
   nameEn?: string;
-  email?: string;
   phone?: string;
+  email?: string;
   creditLimit?: number;
   balance?: number;
 }
@@ -21,8 +21,8 @@ function formatEGP(v?: number) {
 
 const emptyForm = { code: '', nameAr: '', nameEn: '', email: '', phone: '', creditLimit: '' };
 
-export default function CustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
+export default function SuppliersPage() {
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,7 +33,7 @@ export default function CustomersPage() {
   const [form, setForm] = useState(emptyForm);
 
   // Edit modal
-  const [editItem, setEditItem] = useState<Customer | null>(null);
+  const [editItem, setEditItem] = useState<Supplier | null>(null);
   const [editForm, setEditForm] = useState(emptyForm);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
@@ -44,9 +44,9 @@ export default function CustomersPage() {
 
   function load() {
     setLoading(true);
-    fetch('/api/customers', { credentials: 'include' })
+    fetch('/api/suppliers', { credentials: 'include' })
       .then(r => r.json())
-      .then(j => { if (j.success) setCustomers(j.data ?? []); else setError(j.message || 'فشل التحميل'); })
+      .then(j => { if (j.success) setSuppliers(j.data ?? []); else setError(j.message || 'فشل التحميل'); })
       .catch(() => setError('تعذر الاتصال بالخادم'))
       .finally(() => setLoading(false));
   }
@@ -57,7 +57,7 @@ export default function CustomersPage() {
     e.preventDefault();
     setSaving(true); setFormError(null);
     try {
-      const res = await fetch('/api/customers', {
+      const res = await fetch('/api/suppliers', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -75,15 +75,15 @@ export default function CustomersPage() {
     finally { setSaving(false); }
   }
 
-  function openEdit(c: Customer) {
-    setEditItem(c);
+  function openEdit(s: Supplier) {
+    setEditItem(s);
     setEditForm({
-      code: c.code || '',
-      nameAr: c.nameAr || '',
-      nameEn: c.nameEn || '',
-      email: c.email || '',
-      phone: c.phone || '',
-      creditLimit: c.creditLimit != null ? String(c.creditLimit) : '',
+      code: s.code || '',
+      nameAr: s.nameAr || '',
+      nameEn: s.nameEn || '',
+      email: s.email || '',
+      phone: s.phone || '',
+      creditLimit: s.creditLimit != null ? String(s.creditLimit) : '',
     });
     setEditError(null);
   }
@@ -93,7 +93,7 @@ export default function CustomersPage() {
     if (!editItem) return;
     setEditSaving(true); setEditError(null);
     try {
-      const res = await fetch('/api/customers', {
+      const res = await fetch('/api/suppliers', {
         method: 'PUT', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -116,7 +116,7 @@ export default function CustomersPage() {
     if (!deleteId) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/customers?id=${deleteId}`, { method: 'DELETE', credentials: 'include' });
+      const res = await fetch(`/api/suppliers?id=${deleteId}`, { method: 'DELETE', credentials: 'include' });
       const j = await res.json();
       if (j.success) { setDeleteId(null); load(); }
       else alert(j.message || j.error || 'فشل الحذف');
@@ -124,15 +124,15 @@ export default function CustomersPage() {
     finally { setDeleting(false); }
   }
 
-  if (loading) return <div className="flex items-center justify-center h-64" dir="rtl"><div className="text-slate-500">جاري تحميل العملاء…</div></div>;
+  if (loading) return <div className="flex items-center justify-center h-64" dir="rtl"><div className="text-slate-500">جاري تحميل الموردين…</div></div>;
   if (error) return <div className="flex items-center justify-center h-64" dir="rtl"><div className="text-red-500">{error}</div></div>;
 
   return (
     <div dir="rtl">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">العملاء</h1>
+        <h1 className="text-2xl font-bold text-slate-900">الموردون</h1>
         <button onClick={() => setShowModal(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-          <Plus className="w-4 h-4" /> إضافة عميل
+          <Plus className="w-4 h-4" /> إضافة مورد
         </button>
       </div>
 
@@ -141,7 +141,7 @@ export default function CustomersPage() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" dir="rtl">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
             <div className="flex items-center justify-between p-5 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-900">إضافة عميل جديد</h2>
+              <h2 className="text-lg font-semibold text-slate-900">إضافة مورد جديد</h2>
               <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
             </div>
             <form onSubmit={handleSubmit} className="p-5 space-y-4">
@@ -150,7 +150,7 @@ export default function CustomersPage() {
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">الرمز *</label>
                   <input required value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="CUS-001" />
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="SUP-001" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">حد الائتمان (ج.م)</label>
@@ -161,12 +161,12 @@ export default function CustomersPage() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">الاسم بالعربية *</label>
                 <input required value={form.nameAr} onChange={e => setForm(f => ({ ...f, nameAr: e.target.value }))}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="شركة الأمل" />
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="شركة التوريد" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">الاسم بالإنجليزية</label>
                 <input value={form.nameEn} onChange={e => setForm(f => ({ ...f, nameEn: e.target.value }))}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Al Amal Company" />
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Supply Company" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -177,7 +177,7 @@ export default function CustomersPage() {
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">البريد الإلكتروني</label>
                   <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="info@co.com" />
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="info@supplier.com" />
                 </div>
               </div>
               <div className="flex gap-3 pt-1">
@@ -200,7 +200,7 @@ export default function CustomersPage() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" dir="rtl">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
             <div className="flex items-center justify-between p-5 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-900">تعديل بيانات العميل</h2>
+              <h2 className="text-lg font-semibold text-slate-900">تعديل بيانات المورد</h2>
               <button onClick={() => setEditItem(null)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
             </div>
             <form onSubmit={handleEdit} className="p-5 space-y-4">
@@ -262,7 +262,7 @@ export default function CustomersPage() {
               <Trash2 className="w-6 h-6 text-red-600" />
             </div>
             <h3 className="text-lg font-semibold text-slate-900 mb-2">تأكيد الحذف</h3>
-            <p className="text-sm text-slate-500 mb-6">هل أنت متأكد من حذف هذا العميل؟ لا يمكن التراجع عن هذا الإجراء.</p>
+            <p className="text-sm text-slate-500 mb-6">هل أنت متأكد من حذف هذا المورد؟ لا يمكن حذف مورد مرتبط بفواتير أو طلبات.</p>
             <div className="flex gap-3">
               <button onClick={handleDelete} disabled={deleting}
                 className="flex-1 bg-red-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors">
@@ -277,8 +277,8 @@ export default function CustomersPage() {
         </div>
       )}
 
-      {customers.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-12 text-center text-slate-400">لا يوجد عملاء حتى الآن</div>
+      {suppliers.length === 0 ? (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-12 text-center text-slate-400">لا يوجد موردون حتى الآن</div>
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
           <table className="w-full">
@@ -289,26 +289,24 @@ export default function CustomersPage() {
                 <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">الهاتف</th>
                 <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">البريد الإلكتروني</th>
                 <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">حد الائتمان</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">الرصيد</th>
                 <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">إجراءات</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {customers.map(c => (
-                <tr key={c.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-5 py-3 text-sm font-mono text-slate-600">{c.code}</td>
-                  <td className="px-5 py-3 text-sm font-medium text-slate-900">{c.nameAr}</td>
-                  <td className="px-5 py-3 text-sm text-slate-500">{c.phone || '—'}</td>
-                  <td className="px-5 py-3 text-sm text-slate-500">{c.email || '—'}</td>
-                  <td className="px-5 py-3 text-sm text-slate-600">{formatEGP(c.creditLimit)}</td>
-                  <td className="px-5 py-3 text-sm text-slate-600">{formatEGP(c.balance)}</td>
+              {suppliers.map(s => (
+                <tr key={s.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-5 py-3 text-sm font-mono text-slate-600">{s.code}</td>
+                  <td className="px-5 py-3 text-sm font-medium text-slate-900">{s.nameAr}</td>
+                  <td className="px-5 py-3 text-sm text-slate-500">{s.phone ?? '—'}</td>
+                  <td className="px-5 py-3 text-sm text-slate-500">{s.email ?? '—'}</td>
+                  <td className="px-5 py-3 text-sm text-slate-600">{formatEGP(s.creditLimit)}</td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2">
-                      <button onClick={() => openEdit(c)}
+                      <button onClick={() => openEdit(s)}
                         className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="تعديل">
                         <Pencil className="w-4 h-4" />
                       </button>
-                      <button onClick={() => setDeleteId(c.id)}
+                      <button onClick={() => setDeleteId(s.id)}
                         className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="حذف">
                         <Trash2 className="w-4 h-4" />
                       </button>

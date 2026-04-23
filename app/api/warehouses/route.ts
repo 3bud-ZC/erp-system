@@ -23,13 +23,14 @@ export async function GET(request: Request) {
 
     const where = search
       ? {
+          tenantId: user.tenantId,
           OR: [
             { nameAr: { contains: search, mode: 'insensitive' as const } },
             { nameEn: { contains: search, mode: 'insensitive' as const } },
             { code: { contains: search, mode: 'insensitive' as const } },
           ],
         }
-      : {};
+      : { tenantId: user.tenantId };
 
     const [data, total] = await Promise.all([
       prisma.warehouse.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take: limit }),
@@ -79,9 +80,8 @@ export async function POST(request: Request) {
       return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
     }
 
-    // @ts-ignore - Prisma type mismatch - tenant relation not in generated types
     const warehouse = await prisma.warehouse.create({
-      data: { code, nameAr, nameEn, address, phone, manager, tenant: { connect: { id: user.tenantId } } },
+      data: { code, nameAr, nameEn, address, phone, manager, tenantId: user.tenantId },
     });
 
     await logAuditAction(

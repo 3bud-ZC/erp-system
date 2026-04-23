@@ -172,7 +172,7 @@ export function ERPDataTable({
 
     switch (column.type) {
       case 'currency':
-        return value?.toLocaleString('ar-SA', { style: 'currency', currency: 'SAR' });
+        return value?.toLocaleString('ar-SA', { style: 'currency', currency: 'EGP' });
       case 'date':
         return value ? format(new Date(value), 'PP', { locale: ar }) : '-';
       case 'status':

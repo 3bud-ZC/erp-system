@@ -113,7 +113,7 @@ export function FormField({ config, value, onChange, error, readonly, mode }: Fo
               placeholder="0.00"
               step="0.01"
             />
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">SAR</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">ج.م</span>
           </div>
           {error && <p className={errorClasses}>{error}</p>}
         </div>

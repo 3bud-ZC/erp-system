@@ -5,7 +5,7 @@ function esc(s: any): string {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 }
 
-function money(n: any, sym = 'ر.س') {
+function money(n: any, sym = 'ج.م') {
   const v = Number(n) || 0;
   return `${v.toFixed(2)} ${sym}`;
 }
