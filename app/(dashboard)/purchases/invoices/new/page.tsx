@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, X, Trash2, ChevronDown, AlertCircle, CheckCircle } from 'lucide-react';
+import { Plus, X, Trash2, ArrowRight, AlertCircle, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -19,7 +19,7 @@ interface InvoiceLine {
 /* ─── Toast ──────────────────────────────────────────────── */
 function Toast({ msg, type }: { msg: string; type: 'success' | 'error' }) {
   return (
-    <div className={`fixed top-5 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-2 px-5 py-3 rounded-xl shadow-xl text-white text-sm font-medium transition-all
+    <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-2 px-5 py-3 rounded-xl shadow-xl text-white text-sm font-medium transition-all
       ${type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
       {type === 'success' ? <CheckCircle className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
       {msg}
@@ -389,7 +389,7 @@ export default function NewPurchaseInvoicePage() {
         </div>
         <Link href="/purchases/invoices"
           className="text-sm text-slate-600 hover:text-slate-900 flex items-center gap-1 border border-slate-200 rounded-lg px-3 py-2 transition-colors hover:bg-slate-50">
-          <ChevronDown className="w-4 h-4 rotate-90" /> العودة للقائمة
+          <ArrowRight className="w-4 h-4" /> العودة للقائمة
         </Link>
       </div>
 
@@ -488,6 +488,13 @@ export default function NewPurchaseInvoicePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
+                {lines.every(l => !l.productId) && (
+                  <tr>
+                    <td colSpan={6} className="py-5 text-center">
+                      <p className="text-slate-400 text-xs">لم يتم إضافة أصناف بعد — اختر صنفاً من القائمة أعلاه</p>
+                    </td>
+                  </tr>
+                )}
                 {lines.map((line, idx) => {
                   const prod = products.find(p => p.id === line.productId);
                   const total = lineTotal(line);

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2, ArrowRight, X, Check, Percent, DollarSign, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, ArrowRight, X, Check, Percent, DollarSign, AlertCircle, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 
 /* ─── Types ─────────────────────────────────────────────────────────── */
@@ -178,7 +178,7 @@ function Toast({ msg, type }: { msg: string; type: 'success' | 'error' }) {
   return (
     <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[70] flex items-center gap-2 px-5 py-3 rounded-xl shadow-xl text-sm font-medium
       ${type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
-      {type === 'success' ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
+      {type === 'success' ? <CheckCircle className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
       {msg}
     </div>
   );
@@ -407,11 +407,15 @@ export default function NewSalesInvoicePage() {
       )}
 
       {/* ── Header ── */}
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/sales/invoices" className="text-slate-400 hover:text-slate-600 transition-colors">
-          <ArrowRight className="w-5 h-5" />
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">فاتورة مبيعات جديدة</h1>
+          <p className="text-sm text-slate-500 mt-0.5">أنشئ فاتورة مبيعات جديدة للعميل</p>
+        </div>
+        <Link href="/sales/invoices"
+          className="text-sm text-slate-600 hover:text-slate-900 flex items-center gap-1 border border-slate-200 rounded-lg px-3 py-2 transition-colors hover:bg-slate-50">
+          <ArrowRight className="w-4 h-4" /> العودة للقائمة
         </Link>
-        <h1 className="text-2xl font-bold text-slate-900">فاتورة مبيعات جديدة</h1>
       </div>
 
       {dataError && (
@@ -422,14 +426,14 @@ export default function NewSalesInvoicePage() {
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {formError && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm p-3 rounded-lg flex items-center gap-2">
-            <X className="w-4 h-4 flex-shrink-0" /> {formError}
+          <div className="flex items-center gap-2 text-red-700 text-sm bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />{formError}
           </div>
         )}
 
         {/* ── Invoice Details ── */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
-          <h2 className="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-4">بيانات الفاتورة</h2>
+          <h2 className="text-sm font-semibold text-slate-700 mb-4 border-b border-slate-100 pb-2">بيانات الفاتورة</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
             {/* Customer */}
@@ -491,11 +495,11 @@ export default function NewSalesInvoicePage() {
 
         {/* ── Line Items ── */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">البنود</h2>
+          <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2">
+            <h2 className="text-sm font-semibold text-slate-700">البنود</h2>
             <button type="button" onClick={addLine}
-              className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 font-medium">
-              <Plus className="w-4 h-4" /> إضافة صنف
+              className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium border border-blue-200 rounded-lg px-2.5 py-1 hover:bg-blue-50 transition-colors">
+              <Plus className="w-3.5 h-3.5" /> إضافة صنف
             </button>
           </div>
 
@@ -511,7 +515,14 @@ export default function NewSalesInvoicePage() {
                   <th className="w-8"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-50">
+                {lines.every(l => !l.productId) && (
+                  <tr>
+                    <td colSpan={6} className="py-5 text-center">
+                      <p className="text-slate-400 text-xs">لم يتم إضافة أصناف بعد — اختر منتجاً لإضافة صنف</p>
+                    </td>
+                  </tr>
+                )}
                 {lines.map((line, i) => {
                   const qty  = parseFloat(line.quantity) || 0;
                   const pr   = parseFloat(line.price) || 0;
@@ -524,20 +535,25 @@ export default function NewSalesInvoicePage() {
                       <td className="px-2 py-1.5">
                         <div className="flex gap-1">
                           <select value={line.productId} onChange={e => setLine(i, 'productId', e.target.value)}
-                            className={`flex-1 border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white ${lowStock ? 'border-red-300' : 'border-slate-200'}`}>
+                            className={`flex-1 border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white ${lowStock ? 'border-red-300' : 'border-slate-200'}`}>
                             <option value="">— اختر المنتج —</option>
                             {products.map(p => (
                               <option key={p.id} value={p.id}>
-                                {p.nameAr} ({p.code}){p.stock != null ? ` — مخزون: ${p.stock}` : ''}
+                                {p.nameAr} ({p.code})
                               </option>
                             ))}
                           </select>
                           <button type="button" title="منتج جديد"
                             onClick={() => { setAddProductLineIdx(i); setShowAddProduct(true); }}
-                            className="px-1.5 py-1 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 border border-blue-200">
+                            className="flex-shrink-0 px-1.5 py-1 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 border border-blue-200 transition-colors">
                             <Plus className="w-3 h-3" />
                           </button>
                         </div>
+                        {prod && !lowStock && (
+                          <p className="text-xs text-slate-400 mt-0.5 pr-1">
+                            المخزون: {prod.stock?.toLocaleString('ar-EG') ?? '—'}
+                          </p>
+                        )}
                         {lowStock && <p className="text-red-500 text-xs mt-0.5">⚠ مخزون غير كافٍ (متاح: {prod!.stock})</p>}
                       </td>
                       <td className="px-2 py-1.5">
@@ -571,13 +587,18 @@ export default function NewSalesInvoicePage() {
               </tbody>
             </table>
           </div>
+
+          <button type="button" onClick={addLine}
+            className="mt-3 w-full py-2 border-2 border-dashed border-slate-200 rounded-lg text-xs text-slate-400 hover:border-blue-300 hover:text-blue-500 transition-colors">
+            + إضافة صنف آخر
+          </button>
         </div>
 
         {/* ── Discount + Tax + Notes ── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {/* Left: Discount + Tax */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5 space-y-4">
-            <h2 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">الخصم والضريبة</h2>
+            <h2 className="text-sm font-semibold text-slate-700 mb-4 border-b border-slate-100 pb-2">الخصم والضريبة</h2>
 
             {/* Discount */}
             <div>
@@ -621,7 +642,7 @@ export default function NewSalesInvoicePage() {
 
           {/* Right: Notes */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
-            <h2 className="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">ملاحظات</h2>
+            <h2 className="text-sm font-semibold text-slate-700 mb-3 border-b border-slate-100 pb-2">ملاحظات</h2>
             <textarea rows={5} value={notes} onChange={e => setNotes(e.target.value)}
               placeholder="أي ملاحظات أو شروط خاصة بهذه الفاتورة…"
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
@@ -661,23 +682,29 @@ export default function NewSalesInvoicePage() {
               {/* Save Draft */}
               <button type="button" disabled={saving}
                 onClick={e => handleSubmit(e as any, 'draft')}
-                className="px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-medium hover:bg-slate-200 disabled:opacity-50 transition-colors text-sm border border-slate-200">
-                {saving && saveMode === 'draft' ? 'جاري الحفظ…' : '📋 حفظ مسودة'}
+                className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200 disabled:opacity-50 transition-colors border border-slate-200">
+                {saving && saveMode === 'draft'
+                  ? <><span className="inline-block w-3.5 h-3.5 border-2 border-slate-400/40 border-t-slate-600 rounded-full animate-spin" /> جاري الحفظ…</>
+                  : '📋 حفظ مسودة'}
               </button>
               {/* Save & New */}
               <button type="button" disabled={saving}
                 onClick={e => handleSubmit(e as any, 'new')}
-                className="px-4 py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 transition-colors text-sm">
-                {saving && saveMode === 'new' ? 'جاري الحفظ…' : '➕ حفظ وجديد'}
+                className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm">
+                {saving && saveMode === 'new'
+                  ? <><span className="inline-block w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> جاري الحفظ…</>
+                  : '➕ حفظ وجديد'}
               </button>
               {/* Save & Close */}
               <button type="submit" disabled={saving}
                 onClick={() => setSaveMode('confirm')}
-                className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm">
-                {saving && saveMode === 'confirm' ? 'جاري الحفظ…' : '✓ حفظ وإغلاق'}
+                className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-sm">
+                {saving && saveMode === 'confirm'
+                  ? <><span className="inline-block w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> جاري الحفظ…</>
+                  : '✓ حفظ وإغلاق'}
               </button>
               <Link href="/sales/invoices"
-                className="px-4 py-2.5 bg-white text-slate-500 rounded-lg font-medium hover:bg-slate-50 transition-colors text-sm text-center border border-slate-200">
+                className="px-4 py-2.5 bg-white text-slate-500 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors text-center border border-slate-200">
                 إلغاء
               </Link>
             </div>
