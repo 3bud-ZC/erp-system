@@ -28,6 +28,23 @@ export async function GET(request: Request) {
       return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
     }
 
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    // Single invoice by id
+    if (id) {
+      const invoice = await (prisma as any).salesInvoice.findFirst({
+        where: { id, tenantId: user.tenantId },
+        include: {
+          customer: true,
+          items: { include: { product: true } },
+          payments: { orderBy: { date: 'desc' } },
+        },
+      });
+      if (!invoice) return apiError('الفاتورة غير موجودة', 404);
+      return apiSuccess(invoice, 'Sales invoice fetched successfully');
+    }
+
     const invoices = await (prisma as any).salesInvoice.findMany({
       where: { tenantId: user.tenantId },
       include: {
@@ -224,7 +241,7 @@ export async function PUT(request: Request) {
 
       // STEP 5: Create and post new journal entry with updated total
       const newTotal = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
-      const newJournalEntry = await createSalesInvoiceEntry(invoice.id, newTotal);
+      const newJournalEntry = await createSalesInvoiceEntry(invoice.id, newTotal, user.tenantId);
       if (newJournalEntry) {
         await postJournalEntry(newJournalEntry.id);
       }

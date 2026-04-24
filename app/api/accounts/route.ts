@@ -20,38 +20,40 @@ export async function GET(request: Request) {
       return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
     }
 
+    // Seed chart of accounts if tenant has none yet
+    const count = await prisma.account.count({ where: { tenantId: user.tenantId } });
+    if (count === 0) {
+      const { seedChartOfAccounts } = await import('@/lib/accounting');
+      await seedChartOfAccounts(user.tenantId);
+    }
+
     const accounts = await prisma.account.findMany({
-      where: {
-        isActive: true,
-        tenantId: user.tenantId,
-      },
+      where: { isActive: true, tenantId: user.tenantId },
       include: {
         journalLines: {
           where: {
-            journalEntry: { isPosted: true },
+            tenantId: user.tenantId,
+            journalEntry: { isPosted: true, tenantId: user.tenantId },
           },
-          select: {
-            debit: true,
-            credit: true,
-          },
+          select: { debit: true, credit: true },
         },
       },
       orderBy: { code: 'asc' },
     });
 
     const accountsWithBalances = accounts.map((account) => {
-      const totalDebit = account.journalLines.reduce((sum, line) => sum + (Number(line.debit) || 0), 0);
-      const totalCredit = account.journalLines.reduce((sum, line) => sum + (Number(line.credit) || 0), 0);
-      
-      const isCreditNormal = ['Liability', 'Equity', 'Revenue'].includes(account.type);
-      const balance = isCreditNormal
-        ? Number(account.balance) + (totalCredit - totalDebit)
-        : Number(account.balance) + (totalDebit - totalCredit);
-
+      const totalDebit  = account.journalLines.reduce((s, l) => s + Number(l.debit),  0);
+      const totalCredit = account.journalLines.reduce((s, l) => s + Number(l.credit), 0);
       return {
-        ...account,
-        calculatedBalance: balance,
-        journalLines: undefined,
+        id:         account.id,
+        code:       account.code,
+        nameAr:     account.nameAr,
+        nameEn:     account.nameEn,
+        type:       account.type,
+        subType:    account.subType,
+        balance:    Number(account.balance),
+        totalDebit,
+        totalCredit,
       };
     });
 

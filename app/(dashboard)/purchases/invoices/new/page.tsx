@@ -214,6 +214,7 @@ export default function NewPurchaseInvoicePage() {
 
   // UI state
   const [saving,    setSaving]    = useState(false);
+  const [saveMode,  setSaveMode]  = useState<'draft' | 'confirm' | 'new'>('confirm');
   const [formError, setFormError] = useState<string | null>(null);
   const [toast,     setToast]     = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
 
@@ -276,21 +277,35 @@ export default function NewPurchaseInvoicePage() {
     showToast(`تم إضافة الصنف: ${p.nameAr}`, 'success');
   }
 
+  /* ── Reset form ── */
+  function resetForm() {
+    setSupplierId(''); setInvoiceNumber(''); setNotes('');
+    setLines([emptyLine()]); setStatus('pending'); setPaymentStatus('credit');
+    setInvoiceDate(new Date().toISOString().split('T')[0]);
+  }
+
   /* ── Submit ── */
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent, mode: 'draft' | 'confirm' | 'new' = saveMode) {
     e.preventDefault();
     setFormError(null);
 
-    if (!supplierId) { setFormError('يرجى اختيار المورد'); return; }
-    const validLines = lines.filter(l => l.productId && parseFloat(l.quantity) > 0 && parseFloat(l.price) >= 0);
-    if (validLines.length === 0) { setFormError('يرجى إضافة صنف واحد على الأقل بكمية وسعر صحيحين'); return; }
+    if (mode === 'draft') {
+      if (!lines.some(l => l.productId)) { setFormError('أضف صنفاً واحداً على الأقل'); return; }
+    } else {
+      if (!supplierId) { setFormError('يرجى اختيار المورد'); return; }
+      const valid = lines.filter(l => l.productId && parseFloat(l.quantity) > 0 && parseFloat(l.price) >= 0);
+      if (valid.length === 0) { setFormError('يرجى إضافة صنف واحد على الأقل بكمية وسعر صحيحين'); return; }
+    }
 
-    setSaving(true);
+    const validLines = lines.filter(l => l.productId && parseFloat(l.quantity) > 0 && parseFloat(l.price) >= 0);
+    const finalStatus = mode === 'draft' ? 'draft' : status;
+
+    setSaving(true); setSaveMode(mode);
     try {
       const payload: Record<string, unknown> = {
-        supplierId,
+        supplierId: supplierId || undefined,
         date:          new Date(invoiceDate).toISOString(),
-        status,
+        status:        finalStatus,
         paymentStatus,
         notes:         notes.trim() || undefined,
         total:         subtotal,
@@ -310,8 +325,16 @@ export default function NewPurchaseInvoicePage() {
       });
       const j = await res.json();
       if (j.success) {
-        showToast('تم حفظ فاتورة المشتريات بنجاح ✓', 'success');
-        setTimeout(() => router.push('/purchases/invoices'), 1200);
+        if (mode === 'draft') {
+          showToast('تم حفظ المسودة ✓', 'success');
+          setTimeout(() => router.push('/purchases/invoices'), 1000);
+        } else if (mode === 'new') {
+          showToast('تم حفظ الفاتورة — جاهز لفاتورة جديدة ✓', 'success');
+          resetForm();
+        } else {
+          showToast('تم حفظ فاتورة المشتريات بنجاح ✓', 'success');
+          setTimeout(() => router.push('/purchases/invoices'), 1000);
+        }
       } else {
         setFormError(j.message || j.error || 'فشل حفظ الفاتورة');
       }
@@ -557,18 +580,36 @@ export default function NewPurchaseInvoicePage() {
         </div>
 
         {/* ── Actions ── */}
-        <div className="flex gap-3">
-          <button type="submit" disabled={saving}
-            className="flex-1 bg-blue-600 text-white rounded-xl py-3 font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-sm flex items-center justify-center gap-2">
-            {saving ? (
-              <>
-                <span className="inline-block w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                جاري الحفظ…
-              </>
-            ) : 'حفظ الفاتورة'}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-4 flex flex-wrap gap-3">
+          {/* Save as draft */}
+          <button type="button" disabled={saving}
+            onClick={e => handleSubmit(e as unknown as React.FormEvent, 'draft')}
+            className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200 disabled:opacity-50 transition-colors border border-slate-200">
+            {saving && saveMode === 'draft'
+              ? <><span className="inline-block w-3.5 h-3.5 border-2 border-slate-400/40 border-t-slate-600 rounded-full animate-spin" /> جاري الحفظ…</>
+              : '📋 حفظ مسودة'}
           </button>
+
+          {/* Save & New */}
+          <button type="button" disabled={saving}
+            onClick={e => handleSubmit(e as unknown as React.FormEvent, 'new')}
+            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm">
+            {saving && saveMode === 'new'
+              ? <><span className="inline-block w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> جاري الحفظ…</>
+              : '➕ حفظ وجديد'}
+          </button>
+
+          {/* Save & Close */}
+          <button type="submit" disabled={saving}
+            onClick={() => setSaveMode('confirm')}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-sm">
+            {saving && saveMode === 'confirm'
+              ? <><span className="inline-block w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> جاري الحفظ…</>
+              : '✓ حفظ وإغلاق'}
+          </button>
+
           <Link href="/purchases/invoices"
-            className="flex-1 bg-slate-100 text-slate-700 rounded-xl py-3 font-semibold hover:bg-slate-200 transition-colors text-center">
+            className="px-4 py-2.5 bg-white text-slate-500 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors border border-slate-200 text-center">
             إلغاء
           </Link>
         </div>

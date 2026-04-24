@@ -285,6 +285,19 @@ export default function PurchaseInvoicesPage() {
   const [editInv,   setEditInv]   = useState<PurchaseInvoice | null>(null);
   const [deleteInv, setDeleteInv] = useState<PurchaseInvoice | null>(null);
 
+  /* Filters — client-side, seeded from URL params on mount */
+  const [filterStatus,   setFilterStatus]   = useState('');
+  const [filterSupplier, setFilterSupplier] = useState('');
+  const [filterFrom,     setFilterFrom]     = useState('');
+  const [filterTo,       setFilterTo]       = useState('');
+
+  // Seed filter from URL on client
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const s = p.get('supplier');
+    if (s) setFilterSupplier(s);
+  }, []);
+
   function load() {
     setLoading(true);
     fetch('/api/purchase-invoices', { credentials: 'include' })
@@ -296,6 +309,16 @@ export default function PurchaseInvoicesPage() {
       .catch(() => setError('تعذر الاتصال بالخادم'))
       .finally(() => setLoading(false));
   }
+
+  /* Apply filters */
+  const filtered = invoices.filter(inv => {
+    if (filterStatus && inv.status !== filterStatus) return false;
+    if (filterSupplier && !(inv.supplier?.nameAr ?? '').includes(filterSupplier)) return false;
+    const d = new Date(inv.date ?? inv.createdAt);
+    if (filterFrom && d < new Date(filterFrom)) return false;
+    if (filterTo   && d > new Date(filterTo + 'T23:59:59')) return false;
+    return true;
+  });
 
   useEffect(() => { load(); }, []);
 
@@ -327,6 +350,52 @@ export default function PurchaseInvoicesPage() {
         </Link>
       </div>
 
+      {/* Filter Bar */}
+      {invoices.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3 mb-4 flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-[140px]">
+            <label className="block text-xs font-medium text-slate-500 mb-1">الحالة</label>
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+              <option value="">كل الحالات</option>
+              <option value="draft">مسودة</option>
+              <option value="pending">معلقة</option>
+              <option value="completed">مكتملة</option>
+              <option value="paid">مدفوعة</option>
+              <option value="cancelled">ملغاة</option>
+            </select>
+          </div>
+          <div className="flex-1 min-w-[160px]">
+            <label className="block text-xs font-medium text-slate-500 mb-1">المورد</label>
+            <input type="text" value={filterSupplier} onChange={e => setFilterSupplier(e.target.value)}
+              placeholder="ابحث باسم المورد…"
+              className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div className="flex-1 min-w-[130px]">
+            <label className="block text-xs font-medium text-slate-500 mb-1">من تاريخ</label>
+            <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div className="flex-1 min-w-[130px]">
+            <label className="block text-xs font-medium text-slate-500 mb-1">إلى تاريخ</label>
+            <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div className="flex items-end gap-2 pb-0.5">
+            {(filterStatus || filterSupplier || filterFrom || filterTo) && (
+              <button
+                onClick={() => { setFilterStatus(''); setFilterSupplier(''); setFilterFrom(''); setFilterTo(''); }}
+                className="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap">
+                مسح الفلاتر
+              </button>
+            )}
+            <span className="text-xs text-slate-400 whitespace-nowrap">
+              {filtered.length} من {invoices.length} فاتورة
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Stats */}
       {invoices.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
@@ -352,6 +421,15 @@ export default function PurchaseInvoicesPage() {
             <Plus className="w-4 h-4" /> إنشاء أول فاتورة
           </Link>
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-10 text-center">
+          <p className="text-slate-400 text-sm mb-2">لا توجد فواتير تطابق الفلاتر المحددة</p>
+          <button
+            onClick={() => { setFilterStatus(''); setFilterSupplier(''); setFilterFrom(''); setFilterTo(''); }}
+            className="text-sm text-blue-600 hover:underline">
+            مسح الفلاتر
+          </button>
+        </div>
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
           <table className="w-full">
@@ -367,12 +445,16 @@ export default function PurchaseInvoicesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {invoices.map(inv => {
+              {filtered.map(inv => {
                 const st = statusLabels[inv.status] ?? { label: inv.status, cls: 'bg-slate-100 text-slate-600' };
                 const pt = paymentLabels[inv.paymentStatus ?? ''] ?? { label: inv.paymentStatus ?? '—', cls: 'bg-slate-100 text-slate-600' };
                 return (
                   <tr key={inv.id} className="hover:bg-slate-50 transition-colors group">
-                    <td className="px-4 py-3 text-sm font-semibold text-blue-600">{inv.invoiceNumber}</td>
+                    <td className="px-4 py-3 text-sm font-semibold text-blue-600">
+                      <Link href={`/purchases/invoices/${inv.id}`} className="hover:underline">
+                        #{inv.invoiceNumber}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3 text-sm text-slate-800">{inv.supplier?.nameAr ?? '—'}</td>
                     <td className="px-4 py-3 text-sm text-slate-500">{formatDate(inv.date ?? inv.createdAt)}</td>
                     <td className="px-4 py-3 text-sm font-semibold text-slate-900">{formatEGP(inv.grandTotal ?? inv.total)}</td>

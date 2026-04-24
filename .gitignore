@@ -133,3 +133,11 @@ temp/
 # Backup files
 *.backup
 *.bak
+
+# Build snapshots / temp logs
+build-*.log
+build-*.tmp
+*.snap.tmp
+
+# Claude worktrees (auto-generated, not source)
+.claude/worktrees/

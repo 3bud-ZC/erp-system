@@ -107,15 +107,17 @@ export default function WarehousesPage() {
     finally { setEditSaving(false); }
   }
 
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   async function handleDelete() {
     if (!deleteId) return;
-    setDeleting(true);
+    setDeleting(true); setDeleteError(null);
     try {
       const res = await fetch(`/api/warehouses?id=${deleteId}`, { method: 'DELETE', credentials: 'include' });
       const j = await res.json();
       if (j.success) { setDeleteId(null); load(); }
-      else alert(j.message || j.error || 'فشل الحذف');
-    } catch { alert('تعذر الاتصال بالخادم'); }
+      else setDeleteError(j.message || j.error || 'فشل الحذف');
+    } catch { setDeleteError('تعذر الاتصال بالخادم'); }
     finally { setDeleting(false); }
   }
 
@@ -228,7 +230,8 @@ export default function WarehousesPage() {
               <Trash2 className="w-6 h-6 text-red-600" />
             </div>
             <h3 className="text-lg font-semibold text-slate-900 mb-2">تأكيد الحذف</h3>
-            <p className="text-sm text-slate-500 mb-6">هل أنت متأكد من حذف هذا المستودع؟ لا يمكن حذف مستودع يحتوي على منتجات.</p>
+            <p className="text-sm text-slate-500 mb-3">هل أنت متأكد من حذف هذا المستودع؟ لا يمكن حذف مستودع يحتوي على منتجات.</p>
+            {deleteError && <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{deleteError}</p>}
             <div className="flex gap-3">
               <button onClick={handleDelete} disabled={deleting}
                 className="flex-1 bg-red-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors">

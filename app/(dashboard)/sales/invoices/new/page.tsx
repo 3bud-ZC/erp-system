@@ -215,8 +215,9 @@ export default function NewSalesInvoicePage() {
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [showAddProduct, setShowAddProduct]   = useState(false);
   const [addProductLineIdx, setAddProductLineIdx] = useState<number | null>(null);
-  const [saving, setSaving]   = useState(false);
-  const [toast, setToast]     = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [saving, setSaving]     = useState(false);
+  const [saveMode, setSaveMode] = useState<'draft' | 'confirm' | 'new'>('confirm');
+  const [toast, setToast]       = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [formError, setFormError] = useState('');
 
   /* ── Load reference data ── */
@@ -304,25 +305,30 @@ export default function NewSalesInvoicePage() {
   }
 
   /* ── Submit ── */
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent, mode: 'draft' | 'confirm' | 'new' = saveMode) {
     e.preventDefault();
-    const err = validate();
-    if (err) { setFormError(err); return; }
+    // Skip customer validation for drafts
+    if (mode !== 'draft') {
+      const err = validate();
+      if (err) { setFormError(err); return; }
+    } else if (!lines.some(l => l.productId)) {
+      setFormError('أضف صنفاً واحداً على الأقل'); return;
+    }
 
-    setSaving(true);
+    setSaving(true); setSaveMode(mode);
     setFormError('');
 
     const validLines = lines.filter(l => l.productId && parseFloat(l.quantity) > 0);
+    const finalStatus = mode === 'draft' ? 'draft' : status;
 
     try {
       const res = await fetch('/api/sales-invoices', {
-        method: 'POST',
-        credentials: 'include',
+        method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          customerId,
+          customerId: customerId || undefined,
           date: invoiceDate,
-          status,
+          status: finalStatus,
           paymentStatus,
           ...(invoiceNumber.trim() && { invoiceNumber: invoiceNumber.trim() }),
           notes: notes.trim() || undefined,
@@ -341,8 +347,20 @@ export default function NewSalesInvoicePage() {
 
       const j = await res.json();
       if (j.success) {
-        showToast('تم حفظ الفاتورة بنجاح ✓', 'success');
-        setTimeout(() => router.push('/sales/invoices'), 1200);
+        if (mode === 'draft') {
+          showToast('تم حفظ المسودة ✓', 'success');
+          setTimeout(() => router.push('/sales/invoices'), 1000);
+        } else if (mode === 'new') {
+          showToast('تم حفظ الفاتورة — جاهز لفاتورة جديدة ✓', 'success');
+          // Reset form
+          setCustomerId(''); setInvoiceNumber(''); setNotes('');
+          setLines([emptyLine()]); setDiscountValue(''); setTaxEnabled(false);
+          setStatus('pending'); setPaymentStatus('cash');
+          setInvoiceDate(new Date().toISOString().split('T')[0]);
+        } else {
+          showToast('تم حفظ الفاتورة بنجاح ✓', 'success');
+          setTimeout(() => router.push('/sales/invoices'), 1000);
+        }
       } else {
         setFormError(j.message || j.error || 'فشل إنشاء الفاتورة');
       }
@@ -622,13 +640,27 @@ export default function NewSalesInvoicePage() {
             </div>
 
             {/* Action buttons */}
-            <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+            <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+              {/* Save Draft */}
+              <button type="button" disabled={saving}
+                onClick={e => handleSubmit(e as any, 'draft')}
+                className="px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-medium hover:bg-slate-200 disabled:opacity-50 transition-colors text-sm border border-slate-200">
+                {saving && saveMode === 'draft' ? 'جاري الحفظ…' : '📋 حفظ مسودة'}
+              </button>
+              {/* Save & New */}
+              <button type="button" disabled={saving}
+                onClick={e => handleSubmit(e as any, 'new')}
+                className="px-4 py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 transition-colors text-sm">
+                {saving && saveMode === 'new' ? 'جاري الحفظ…' : '➕ حفظ وجديد'}
+              </button>
+              {/* Save & Close */}
               <button type="submit" disabled={saving}
-                className="px-8 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm min-w-[140px]">
-                {saving ? 'جاري الحفظ…' : 'حفظ الفاتورة'}
+                onClick={() => setSaveMode('confirm')}
+                className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm">
+                {saving && saveMode === 'confirm' ? 'جاري الحفظ…' : '✓ حفظ وإغلاق'}
               </button>
               <Link href="/sales/invoices"
-                className="px-8 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-medium hover:bg-slate-200 transition-colors text-sm text-center">
+                className="px-4 py-2.5 bg-white text-slate-500 rounded-lg font-medium hover:bg-slate-50 transition-colors text-sm text-center border border-slate-200">
                 إلغاء
               </Link>
             </div>

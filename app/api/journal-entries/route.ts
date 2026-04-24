@@ -107,6 +107,7 @@ export async function POST(request: Request) {
       description,
       referenceType: referenceType || 'Manual',
       referenceId: referenceId || null,
+      tenantId: user.tenantId!,
       lines: lines.map((line: any) => ({
         accountCode: line.accountCode,
         debit: line.debit || 0,
