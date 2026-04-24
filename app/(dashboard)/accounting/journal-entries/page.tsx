@@ -51,7 +51,7 @@ export default function JournalEntriesPage() {
       .then(j => {
         if (j.success) {
           const raw = j.data;
-          setEntries(Array.isArray(raw) ? raw : (raw?.entries ?? raw?.data ?? []));
+          setEntries(Array.isArray(raw) ? raw : (raw?.entries ?? []));
         } else setError(j.message || 'فشل تحميل القيود');
       })
       .catch(() => setError('تعذر الاتصال بالخادم'))

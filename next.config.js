@@ -64,4 +64,22 @@ const nextConfig = {
   },
 };
 
+nextConfig.redirects = async () => [
+  // Redirect legacy /erp/* routes to new canonical routes
+  { source: '/erp/dashboard', destination: '/dashboard', permanent: false },
+  { source: '/erp/sales/invoices', destination: '/sales/invoices', permanent: false },
+  { source: '/erp/sales/invoices/create', destination: '/sales/invoices/new', permanent: false },
+  { source: '/erp/sales/orders', destination: '/sales/invoices', permanent: false },
+  { source: '/erp/sales/orders/create', destination: '/sales/invoices/new', permanent: false },
+  { source: '/erp/sales/quotations', destination: '/sales/invoices', permanent: false },
+  { source: '/erp/purchases/invoices', destination: '/purchases/invoices', permanent: false },
+  { source: '/erp/purchases/invoices/create', destination: '/purchases/invoices', permanent: false },
+  { source: '/erp/purchases/orders', destination: '/purchases/invoices', permanent: false },
+  { source: '/erp/purchases/orders/create', destination: '/purchases/invoices', permanent: false },
+  { source: '/erp/inventory/products', destination: '/inventory/products', permanent: false },
+  { source: '/erp/inventory/products/create', destination: '/inventory/products', permanent: false },
+  { source: '/erp/accounting/journal', destination: '/accounting/journal-entries', permanent: false },
+  { source: '/erp/accounting/journal/create', destination: '/accounting/journal-entries', permanent: false },
+];
+
 module.exports = nextConfig;

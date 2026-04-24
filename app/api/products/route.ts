@@ -22,13 +22,14 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const type = searchParams.get('type') || 'finished_product';
+    const typeParam = searchParams.get('type');
+
+    // If type is omitted or 'all', return all types; otherwise filter by specific type
+    const where: any = { tenantId: user.tenantId };
+    if (typeParam && typeParam !== 'all') where.type = typeParam;
 
     const products = await prisma.product.findMany({
-      where: {
-        type,
-        tenantId: user.tenantId,
-      },
+      where,
       orderBy: { createdAt: 'desc' },
       include: {
         unitRef: true,
