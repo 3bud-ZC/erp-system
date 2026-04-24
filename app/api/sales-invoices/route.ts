@@ -16,6 +16,17 @@ import {
   handleTransactionError 
 } from '@/lib/erp-execution-engine/services/atomic-transaction-service';
 
+// Translate backend errors to user-friendly Arabic messages
+function translateSalesError(error: any): string {
+  const msg: string = error?.message || String(error);
+  if (msg.includes('Foreign key') || msg.includes('foreign key') || msg.includes('P2003')) return 'هذا العنصر مرتبط ببيانات أخرى';
+  if (msg.includes('Unique constraint') || msg.includes('P2002')) return 'رقم الفاتورة مستخدم بالفعل';
+  if (msg.includes('Stock') || msg.includes('stock') || msg.includes('insufficient')) return 'رصيد المخزون غير كافٍ';
+  if (msg.includes('Validation') || msg.includes('validation') || msg.includes('P2000')) return 'بيانات غير مكتملة أو غير صحيحة';
+  if (msg.includes('Record to update not found') || msg.includes('P2025')) return 'السجل غير موجود';
+  return 'حدث خطأ غير متوقع — يرجى المحاولة مرة أخرى';
+}
+
 // GET - Read sales invoices (requires read_sales_invoice permission)
 export async function GET(request: Request) {
   try {
@@ -85,6 +96,19 @@ export async function POST(request: Request) {
         return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
       }
 
+      // Explicit input validation
+      if (!safeInvoiceData.customerId) {
+        return apiError('يجب اختيار العميل', 400);
+      }
+      if (!Array.isArray(items) || items.length === 0) {
+        return apiError('يجب إضافة صنف واحد على الأقل', 400);
+      }
+      for (const item of items) {
+        if (!item.productId) return apiError('كل صنف يجب أن يحتوي على منتج محدد', 400);
+        if (!(Number(item.quantity) > 0)) return apiError('الكمية يجب أن تكون أكبر من صفر', 400);
+        if (Number(item.price) < 0) return apiError('السعر يجب أن يكون صحيحاً', 400);
+      }
+
       // STEP 1: Quick pre-check for early user-friendly error (outside transaction)
       const validation = await validateStockAvailability(items);
       if (!validation.valid) {
@@ -130,9 +154,10 @@ export async function POST(request: Request) {
 
       return apiSuccess(invoice, 'Sales invoice created successfully');
     } catch (error: any) {
-      console.error('Sales invoice creation error:', error);
-      console.error('Error details:', JSON.stringify(error, null, 2));
-      return handleApiError(error, 'Create sales invoice');
+      console.error('Sales invoice creation error:', error?.message || error);
+      // Translate known DB/service errors to Arabic
+      const msg = translateSalesError(error);
+      return apiError(msg, 500);
     }
   }
 

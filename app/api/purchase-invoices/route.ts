@@ -10,6 +10,16 @@ import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
 import { logActivity } from '@/lib/activity-log';
 
+// Translate backend errors to user-friendly Arabic messages
+function translatePurchaseError(error: any): string {
+  const msg: string = error?.message || String(error);
+  if (msg.includes('Foreign key') || msg.includes('foreign key') || msg.includes('P2003')) return 'هذا العنصر مرتبط ببيانات أخرى';
+  if (msg.includes('Unique constraint') || msg.includes('P2002')) return 'رقم الفاتورة مستخدم بالفعل';
+  if (msg.includes('Validation') || msg.includes('validation') || msg.includes('P2000')) return 'بيانات غير مكتملة أو غير صحيحة';
+  if (msg.includes('Record to update not found') || msg.includes('P2025')) return 'السجل غير موجود';
+  return 'حدث خطأ غير متوقع — يرجى المحاولة مرة أخرى';
+}
+
 // GET - Read purchase invoices (requires read_purchase_invoice permission)
 export async function GET(request: Request) {
   try {
@@ -73,6 +83,19 @@ export async function POST(request: Request) {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { items, tenantId: _clientTenantId, ...invoiceData } = body;
 
+      // Explicit input validation
+      if (!invoiceData.supplierId) {
+        return apiError('يجب اختيار المورد', 400);
+      }
+      if (!Array.isArray(items) || items.length === 0) {
+        return apiError('يجب إضافة صنف واحد على الأقل', 400);
+      }
+      for (const item of items) {
+        if (!item.productId) return apiError('كل صنف يجب أن يحتوي على منتج محدد', 400);
+        if (!(Number(item.quantity) > 0)) return apiError('الكمية يجب أن تكون أكبر من صفر', 400);
+        if (Number(item.price) < 0) return apiError('السعر يجب أن يكون صحيحاً', 400);
+      }
+
       // Calculate total server-side (ignore client-sent total)
       const total = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
 
@@ -128,8 +151,10 @@ export async function POST(request: Request) {
       });
 
       return apiSuccess(invoice, 'Purchase invoice created successfully');
-    } catch (error) {
-      return handleApiError(error, 'Create purchase invoice');
+    } catch (error: any) {
+      console.error('Purchase invoice creation error:', error?.message || error);
+      const msg = translatePurchaseError(error);
+      return apiError(msg, 500);
     }
   }
 

@@ -284,6 +284,16 @@ export default function NewPurchaseInvoicePage() {
     setInvoiceDate(new Date().toISOString().split('T')[0]);
   }
 
+  /* ── Error translation ── */
+  function translateError(err: string): string {
+    if (!err) return 'حدث خطأ غير متوقع';
+    if (err.includes('foreign key') || err.includes('Foreign key') || err.includes('P2003')) return 'هذا العنصر مرتبط ببيانات أخرى';
+    if (err.includes('Unique') || err.includes('P2002')) return 'رقم الفاتورة مستخدم بالفعل';
+    if (err.includes('Validation') || err.includes('validation')) return 'بيانات غير مكتملة أو غير صحيحة';
+    if (err.includes('connect') || err.includes('fetch')) return 'تعذر الاتصال بالخادم';
+    return err;
+  }
+
   /* ── Submit ── */
   async function handleSubmit(e: React.FormEvent, mode: 'draft' | 'confirm' | 'new' = saveMode) {
     e.preventDefault();
@@ -301,42 +311,48 @@ export default function NewPurchaseInvoicePage() {
     const finalStatus = mode === 'draft' ? 'draft' : status;
 
     setSaving(true); setSaveMode(mode);
-    try {
-      const payload: Record<string, unknown> = {
-        supplierId: supplierId || undefined,
-        date:          new Date(invoiceDate).toISOString(),
-        status:        finalStatus,
-        paymentStatus,
-        notes:         notes.trim() || undefined,
-        total:         subtotal,
-        items: validLines.map(l => ({
-          productId: l.productId,
-          quantity:  parseFloat(l.quantity),
-          price:     parseFloat(l.price),
-          total:     (parseFloat(l.quantity) || 0) * (parseFloat(l.price) || 0),
-        })),
-      };
-      if (invoiceNumber.trim()) payload.invoiceNumber = invoiceNumber.trim();
 
+    const payload: Record<string, unknown> = {
+      supplierId: supplierId || undefined,
+      date:          new Date(invoiceDate).toISOString(),
+      status:        finalStatus,
+      paymentStatus,
+      notes:         notes.trim() || undefined,
+      total:         subtotal,
+      items: validLines.map(l => ({
+        productId: l.productId,
+        quantity:  parseFloat(l.quantity),
+        price:     parseFloat(l.price),
+        total:     (parseFloat(l.quantity) || 0) * (parseFloat(l.price) || 0),
+      })),
+    };
+    if (invoiceNumber.trim()) payload.invoiceNumber = invoiceNumber.trim();
+
+    console.log('[PurchaseInvoice] Sending payload:', payload);
+
+    try {
       const res = await fetch('/api/purchase-invoices', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       const j = await res.json();
+      console.log('[PurchaseInvoice] Response:', j);
+
       if (j.success) {
         if (mode === 'draft') {
           showToast('تم حفظ المسودة ✓', 'success');
           setTimeout(() => router.push('/purchases/invoices'), 1000);
         } else if (mode === 'new') {
-          showToast('تم حفظ الفاتورة — جاهز لفاتورة جديدة ✓', 'success');
+          showToast('تم حفظ الفاتورة بنجاح ✓', 'success');
           resetForm();
         } else {
           showToast('تم حفظ فاتورة المشتريات بنجاح ✓', 'success');
           setTimeout(() => router.push('/purchases/invoices'), 1000);
         }
       } else {
-        setFormError(j.message || j.error || 'فشل حفظ الفاتورة');
+        const rawMsg = j.message || j.error || 'فشل حفظ الفاتورة';
+        setFormError(translateError(rawMsg));
       }
     } catch {
       setFormError('تعذر الاتصال بالخادم');
