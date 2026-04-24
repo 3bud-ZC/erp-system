@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Plus, Eye, Pencil, Trash2, X, AlertCircle } from 'lucide-react';
+import { useEffect, useState, useMemo, useCallback, memo } from 'react';
+import { Plus, Eye, Pencil, Trash2, X, AlertCircle, ChevronRight, ChevronLeft, FileText } from 'lucide-react';
 import Link from 'next/link';
 
 /* ─── Types ─────────────────────────────────────────────── */
@@ -30,6 +30,9 @@ interface SalesInvoice {
   items?: InvoiceItem[];
 }
 
+/* ─── Constants ──────────────────────────────────────────── */
+const PAGE_SIZE = 20;
+
 /* ─── Helpers ────────────────────────────────────────────── */
 function formatEGP(v?: number | null) {
   if (v == null) return '—';
@@ -50,14 +53,83 @@ const statusLabels: Record<string, { label: string; cls: string }> = {
 };
 
 const paymentLabels: Record<string, { label: string; cls: string }> = {
-  cash:          { label: 'نقدي',        cls: 'bg-emerald-50 text-emerald-700' },
-  credit:        { label: 'آجل',         cls: 'bg-orange-50 text-orange-700' },
-  partial:       { label: 'جزئي',        cls: 'bg-purple-50 text-purple-700' },
+  cash:          { label: 'نقدي',       cls: 'bg-emerald-50 text-emerald-700' },
+  credit:        { label: 'آجل',        cls: 'bg-orange-50 text-orange-700' },
+  partial:       { label: 'جزئي',       cls: 'bg-purple-50 text-purple-700' },
   bank_transfer: { label: 'تحويل بنكي', cls: 'bg-sky-50 text-sky-700' },
 };
 
+/* ─── Skeleton ───────────────────────────────────────────── */
+function TableSkeleton() {
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+      <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex gap-8">
+        {['w-20', 'w-28', 'w-16', 'w-24', 'w-16', 'w-16', 'w-12'].map((w, i) => (
+          <div key={i} className={`${w} h-3.5 bg-slate-200 animate-pulse rounded`} />
+        ))}
+      </div>
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div key={i} className="px-4 py-3.5 border-b border-slate-100 flex gap-8 items-center last:border-0">
+          <div className="w-20 h-4 bg-slate-100 animate-pulse rounded" />
+          <div className="w-28 h-4 bg-slate-100 animate-pulse rounded" />
+          <div className="w-16 h-4 bg-slate-100 animate-pulse rounded" />
+          <div className="w-24 h-4 bg-slate-100 animate-pulse rounded" />
+          <div className="w-16 h-5 bg-slate-100 animate-pulse rounded-full" />
+          <div className="w-16 h-5 bg-slate-100 animate-pulse rounded-full" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Pagination ─────────────────────────────────────────── */
+const Pagination = memo(function Pagination({
+  page, totalPages, onPage,
+}: { page: number; totalPages: number; onPage: (p: number) => void }) {
+  if (totalPages <= 1) return null;
+
+  const pages = useMemo(() => {
+    const all = Array.from({ length: totalPages }, (_, i) => i + 1);
+    return all.filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1);
+  }, [totalPages, page]);
+
+  return (
+    <div className="flex items-center gap-1">
+      <button onClick={() => onPage(page - 1)} disabled={page === 1}
+        className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40 transition-colors">
+        <ChevronRight className="w-4 h-4" />
+      </button>
+
+      {pages.map((p, i) => {
+        const prev = pages[i - 1];
+        const showEllipsis = typeof prev === 'number' && p - prev > 1;
+        return (
+          <span key={p} className="flex items-center gap-1">
+            {showEllipsis && <span className="px-1 text-slate-400 text-sm">…</span>}
+            <button
+              onClick={() => onPage(p)}
+              className={`min-w-[32px] h-8 rounded-lg text-sm font-medium transition-colors ${
+                page === p
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {p}
+            </button>
+          </span>
+        );
+      })}
+
+      <button onClick={() => onPage(page + 1)} disabled={page === totalPages}
+        className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40 transition-colors">
+        <ChevronLeft className="w-4 h-4" />
+      </button>
+    </div>
+  );
+});
+
 /* ─── View Details Modal ─────────────────────────────────── */
-function ViewModal({ inv, onClose }: { inv: SalesInvoice; onClose: () => void }) {
+const ViewModal = memo(function ViewModal({ inv, onClose }: { inv: SalesInvoice; onClose: () => void }) {
   const st = statusLabels[inv.status] ?? { label: inv.status, cls: 'bg-slate-100 text-slate-600' };
   const pt = paymentLabels[inv.paymentStatus ?? ''] ?? { label: inv.paymentStatus ?? '—', cls: 'bg-slate-100 text-slate-600' };
 
@@ -73,7 +145,6 @@ function ViewModal({ inv, onClose }: { inv: SalesInvoice; onClose: () => void })
         </div>
 
         <div className="p-5 space-y-5">
-          {/* Header info */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
             <div>
               <p className="text-slate-500 mb-0.5">العميل</p>
@@ -89,7 +160,6 @@ function ViewModal({ inv, onClose }: { inv: SalesInvoice; onClose: () => void })
             </div>
           </div>
 
-          {/* Items */}
           {inv.items && inv.items.length > 0 && (
             <div>
               <p className="text-sm font-semibold text-slate-700 mb-2">الأصناف</p>
@@ -118,7 +188,6 @@ function ViewModal({ inv, onClose }: { inv: SalesInvoice; onClose: () => void })
             </div>
           )}
 
-          {/* Totals */}
           <div className="bg-slate-50 rounded-lg p-4 space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-slate-500">المجموع الفرعي</span>
@@ -142,7 +211,6 @@ function ViewModal({ inv, onClose }: { inv: SalesInvoice; onClose: () => void })
             </div>
           </div>
 
-          {/* Notes */}
           {inv.notes && (
             <div>
               <p className="text-sm font-semibold text-slate-700 mb-1">ملاحظات</p>
@@ -160,10 +228,10 @@ function ViewModal({ inv, onClose }: { inv: SalesInvoice; onClose: () => void })
       </div>
     </div>
   );
-}
+});
 
 /* ─── Edit Status Modal ──────────────────────────────────── */
-function EditModal({
+const EditModal = memo(function EditModal({
   inv, onClose, onSaved,
 }: { inv: SalesInvoice; onClose: () => void; onSaved: () => void }) {
   const [status, setStatus]               = useState(inv.status);
@@ -180,16 +248,10 @@ function EditModal({
         method: 'PUT', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: inv.id,
-          status,
-          paymentStatus,
+          id: inv.id, status, paymentStatus,
           notes: notes.trim() || undefined,
-          // Send existing items unchanged so API doesn't break
           items: (inv.items ?? []).map(i => ({
-            productId: i.productId,
-            quantity: i.quantity,
-            price: i.price,
-            total: i.total,
+            productId: i.productId, quantity: i.quantity, price: i.price, total: i.total,
           })),
         }),
       });
@@ -254,10 +316,12 @@ function EditModal({
       </div>
     </div>
   );
-}
+});
 
 /* ─── Delete Confirm Modal ───────────────────────────────── */
-function DeleteModal({ inv, onClose, onDeleted }: { inv: SalesInvoice; onClose: () => void; onDeleted: () => void }) {
+const DeleteModal = memo(function DeleteModal({
+  inv, onClose, onDeleted,
+}: { inv: SalesInvoice; onClose: () => void; onDeleted: () => void }) {
   const [deleting, setDeleting] = useState(false);
   const [err, setErr] = useState('');
 
@@ -300,32 +364,86 @@ function DeleteModal({ inv, onClose, onDeleted }: { inv: SalesInvoice; onClose: 
       </div>
     </div>
   );
-}
+});
+
+/* ─── Memoized Table Row ─────────────────────────────────── */
+const InvoiceRow = memo(function InvoiceRow({
+  inv, onView, onEdit, onDelete,
+}: {
+  inv: SalesInvoice;
+  onView: (inv: SalesInvoice) => void;
+  onEdit: (inv: SalesInvoice) => void;
+  onDelete: (inv: SalesInvoice) => void;
+}) {
+  const st = statusLabels[inv.status] ?? { label: inv.status, cls: 'bg-slate-100 text-slate-600' };
+  const pt = paymentLabels[inv.paymentStatus ?? ''] ?? { label: inv.paymentStatus ?? '—', cls: 'bg-slate-100 text-slate-600' };
+
+  return (
+    <tr className="hover:bg-slate-50 transition-colors group">
+      <td className="px-4 py-3 text-sm font-semibold text-blue-600">
+        <Link href={`/sales/invoices/${inv.id}`} className="hover:underline">
+          #{inv.invoiceNumber}
+        </Link>
+      </td>
+      <td className="px-4 py-3 text-sm text-slate-800">{inv.customer?.nameAr ?? '—'}</td>
+      <td className="px-4 py-3 text-sm text-slate-500 tabular-nums">{formatDate(inv.date ?? inv.createdAt)}</td>
+      <td className="px-4 py-3 text-sm font-semibold text-slate-900 tabular-nums">
+        {formatEGP(inv.grandTotal ?? inv.total)}
+      </td>
+      <td className="px-4 py-3">
+        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${st.cls}`}>{st.label}</span>
+      </td>
+      <td className="px-4 py-3">
+        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${pt.cls}`}>{pt.label}</span>
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={() => onView(inv)}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+            title="عرض التفاصيل">
+            <Eye className="w-4 h-4" />
+          </button>
+          <button onClick={() => onEdit(inv)}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+            title="تعديل">
+            <Pencil className="w-4 h-4" />
+          </button>
+          <button onClick={() => onDelete(inv)}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+            title="حذف">
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+});
 
 /* ─── Main Page ──────────────────────────────────────────── */
 export default function SalesInvoicesPage() {
   const [invoices, setInvoices] = useState<SalesInvoice[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState<string | null>(null);
+  const [page,     setPage]     = useState(1);
 
   const [viewInv,   setViewInv]   = useState<SalesInvoice | null>(null);
   const [editInv,   setEditInv]   = useState<SalesInvoice | null>(null);
   const [deleteInv, setDeleteInv] = useState<SalesInvoice | null>(null);
 
-  /* Filters — client-side, seeded from URL params on mount */
   const [filterStatus,   setFilterStatus]   = useState('');
   const [filterCustomer, setFilterCustomer] = useState('');
   const [filterFrom,     setFilterFrom]     = useState('');
   const [filterTo,       setFilterTo]       = useState('');
 
-  // Seed filter from URL on client
+  /* Seed filter from URL on mount */
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     const c = p.get('customer');
     if (c) setFilterCustomer(c);
   }, []);
 
-  function load() {
+  /* Stable fetch function */
+  const load = useCallback(() => {
     setLoading(true);
     fetch('/api/sales-invoices', { credentials: 'include' })
       .then(r => r.json())
@@ -335,51 +453,124 @@ export default function SalesInvoicesPage() {
       })
       .catch(() => setError('تعذر الاتصال بالخادم'))
       .finally(() => setLoading(false));
-  }
+  }, []);
 
-  /* Apply filters */
-  const filtered = invoices.filter(inv => {
+  useEffect(() => { load(); }, [load]);
+
+  /* Reset to page 1 whenever filters change */
+  useEffect(() => { setPage(1); }, [filterStatus, filterCustomer, filterFrom, filterTo]);
+
+  /* ── Memoized derived values ── */
+  const filtered = useMemo(() => invoices.filter(inv => {
     if (filterStatus && inv.status !== filterStatus) return false;
     if (filterCustomer && !(inv.customer?.nameAr ?? '').includes(filterCustomer)) return false;
     const d = new Date(inv.date ?? inv.createdAt);
     if (filterFrom && d < new Date(filterFrom)) return false;
     if (filterTo   && d > new Date(filterTo + 'T23:59:59')) return false;
     return true;
-  });
+  }), [invoices, filterStatus, filterCustomer, filterFrom, filterTo]);
 
-  useEffect(() => { load(); }, []);
+  const stats = useMemo(() => ({
+    pending:   invoices.filter(i => i.status === 'pending').length,
+    completed: invoices.filter(i => i.status === 'completed').length,
+    paid:      invoices.filter(i => i.status === 'paid').length,
+    cancelled: invoices.filter(i => i.status === 'cancelled').length,
+  }), [invoices]);
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated  = useMemo(
+    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filtered, page]
+  );
+
+  /* ── Stable callbacks (prevent child re-renders) ── */
+  const clearFilters = useCallback(() => {
+    setFilterStatus(''); setFilterCustomer(''); setFilterFrom(''); setFilterTo('');
+  }, []);
+
+  const handleView   = useCallback((inv: SalesInvoice) => setViewInv(inv),   []);
+  const handleEdit   = useCallback((inv: SalesInvoice) => setEditInv(inv),   []);
+  const handleDelete = useCallback((inv: SalesInvoice) => setDeleteInv(inv), []);
+  const closeView    = useCallback(() => setViewInv(null),   []);
+  const closeEdit    = useCallback(() => setEditInv(null),   []);
+  const closeDelete  = useCallback(() => setDeleteInv(null), []);
+
+  /* ── Loading skeleton ── */
   if (loading) return (
-    <div className="flex items-center justify-center h-64" dir="rtl">
-      <div className="text-slate-500 text-sm">جاري تحميل فواتير المبيعات…</div>
+    <div dir="rtl" className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="space-y-1.5">
+          <div className="h-7 w-36 bg-slate-200 animate-pulse rounded-lg" />
+          <div className="h-4 w-24 bg-slate-100 animate-pulse rounded" />
+        </div>
+        <div className="h-9 w-28 bg-slate-200 animate-pulse rounded-lg" />
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[0,1,2,3].map(i => (
+          <div key={i} className="bg-white rounded-xl border border-slate-100 px-4 py-3">
+            <div className="h-3 w-12 bg-slate-200 animate-pulse rounded mb-2" />
+            <div className="h-6 w-8 bg-slate-200 animate-pulse rounded" />
+          </div>
+        ))}
+      </div>
+      <TableSkeleton />
     </div>
   );
 
+  /* ── Error ── */
   if (error) return (
-    <div className="flex items-center justify-center h-64" dir="rtl">
-      <div className="text-red-500 text-sm">{error}</div>
+    <div className="flex flex-col items-center justify-center h-64 gap-3" dir="rtl">
+      <AlertCircle className="w-8 h-8 text-red-400" />
+      <p className="text-red-500 text-sm">{error}</p>
+      <button onClick={load}
+        className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
+        إعادة المحاولة
+      </button>
     </div>
   );
 
   return (
-    <div dir="rtl">
+    <div dir="rtl" className="space-y-4">
       {/* Modals */}
-      {viewInv   && <ViewModal   inv={viewInv}   onClose={() => setViewInv(null)} />}
-      {editInv   && <EditModal   inv={editInv}   onClose={() => setEditInv(null)}   onSaved={load} />}
-      {deleteInv && <DeleteModal inv={deleteInv} onClose={() => setDeleteInv(null)} onDeleted={load} />}
+      {viewInv   && <ViewModal   inv={viewInv}   onClose={closeView} />}
+      {editInv   && <EditModal   inv={editInv}   onClose={closeEdit}   onSaved={load} />}
+      {deleteInv && <DeleteModal inv={deleteInv} onClose={closeDelete} onDeleted={load} />}
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">فواتير المبيعات</h1>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">فواتير المبيعات</h1>
+          <p className="text-sm text-slate-500 mt-0.5">{invoices.length} فاتورة إجمالاً</p>
+        </div>
         <Link href="/sales/invoices/new"
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm">
           <Plus className="w-4 h-4" /> فاتورة جديدة
         </Link>
       </div>
 
+      {/* Clickable stat cards — act as quick filters */}
+      {invoices.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {(['pending', 'completed', 'paid', 'cancelled'] as const).map(s => {
+            const { label, cls } = statusLabels[s];
+            const active = filterStatus === s;
+            return (
+              <button key={s}
+                onClick={() => setFilterStatus(active ? '' : s)}
+                className={`bg-white rounded-xl border shadow-sm px-4 py-3 text-right transition-all ${
+                  active ? 'border-blue-400 ring-2 ring-blue-100' : 'border-slate-100 hover:border-slate-200 hover:shadow'
+                }`}>
+                <p className="text-xs text-slate-500">{label}</p>
+                <p className={`text-xl font-bold mt-0.5 ${cls.split(' ')[1]}`}>{stats[s]}</p>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Filter Bar */}
       {invoices.length > 0 && (
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3 mb-4 flex flex-wrap items-end gap-3">
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3 flex flex-wrap items-end gap-3">
           <div className="flex-1 min-w-[140px]">
             <label className="block text-xs font-medium text-slate-500 mb-1">الحالة</label>
             <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
@@ -410,10 +601,9 @@ export default function SalesInvoicesPage() {
           </div>
           <div className="flex items-end gap-2 pb-0.5">
             {(filterStatus || filterCustomer || filterFrom || filterTo) && (
-              <button
-                onClick={() => { setFilterStatus(''); setFilterCustomer(''); setFilterFrom(''); setFilterTo(''); }}
+              <button onClick={clearFilters}
                 className="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap">
-                مسح الفلاتر
+                مسح ×
               </button>
             )}
             <span className="text-xs text-slate-400 whitespace-nowrap">
@@ -423,25 +613,10 @@ export default function SalesInvoicesPage() {
         </div>
       )}
 
-      {/* Stats */}
-      {invoices.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-          {(['pending','completed','paid','cancelled'] as const).map(s => {
-            const count = invoices.filter(i => i.status === s).length;
-            const { label, cls } = statusLabels[s];
-            return (
-              <div key={s} className="bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3">
-                <p className="text-xs text-slate-500">{label}</p>
-                <p className={`text-xl font-bold mt-0.5 ${cls.split(' ')[1]}`}>{count}</p>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
       {/* Table */}
       {invoices.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-12 text-center">
+          <FileText className="w-10 h-10 text-slate-200 mx-auto mb-3" />
           <p className="text-slate-400 text-sm mb-4">لا توجد فواتير مبيعات حتى الآن</p>
           <Link href="/sales/invoices/new"
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
@@ -451,71 +626,47 @@ export default function SalesInvoicesPage() {
       ) : filtered.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-10 text-center">
           <p className="text-slate-400 text-sm mb-2">لا توجد فواتير تطابق الفلاتر المحددة</p>
-          <button
-            onClick={() => { setFilterStatus(''); setFilterCustomer(''); setFilterFrom(''); setFilterTo(''); }}
-            className="text-sm text-blue-600 hover:underline">
+          <button onClick={clearFilters} className="text-sm text-blue-600 hover:underline">
             مسح الفلاتر
           </button>
         </div>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">رقم الفاتورة</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">العميل</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">التاريخ</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">الإجمالي</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">الحالة</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">الدفع</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">إجراءات</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filtered.map(inv => {
-                const st = statusLabels[inv.status] ?? { label: inv.status, cls: 'bg-slate-100 text-slate-600' };
-                const pt = paymentLabels[inv.paymentStatus ?? ''] ?? { label: inv.paymentStatus ?? '—', cls: 'bg-slate-100 text-slate-600' };
-                return (
-                  <tr key={inv.id} className="hover:bg-slate-50 transition-colors group">
-                    <td className="px-4 py-3 text-sm font-semibold text-blue-600">
-                      <Link href={`/sales/invoices/${inv.id}`} className="hover:underline">
-                        #{inv.invoiceNumber}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-800">{inv.customer?.nameAr ?? '—'}</td>
-                    <td className="px-4 py-3 text-sm text-slate-500">{formatDate(inv.date ?? inv.createdAt)}</td>
-                    <td className="px-4 py-3 text-sm font-semibold text-slate-900">{formatEGP(inv.grandTotal ?? inv.total)}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${st.cls}`}>{st.label}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${pt.cls}`}>{pt.label}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => setViewInv(inv)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                          title="عرض التفاصيل">
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => setEditInv(inv)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
-                          title="تعديل">
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => setDeleteInv(inv)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                          title="حذف">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">رقم الفاتورة</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">العميل</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">التاريخ</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">الإجمالي</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">الحالة</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">الدفع</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500">إجراءات</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {paginated.map(inv => (
+                  <InvoiceRow
+                    key={inv.id}
+                    inv={inv}
+                    onView={handleView}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination bar */}
+          <div className="flex items-center justify-between text-xs text-slate-400 px-1">
+            <span>
+              عرض {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} من {filtered.length}
+            </span>
+            <Pagination page={page} totalPages={totalPages} onPage={setPage} />
+          </div>
+        </>
       )}
     </div>
   );

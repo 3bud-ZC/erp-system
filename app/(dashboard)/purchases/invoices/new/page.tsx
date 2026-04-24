@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Plus, X, Trash2, ArrowRight, AlertCircle, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -231,43 +231,80 @@ export default function NewPurchaseInvoicePage() {
   }, []);
 
   /* ── Toast helper ── */
-  function showToast(msg: string, type: 'success' | 'error') {
+  const showToast = useCallback((msg: string, type: 'success' | 'error') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
-  }
+  }, []);
 
-  /* ── Line helpers ── */
-  function setLine(idx: number, field: keyof InvoiceLine, value: string) {
+  /* ── Line helpers (stable refs via useCallback) ── */
+  const setLine = useCallback((idx: number, field: keyof InvoiceLine, value: string) => {
     setLines(prev => prev.map((l, i) => i === idx ? { ...l, [field]: value } : l));
-  }
+  }, []);
 
-  function onProductChange(idx: number, productId: string) {
-    const prod = products.find(p => p.id === productId);
-    setLines(prev => prev.map((l, i) => i === idx ? {
-      ...l,
-      productId,
-      price: prod?.cost != null ? String(prod.cost) : (prod?.price != null ? String(prod.price) : l.price),
-    } : l));
-  }
+  const onProductChange = useCallback((idx: number, productId: string) => {
+    setLines(prev => prev.map((l, i) => {
+      if (i !== idx) return l;
+      const prod = products.find(p => p.id === productId);
+      return {
+        ...l,
+        productId,
+        price: prod?.cost != null ? String(prod.cost) : (prod?.price != null ? String(prod.price) : l.price),
+      };
+    }));
+  }, [products]);
 
-  function addLine() { setLines(prev => [...prev, emptyLine()]); }
-  function removeLine(idx: number) {
+  const addLine    = useCallback(() => setLines(prev => [...prev, emptyLine()]), []);
+  const removeLine = useCallback((idx: number) => {
     setLines(prev => prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev);
-  }
+  }, []);
 
-  /* ── Calculations ── */
-  const lineTotal = (l: InvoiceLine) => (parseFloat(l.quantity) || 0) * (parseFloat(l.price) || 0);
-  const subtotal  = lines.reduce((s, l) => s + lineTotal(l), 0);
+  /* ── Keyboard navigation: Enter moves to next field ── */
+  const handleLineKeyDown = useCallback((
+    e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>,
+    rowIdx: number,
+    field: 'productId' | 'description' | 'quantity' | 'price',
+  ) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const fieldOrder: (typeof field)[] = ['productId', 'description', 'quantity', 'price'];
+    const nextIdx = fieldOrder.indexOf(field) + 1;
+    if (nextIdx < fieldOrder.length) {
+      const el = document.querySelector<HTMLElement>(
+        `[data-row="${rowIdx}"][data-field="${fieldOrder[nextIdx]}"]`,
+      );
+      el?.focus();
+    } else {
+      const nextRowEl = document.querySelector<HTMLElement>(
+        `[data-row="${rowIdx + 1}"][data-field="productId"]`,
+      );
+      if (nextRowEl) {
+        nextRowEl.focus();
+      } else {
+        setLines(prev => [...prev, emptyLine()]);
+        setTimeout(() => {
+          const newEl = document.querySelector<HTMLElement>(
+            `[data-row="${rowIdx + 1}"][data-field="productId"]`,
+          );
+          newEl?.focus();
+        }, 50);
+      }
+    }
+  }, []);
+
+  /* ── Calculations (memoized) ── */
+  const lineTotal = useCallback((l: InvoiceLine) =>
+    (parseFloat(l.quantity) || 0) * (parseFloat(l.price) || 0), []);
+  const subtotal  = useMemo(() => lines.reduce((s, l) => s + lineTotal(l), 0), [lines, lineTotal]);
 
   /* ── Quick-add callbacks ── */
-  function onSupplierCreated(s: Supplier) {
+  const onSupplierCreated = useCallback((s: Supplier) => {
     setSuppliers(prev => [s, ...prev]);
     setSupplierId(s.id);
     setShowAddSupplier(false);
     showToast(`تم إضافة المورد: ${s.nameAr}`, 'success');
-  }
+  }, [showToast]);
 
-  function onProductCreated(p: Product) {
+  const onProductCreated = useCallback((p: Product) => {
     setProducts(prev => [p, ...prev]);
     if (addProductLineIdx !== null) {
       onProductChange(addProductLineIdx, p.id);
@@ -275,14 +312,14 @@ export default function NewPurchaseInvoicePage() {
     setShowAddProduct(false);
     setAddProductLineIdx(null);
     showToast(`تم إضافة الصنف: ${p.nameAr}`, 'success');
-  }
+  }, [addProductLineIdx, onProductChange, showToast]);
 
   /* ── Reset form ── */
-  function resetForm() {
+  const resetForm = useCallback(() => {
     setSupplierId(''); setInvoiceNumber(''); setNotes('');
     setLines([emptyLine()]); setStatus('pending'); setPaymentStatus('credit');
     setInvoiceDate(new Date().toISOString().split('T')[0]);
-  }
+  }, []);
 
   /* ── Error translation ── */
   function translateError(err: string): string {
@@ -295,7 +332,7 @@ export default function NewPurchaseInvoicePage() {
   }
 
   /* ── Submit ── */
-  async function handleSubmit(e: React.FormEvent, mode: 'draft' | 'confirm' | 'new' = saveMode) {
+  const handleSubmit = useCallback(async (e: React.FormEvent, mode: 'draft' | 'confirm' | 'new' = saveMode) => {
     e.preventDefault();
     setFormError(null);
 
@@ -359,7 +396,8 @@ export default function NewPurchaseInvoicePage() {
     } finally {
       setSaving(false);
     }
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saveMode, supplierId, lines, subtotal, status, paymentStatus, invoiceNumber, notes, router, showToast, resetForm]);
 
   /* ── Render ── */
   if (loadingData) {
@@ -504,6 +542,8 @@ export default function NewPurchaseInvoicePage() {
                       <td className="py-2 pr-0 pl-2">
                         <div className="flex gap-1">
                           <select value={line.productId} onChange={e => onProductChange(idx, e.target.value)}
+                            onKeyDown={e => handleLineKeyDown(e as any, idx, 'productId')}
+                            data-row={idx} data-field="productId"
                             className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
                             <option value="">اختر صنفاً…</option>
                             {products.map(p => (
@@ -527,6 +567,8 @@ export default function NewPurchaseInvoicePage() {
                       {/* Description */}
                       <td className="py-2 px-2">
                         <input value={line.description} onChange={e => setLine(idx, 'description', e.target.value)}
+                          onKeyDown={e => handleLineKeyDown(e, idx, 'description')}
+                          data-row={idx} data-field="description"
                           className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                           placeholder="ملاحظة" />
                       </td>
@@ -535,6 +577,8 @@ export default function NewPurchaseInvoicePage() {
                       <td className="py-2 px-2">
                         <input type="number" min="0.001" step="any" value={line.quantity}
                           onChange={e => setLine(idx, 'quantity', e.target.value)}
+                          onKeyDown={e => handleLineKeyDown(e, idx, 'quantity')}
+                          data-row={idx} data-field="quantity"
                           className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 text-center" />
                       </td>
 
@@ -542,6 +586,8 @@ export default function NewPurchaseInvoicePage() {
                       <td className="py-2 px-2">
                         <input type="number" min="0" step="any" value={line.price}
                           onChange={e => setLine(idx, 'price', e.target.value)}
+                          onKeyDown={e => handleLineKeyDown(e, idx, 'price')}
+                          data-row={idx} data-field="price"
                           className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                           placeholder="0.00" />
                       </td>

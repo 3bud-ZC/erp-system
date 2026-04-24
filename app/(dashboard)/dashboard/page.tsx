@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo, memo } from 'react';
 import Link from 'next/link';
 import {
   TrendingUp, TrendingDown, ShoppingCart, Package, DollarSign,
@@ -109,7 +109,7 @@ interface KPICardProps {
   iconCls: string;
   accentCls: string;
 }
-function KPICard({ title, subtitle, value, trend, Icon, iconCls, accentCls }: KPICardProps) {
+const KPICard = memo(function KPICard({ title, subtitle, value, trend, Icon, iconCls, accentCls }: KPICardProps) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5 overflow-hidden relative">
       {/* color accent stripe */}
@@ -134,10 +134,10 @@ function KPICard({ title, subtitle, value, trend, Icon, iconCls, accentCls }: KP
       {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
     </div>
   );
-}
+});
 
 /* ─── Stat Pill ──────────────────────────────────────────────────────── */
-function StatPill({
+const StatPill = memo(function StatPill({
   label, value, Icon, iconCls, href,
 }: { label: string; value: number | string; Icon: React.ElementType; iconCls: string; href?: string }) {
   const inner = (
@@ -152,7 +152,7 @@ function StatPill({
     </div>
   );
   return href ? <Link href={href} className="block">{inner}</Link> : <div>{inner}</div>;
-}
+});
 
 /* ─── Main Page ──────────────────────────────────────────────────────── */
 export default function DashboardPage() {
@@ -196,11 +196,11 @@ export default function DashboardPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  /* derived values */
-  const unpaid       = invoices?.filter(i => i.status === 'pending' || i.status === 'draft') ?? [];
-  const recentInvs   = invoices?.slice(0, 7) ?? [];
-  const profit       = dash?.netProfit ?? 0;
-  const profitable   = profit >= 0;
+  /* derived values — memoized to avoid recomputing on unrelated re-renders */
+  const unpaid     = useMemo(() => invoices?.filter(i => i.status === 'pending' || i.status === 'draft') ?? [], [invoices]);
+  const recentInvs = useMemo(() => invoices?.slice(0, 7) ?? [], [invoices]);
+  const profit     = useMemo(() => dash?.netProfit ?? 0, [dash]);
+  const profitable = useMemo(() => profit >= 0, [profit]);
 
   /* ── Loading skeleton ─────────────────────────────────────────────── */
   if (loading) return (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Trash2, ArrowRight, X, Check, Percent, DollarSign, AlertCircle, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
@@ -233,19 +233,22 @@ export default function NewSalesInvoicePage() {
       .finally(() => setDataLoading(false));
   }, []);
 
-  /* ── Calculations ── */
-  const subtotal = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0) * (parseFloat(l.price) || 0), 0);
-  const discountAmt = (() => {
+  /* ── Calculations (memoized — recompute only when lines/discount/tax change) ── */
+  const subtotal = useMemo(
+    () => lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0) * (parseFloat(l.price) || 0), 0),
+    [lines],
+  );
+  const discountAmt = useMemo(() => {
     const v = parseFloat(discountValue) || 0;
     if (discountType === 'percentage') return Math.min(subtotal * v / 100, subtotal);
     return Math.min(v, subtotal);
-  })();
-  const afterDiscount = subtotal - discountAmt;
-  const taxAmt    = taxEnabled ? afterDiscount * TAX_RATE : 0;
-  const grandTotal = afterDiscount + taxAmt;
+  }, [subtotal, discountValue, discountType]);
+  const afterDiscount = useMemo(() => subtotal - discountAmt, [subtotal, discountAmt]);
+  const taxAmt        = useMemo(() => taxEnabled ? afterDiscount * TAX_RATE : 0, [taxEnabled, afterDiscount]);
+  const grandTotal    = useMemo(() => afterDiscount + taxAmt, [afterDiscount, taxAmt]);
 
-  /* ── Line helpers ── */
-  function setLine(i: number, field: keyof InvoiceLine, val: string) {
+  /* ── Line helpers (stable refs via useCallback) ── */
+  const setLine = useCallback((i: number, field: keyof InvoiceLine, val: string) => {
     setLines(ls => ls.map((l, idx) => {
       if (idx !== i) return l;
       const updated = { ...l, [field]: val };
@@ -258,9 +261,48 @@ export default function NewSalesInvoicePage() {
       }
       return updated;
     }));
-  }
-  function addLine()         { setLines(ls => [...ls, emptyLine()]); }
-  function removeLine(i: number) { if (lines.length > 1) setLines(ls => ls.filter((_, idx) => idx !== i)); }
+  }, [products]);
+
+  const addLine    = useCallback(() => setLines(ls => [...ls, emptyLine()]), []);
+  const removeLine = useCallback((i: number) => {
+    setLines(ls => ls.length > 1 ? ls.filter((_, idx) => idx !== i) : ls);
+  }, []);
+
+  /* ── Keyboard navigation: Enter moves to next field in the row ── */
+  const handleLineKeyDown = useCallback((
+    e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>,
+    rowIdx: number,
+    field: 'productId' | 'description' | 'quantity' | 'price',
+  ) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const fieldOrder: (typeof field)[] = ['productId', 'description', 'quantity', 'price'];
+    const nextFieldIdx = fieldOrder.indexOf(field) + 1;
+    if (nextFieldIdx < fieldOrder.length) {
+      const nextField = fieldOrder[nextFieldIdx];
+      const el = document.querySelector<HTMLElement>(
+        `[data-row="${rowIdx}"][data-field="${nextField}"]`,
+      );
+      el?.focus();
+    } else {
+      // last field in row → move to next row's product, or add a new row
+      const nextRowEl = document.querySelector<HTMLElement>(
+        `[data-row="${rowIdx + 1}"][data-field="productId"]`,
+      );
+      if (nextRowEl) {
+        nextRowEl.focus();
+      } else {
+        setLines(ls => [...ls, emptyLine()]);
+        // focus happens after re-render via queueMicrotask
+        setTimeout(() => {
+          const newEl = document.querySelector<HTMLElement>(
+            `[data-row="${rowIdx + 1}"][data-field="productId"]`,
+          );
+          newEl?.focus();
+        }, 50);
+      }
+    }
+  }, []);
 
   /* ── Quick-add handlers ── */
   function handleCustomerCreated(c: Customer) {
@@ -316,7 +358,7 @@ export default function NewSalesInvoicePage() {
   }
 
   /* ── Submit ── */
-  async function handleSubmit(e: React.FormEvent, mode: 'draft' | 'confirm' | 'new' = saveMode) {
+  const handleSubmit = useCallback(async (e: React.FormEvent, mode: 'draft' | 'confirm' | 'new' = saveMode) => {
     e.preventDefault();
     // Skip customer validation for drafts
     if (mode !== 'draft') {
@@ -386,7 +428,8 @@ export default function NewSalesInvoicePage() {
     } finally {
       setSaving(false);
     }
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saveMode, customerId, invoiceDate, lines, grandTotal, subtotal, discountAmt, taxAmt, status, paymentStatus, invoiceNumber, notes, products, router]);
 
   /* ── Render ── */
   if (dataLoading) return (
@@ -535,6 +578,8 @@ export default function NewSalesInvoicePage() {
                       <td className="px-2 py-1.5">
                         <div className="flex gap-1">
                           <select value={line.productId} onChange={e => setLine(i, 'productId', e.target.value)}
+                            onKeyDown={e => handleLineKeyDown(e as any, i, 'productId')}
+                            data-row={i} data-field="productId"
                             className={`flex-1 border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white ${lowStock ? 'border-red-300' : 'border-slate-200'}`}>
                             <option value="">— اختر المنتج —</option>
                             {products.map(p => (
@@ -558,17 +603,23 @@ export default function NewSalesInvoicePage() {
                       </td>
                       <td className="px-2 py-1.5">
                         <input value={line.description} onChange={e => setLine(i, 'description', e.target.value)}
+                          onKeyDown={e => handleLineKeyDown(e, i, 'description')}
+                          data-row={i} data-field="description"
                           className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                           placeholder="وصف (اختياري)" />
                       </td>
                       <td className="px-2 py-1.5">
                         <input type="number" min="0.01" step="0.01" value={line.quantity}
                           onChange={e => setLine(i, 'quantity', e.target.value)}
+                          onKeyDown={e => handleLineKeyDown(e, i, 'quantity')}
+                          data-row={i} data-field="quantity"
                           className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 text-center" />
                       </td>
                       <td className="px-2 py-1.5">
                         <input type="number" min="0" step="0.01" value={line.price}
                           onChange={e => setLine(i, 'price', e.target.value)}
+                          onKeyDown={e => handleLineKeyDown(e, i, 'price')}
+                          data-row={i} data-field="price"
                           placeholder="0.00"
                           className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
                       </td>
