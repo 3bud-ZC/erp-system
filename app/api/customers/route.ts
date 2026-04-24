@@ -50,9 +50,6 @@ export async function POST(request: Request) {
     // Remove tenantId from body if present - will be set from user context
     const { tenantId, ...customerData } = body;
     
-    console.log('Creating customer with data:', customerData);
-    console.log('Setting tenantId:', user.tenantId);
-    
     const customer = await prisma.customer.create({
       data: { 
         code: customerData.code,
