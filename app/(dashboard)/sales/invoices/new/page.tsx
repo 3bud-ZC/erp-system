@@ -2,95 +2,317 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2, ArrowRight } from 'lucide-react';
+import { Plus, Trash2, ArrowRight, X, Check, Percent, DollarSign, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 
-interface Customer { id: string; nameAr: string; nameEn?: string; }
-interface Product  { id: string; nameAr: string; code: string; price?: number; }
+/* ─── Types ─────────────────────────────────────────────────────────── */
+interface Customer { id: string; nameAr: string; phone?: string; }
+interface Product  { id: string; nameAr: string; code: string; price?: number; stock?: number; }
 
 interface InvoiceLine {
   productId: string;
+  description: string;
   quantity: string;
   price: string;
 }
 
-function formatEGP(v: number) {
-  return `${v.toLocaleString('ar-EG')} ج.م`;
+/* ─── Helpers ────────────────────────────────────────────────────────── */
+function fmt(v: number) { return v.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+const emptyLine = (): InvoiceLine => ({ productId: '', description: '', quantity: '1', price: '' });
+
+/* ─── Quick-Add Customer Modal ──────────────────────────────────────── */
+function QuickAddCustomer({ onCreated, onClose }: { onCreated: (c: Customer) => void; onClose: () => void; }) {
+  const [nameAr, setNameAr] = useState('');
+  const [phone, setPhone]   = useState('');
+  const [email, setEmail]   = useState('');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr]       = useState('');
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!nameAr.trim()) { setErr('اسم العميل مطلوب'); return; }
+    setSaving(true); setErr('');
+    try {
+      const r = await fetch('/api/customers', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nameAr: nameAr.trim(), phone: phone.trim(), email: email.trim(),
+          code: `C${Date.now().toString().slice(-6)}` }),
+      });
+      const j = await r.json();
+      if (j.success) { onCreated(j.data); }
+      else setErr(j.message || 'فشل إنشاء العميل');
+    } catch { setErr('تعذر الاتصال'); } finally { setSaving(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4" dir="rtl">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm">
+        <div className="flex items-center justify-between p-4 border-b">
+          <h3 className="font-semibold text-slate-800">إضافة عميل جديد</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+        </div>
+        <form onSubmit={submit} className="p-4 space-y-3">
+          {err && <p className="text-red-600 text-xs bg-red-50 p-2 rounded">{err}</p>}
+          <div>
+            <label className="text-xs font-medium text-slate-700 block mb-1">الاسم *</label>
+            <input autoFocus value={nameAr} onChange={e => setNameAr(e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="اسم العميل" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-700 block mb-1">الهاتف</label>
+            <input value={phone} onChange={e => setPhone(e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="01xxxxxxxxx" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-700 block mb-1">البريد الإلكتروني</label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="example@email.com" />
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button type="submit" disabled={saving}
+              className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+              {saving ? 'جاري الحفظ…' : 'حفظ'}
+            </button>
+            <button type="button" onClick={onClose}
+              className="flex-1 bg-slate-100 text-slate-700 rounded-lg py-2 text-sm font-medium hover:bg-slate-200">
+              إلغاء
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 }
 
-const emptyLine = (): InvoiceLine => ({ productId: '', quantity: '1', price: '' });
+/* ─── Quick-Add Product Modal ──────────────────────────────────────── */
+function QuickAddProduct({ onCreated, onClose }: { onCreated: (p: Product) => void; onClose: () => void; }) {
+  const [nameAr, setNameAr] = useState('');
+  const [code, setCode]     = useState('');
+  const [price, setPrice]   = useState('');
+  const [cost, setCost]     = useState('');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr]       = useState('');
 
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!nameAr.trim()) { setErr('اسم المنتج مطلوب'); return; }
+    if (!code.trim()) { setErr('كود المنتج مطلوب'); return; }
+    setSaving(true); setErr('');
+    try {
+      const r = await fetch('/api/products', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nameAr: nameAr.trim(), code: code.trim().toUpperCase(),
+          type: 'finished_product',
+          price: parseFloat(price) || 0,
+          cost: parseFloat(cost) || 0,
+          stock: 0, unit: 'piece',
+        }),
+      });
+      const j = await r.json();
+      if (j.success) { onCreated(j.data); }
+      else setErr(j.message || 'فشل إنشاء المنتج');
+    } catch { setErr('تعذر الاتصال'); } finally { setSaving(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4" dir="rtl">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm">
+        <div className="flex items-center justify-between p-4 border-b">
+          <h3 className="font-semibold text-slate-800">إضافة منتج جديد</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+        </div>
+        <form onSubmit={submit} className="p-4 space-y-3">
+          {err && <p className="text-red-600 text-xs bg-red-50 p-2 rounded">{err}</p>}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-slate-700 block mb-1">الاسم *</label>
+              <input autoFocus value={nameAr} onChange={e => setNameAr(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="اسم المنتج" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-700 block mb-1">الكود *</label>
+              <input value={code} onChange={e => setCode(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="PRD-001" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-slate-700 block mb-1">سعر البيع</label>
+              <input type="number" min="0" step="0.01" value={price} onChange={e => setPrice(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="0.00" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-700 block mb-1">التكلفة</label>
+              <input type="number" min="0" step="0.01" value={cost} onChange={e => setCost(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="0.00" />
+            </div>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button type="submit" disabled={saving}
+              className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+              {saving ? 'جاري الحفظ…' : 'حفظ'}
+            </button>
+            <button type="button" onClick={onClose}
+              className="flex-1 bg-slate-100 text-slate-700 rounded-lg py-2 text-sm font-medium hover:bg-slate-200">
+              إلغاء
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Toast ─────────────────────────────────────────────────────────── */
+function Toast({ msg, type }: { msg: string; type: 'success' | 'error' }) {
+  return (
+    <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[70] flex items-center gap-2 px-5 py-3 rounded-xl shadow-xl text-sm font-medium
+      ${type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
+      {type === 'success' ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
+      {msg}
+    </div>
+  );
+}
+
+/* ─── Main Page ──────────────────────────────────────────────────────── */
 export default function NewSalesInvoicePage() {
   const router = useRouter();
 
-  const [customers, setCustomers]   = useState<Customer[]>([]);
-  const [products, setProducts]     = useState<Product[]>([]);
-  const [loadingData, setLoadingData] = useState(true);
-  const [dataError, setDataError]   = useState<string | null>(null);
+  /* Reference data */
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [products, setProducts]   = useState<Product[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [dataError, setDataError]     = useState('');
 
-  const [customerId, setCustomerId] = useState('');
-  const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0]);
+  /* Form state */
+  const [customerId, setCustomerId]     = useState('');
+  const [invoiceDate, setInvoiceDate]   = useState(new Date().toISOString().split('T')[0]);
   const [invoiceNumber, setInvoiceNumber] = useState('');
-  const [status, setStatus] = useState('pending');
-  const [lines, setLines] = useState<InvoiceLine[]>([emptyLine()]);
+  const [status, setStatus]             = useState('pending');
+  const [paymentStatus, setPaymentStatus] = useState('cash');
+  const [lines, setLines]               = useState<InvoiceLine[]>([emptyLine()]);
+  const [notes, setNotes]               = useState('');
 
-  const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  /* Discount */
+  const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
+  const [discountValue, setDiscountValue] = useState('');
 
-  /* ── Load reference data ──────────────────────────────────────────── */
+  /* Tax */
+  const [taxEnabled, setTaxEnabled] = useState(false);
+  const TAX_RATE = 0.14; // 14% Egyptian VAT
+
+  /* UI modals & feedback */
+  const [showAddCustomer, setShowAddCustomer] = useState(false);
+  const [showAddProduct, setShowAddProduct]   = useState(false);
+  const [addProductLineIdx, setAddProductLineIdx] = useState<number | null>(null);
+  const [saving, setSaving]   = useState(false);
+  const [toast, setToast]     = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [formError, setFormError] = useState('');
+
+  /* ── Load reference data ── */
   useEffect(() => {
     Promise.all([
       fetch('/api/customers', { credentials: 'include' }).then(r => r.json()),
       fetch('/api/products', { credentials: 'include' }).then(r => r.json()),
-    ])
-      .then(([cj, pj]) => {
-        if (cj.success) setCustomers(cj.data ?? []);
-        else setDataError(cj.message || 'فشل تحميل العملاء');
-        if (pj.success) setProducts(pj.data ?? []);
-        else setDataError(pj.message || 'فشل تحميل المنتجات');
-      })
-      .catch(() => setDataError('تعذر الاتصال بالخادم'))
-      .finally(() => setLoadingData(false));
+    ]).then(([cj, pj]) => {
+      if (cj.success) setCustomers(cj.data ?? []);
+      if (pj.success) setProducts(pj.data ?? []);
+      if (!cj.success || !pj.success) setDataError('تعذر تحميل بعض البيانات');
+    }).catch(() => setDataError('تعذر الاتصال بالخادم'))
+      .finally(() => setDataLoading(false));
   }, []);
 
-  /* ── Line helpers ─────────────────────────────────────────────────── */
-  function updateLine(i: number, field: keyof InvoiceLine, val: string) {
+  /* ── Calculations ── */
+  const subtotal = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0) * (parseFloat(l.price) || 0), 0);
+  const discountAmt = (() => {
+    const v = parseFloat(discountValue) || 0;
+    if (discountType === 'percentage') return Math.min(subtotal * v / 100, subtotal);
+    return Math.min(v, subtotal);
+  })();
+  const afterDiscount = subtotal - discountAmt;
+  const taxAmt    = taxEnabled ? afterDiscount * TAX_RATE : 0;
+  const grandTotal = afterDiscount + taxAmt;
+
+  /* ── Line helpers ── */
+  function setLine(i: number, field: keyof InvoiceLine, val: string) {
     setLines(ls => ls.map((l, idx) => {
       if (idx !== i) return l;
       const updated = { ...l, [field]: val };
-      // Auto-fill price when product changes
       if (field === 'productId') {
         const p = products.find(p => p.id === val);
-        if (p?.price != null) updated.price = String(p.price);
+        if (p) {
+          if (p.price != null) updated.price = String(p.price);
+          if (!updated.description) updated.description = p.nameAr;
+        }
       }
       return updated;
     }));
   }
-
   function addLine()         { setLines(ls => [...ls, emptyLine()]); }
-  function removeLine(i: number) {
-    if (lines.length > 1) setLines(ls => ls.filter((_, idx) => idx !== i));
+  function removeLine(i: number) { if (lines.length > 1) setLines(ls => ls.filter((_, idx) => idx !== i)); }
+
+  /* ── Quick-add handlers ── */
+  function handleCustomerCreated(c: Customer) {
+    setCustomers(cs => [c, ...cs]);
+    setCustomerId(c.id);
+    setShowAddCustomer(false);
+    showToast('تم إضافة العميل بنجاح', 'success');
+  }
+  function handleProductCreated(p: Product) {
+    setProducts(ps => [p, ...ps]);
+    if (addProductLineIdx !== null) {
+      setLine(addProductLineIdx, 'productId', p.id);
+    }
+    setShowAddProduct(false);
+    setAddProductLineIdx(null);
+    showToast('تم إضافة المنتج بنجاح', 'success');
   }
 
-  /* ── Totals ───────────────────────────────────────────────────────── */
-  const grandTotal = lines.reduce((sum, l) => {
-    const qty = parseFloat(l.quantity) || 0;
-    const pr  = parseFloat(l.price)    || 0;
-    return sum + qty * pr;
-  }, 0);
+  function showToast(msg: string, type: 'success' | 'error') {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  }
 
-  /* ── Submit ───────────────────────────────────────────────────────── */
+  /* ── Validation ── */
+  function validate(): string | null {
+    if (!customerId) return 'يجب اختيار العميل';
+    if (!invoiceDate) return 'يجب تحديد تاريخ الفاتورة';
+    if (lines.every(l => !l.productId)) return 'يجب إضافة صنف واحد على الأقل';
+    if (lines.some(l => l.productId && !(parseFloat(l.quantity) > 0))) return 'الكمية يجب أن تكون أكبر من صفر';
+    if (grandTotal <= 0) return 'إجمالي الفاتورة يجب أن يكون أكبر من صفر';
+
+    // Stock validation: warn if product stock might be insufficient
+    for (const line of lines) {
+      if (!line.productId) continue;
+      const p = products.find(p => p.id === line.productId);
+      const qty = parseFloat(line.quantity) || 0;
+      if (p && p.stock != null && qty > p.stock) {
+        return `المخزون غير كافٍ لـ "${p.nameAr}" (متاح: ${p.stock})`;
+      }
+    }
+    return null;
+  }
+
+  /* ── Submit ── */
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!customerId)          { setFormError('يجب اختيار العميل'); return; }
-    if (lines.some(l => !l.productId)) { setFormError('يجب اختيار المنتج لكل سطر'); return; }
-    if (lines.some(l => !(parseFloat(l.quantity) > 0))) {
-      setFormError('الكمية يجب أن تكون أكبر من صفر');
-      return;
-    }
+    const err = validate();
+    if (err) { setFormError(err); return; }
 
     setSaving(true);
-    setFormError(null);
+    setFormError('');
+
+    const validLines = lines.filter(l => l.productId && parseFloat(l.quantity) > 0);
 
     try {
       const res = await fetch('/api/sales-invoices', {
@@ -101,18 +323,26 @@ export default function NewSalesInvoicePage() {
           customerId,
           date: invoiceDate,
           status,
+          paymentStatus,
           ...(invoiceNumber.trim() && { invoiceNumber: invoiceNumber.trim() }),
-          items: lines.map(l => ({
+          notes: notes.trim() || undefined,
+          total: subtotal,
+          discount: discountAmt,
+          tax: taxAmt,
+          grandTotal,
+          items: validLines.map(l => ({
             productId: l.productId,
             quantity:  parseFloat(l.quantity) || 1,
-            price:     parseFloat(l.price)    || 0,
+            price:     parseFloat(l.price) || 0,
+            total:     (parseFloat(l.quantity) || 1) * (parseFloat(l.price) || 0),
           })),
         }),
       });
 
       const j = await res.json();
       if (j.success) {
-        router.push('/sales/invoices');
+        showToast('تم حفظ الفاتورة بنجاح ✓', 'success');
+        setTimeout(() => router.push('/sales/invoices'), 1200);
       } else {
         setFormError(j.message || j.error || 'فشل إنشاء الفاتورة');
       }
@@ -123,29 +353,25 @@ export default function NewSalesInvoicePage() {
     }
   }
 
-  /* ── Render ───────────────────────────────────────────────────────── */
-  if (loadingData) return (
+  /* ── Render ── */
+  if (dataLoading) return (
     <div className="flex items-center justify-center h-64" dir="rtl">
       <div className="text-slate-500">جاري تحميل البيانات…</div>
     </div>
   );
 
-  if (dataError) return (
-    <div className="flex items-center justify-center h-64" dir="rtl">
-      <div className="text-red-500">{dataError}</div>
-    </div>
-  );
-
-  const statusLabels: Record<string, string> = {
-    pending:   'معلقة',
-    paid:      'مدفوعة',
-    draft:     'مسودة',
-    cancelled: 'ملغاة',
-  };
-
   return (
-    <div dir="rtl">
-      {/* Header */}
+    <div dir="rtl" className="pb-12">
+      {toast && <Toast msg={toast.msg} type={toast.type} />}
+      {showAddCustomer && <QuickAddCustomer onCreated={handleCustomerCreated} onClose={() => setShowAddCustomer(false)} />}
+      {showAddProduct && (
+        <QuickAddProduct
+          onCreated={handleProductCreated}
+          onClose={() => { setShowAddProduct(false); setAddProductLineIdx(null); }}
+        />
+      )}
+
+      {/* ── Header ── */}
       <div className="flex items-center gap-3 mb-6">
         <Link href="/sales/invoices" className="text-slate-400 hover:text-slate-600 transition-colors">
           <ArrowRight className="w-5 h-5" />
@@ -153,143 +379,154 @@ export default function NewSalesInvoicePage() {
         <h1 className="text-2xl font-bold text-slate-900">فاتورة مبيعات جديدة</h1>
       </div>
 
+      {dataError && (
+        <div className="mb-4 bg-yellow-50 border border-yellow-200 text-yellow-700 text-sm p-3 rounded-lg">
+          ⚠ {dataError}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-5">
         {formError && (
-          <div className="text-red-600 text-sm bg-red-50 border border-red-200 p-3 rounded-lg">
-            {formError}
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm p-3 rounded-lg flex items-center gap-2">
+            <X className="w-4 h-4 flex-shrink-0" /> {formError}
           </div>
         )}
 
-        {/* Header fields */}
+        {/* ── Invoice Details ── */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
-          <h2 className="text-base font-semibold text-slate-800 mb-4">بيانات الفاتورة</h2>
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <div>
+          <h2 className="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-4">بيانات الفاتورة</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+            {/* Customer */}
+            <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-slate-700 mb-1">العميل *</label>
-              <select
-                required
-                value={customerId}
-                onChange={e => setCustomerId(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">— اختر العميل —</option>
-                {customers.map(c => (
-                  <option key={c.id} value={c.id}>{c.nameAr}</option>
-                ))}
+              <div className="flex gap-2">
+                <select required value={customerId} onChange={e => setCustomerId(e.target.value)}
+                  className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                  <option value="">— اختر العميل —</option>
+                  {customers.map(c => <option key={c.id} value={c.id}>{c.nameAr}</option>)}
+                </select>
+                <button type="button" onClick={() => setShowAddCustomer(true)} title="إضافة عميل جديد"
+                  className="px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors border border-blue-200">
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Date */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">التاريخ *</label>
+              <input type="date" required value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+
+            {/* Invoice Number */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">رقم الفاتورة</label>
+              <input value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)}
+                placeholder="يُنشأ تلقائياً"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+
+            {/* Status */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">الحالة</label>
+              <select value={status} onChange={e => setStatus(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                <option value="pending">معلقة</option>
+                <option value="paid">مدفوعة</option>
+                <option value="draft">مسودة</option>
+                <option value="cancelled">ملغاة</option>
               </select>
             </div>
 
+            {/* Payment Status */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">التاريخ *</label>
-              <input
-                type="date"
-                required
-                value={invoiceDate}
-                onChange={e => setInvoiceDate(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">رقم الفاتورة</label>
-              <input
-                type="text"
-                value={invoiceNumber}
-                onChange={e => setInvoiceNumber(e.target.value)}
-                placeholder="يُنشأ تلقائياً"
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">الحالة</label>
-              <select
-                value={status}
-                onChange={e => setStatus(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {Object.entries(statusLabels).map(([v, l]) => (
-                  <option key={v} value={v}>{l}</option>
-                ))}
+              <label className="block text-sm font-medium text-slate-700 mb-1">طريقة الدفع</label>
+              <select value={paymentStatus} onChange={e => setPaymentStatus(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                <option value="cash">نقداً</option>
+                <option value="credit">آجل</option>
+                <option value="partial">جزئي</option>
+                <option value="bank_transfer">تحويل بنكي</option>
               </select>
             </div>
           </div>
         </div>
 
-        {/* Line items */}
+        {/* ── Line Items ── */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-semibold text-slate-800">بنود الفاتورة</h2>
-            <button
-              type="button"
-              onClick={addLine}
-              className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 font-medium"
-            >
-              <Plus className="w-4 h-4" /> إضافة سطر
+            <h2 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">البنود</h2>
+            <button type="button" onClick={addLine}
+              className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 font-medium">
+              <Plus className="w-4 h-4" /> إضافة صنف
             </button>
           </div>
 
-          <div className="border border-slate-200 rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500">المنتج</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 w-24">الكمية</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 w-32">سعر الوحدة</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 w-32">الإجمالي</th>
-                  <th className="w-10"></th>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[600px]">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 w-5/12">المنتج</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 w-2/12">البيان</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 w-1/12">الكمية</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 w-2/12">السعر (ج.م)</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 w-2/12">الإجمالي</th>
+                  <th className="w-8"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {lines.map((line, i) => {
-                  const qty = parseFloat(line.quantity) || 0;
-                  const pr  = parseFloat(line.price)    || 0;
-                  const sub = qty * pr;
+                  const qty  = parseFloat(line.quantity) || 0;
+                  const pr   = parseFloat(line.price) || 0;
+                  const sub  = qty * pr;
+                  const prod = products.find(p => p.id === line.productId);
+                  const lowStock = prod && prod.stock != null && qty > prod.stock;
+
                   return (
-                    <tr key={i}>
+                    <tr key={i} className={lowStock ? 'bg-red-50' : ''}>
                       <td className="px-2 py-1.5">
-                        <select
-                          value={line.productId}
-                          onChange={e => updateLine(i, 'productId', e.target.value)}
-                          className="w-full border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        >
-                          <option value="">— اختر المنتج —</option>
-                          {products.map(p => (
-                            <option key={p.id} value={p.id}>{p.nameAr} ({p.code})</option>
-                          ))}
-                        </select>
+                        <div className="flex gap-1">
+                          <select value={line.productId} onChange={e => setLine(i, 'productId', e.target.value)}
+                            className={`flex-1 border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white ${lowStock ? 'border-red-300' : 'border-slate-200'}`}>
+                            <option value="">— اختر المنتج —</option>
+                            {products.map(p => (
+                              <option key={p.id} value={p.id}>
+                                {p.nameAr} ({p.code}){p.stock != null ? ` — مخزون: ${p.stock}` : ''}
+                              </option>
+                            ))}
+                          </select>
+                          <button type="button" title="منتج جديد"
+                            onClick={() => { setAddProductLineIdx(i); setShowAddProduct(true); }}
+                            className="px-1.5 py-1 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 border border-blue-200">
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+                        {lowStock && <p className="text-red-500 text-xs mt-0.5">⚠ مخزون غير كافٍ (متاح: {prod!.stock})</p>}
                       </td>
                       <td className="px-2 py-1.5">
-                        <input
-                          type="number"
-                          min="0.01"
-                          step="0.01"
-                          value={line.quantity}
-                          onChange={e => updateLine(i, 'quantity', e.target.value)}
-                          className="w-full border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
+                        <input value={line.description} onChange={e => setLine(i, 'description', e.target.value)}
+                          className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          placeholder="وصف (اختياري)" />
                       </td>
                       <td className="px-2 py-1.5">
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={line.price}
-                          onChange={e => updateLine(i, 'price', e.target.value)}
+                        <input type="number" min="0.01" step="0.01" value={line.quantity}
+                          onChange={e => setLine(i, 'quantity', e.target.value)}
+                          className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 text-center" />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <input type="number" min="0" step="0.01" value={line.price}
+                          onChange={e => setLine(i, 'price', e.target.value)}
                           placeholder="0.00"
-                          className="w-full border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
+                          className="w-full border border-slate-200 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
                       </td>
-                      <td className="px-3 py-1.5 text-xs text-slate-600 whitespace-nowrap">
-                        {sub > 0 ? sub.toLocaleString('ar-EG') : '—'}
+                      <td className="px-3 py-1.5 text-xs font-medium text-slate-700 whitespace-nowrap text-left">
+                        {sub > 0 ? `${fmt(sub)} ج.م` : '—'}
                       </td>
                       <td className="px-1 py-1.5">
-                        <button
-                          type="button"
-                          onClick={() => removeLine(i)}
-                          disabled={lines.length === 1}
-                          className="text-slate-300 hover:text-red-500 disabled:opacity-30"
-                        >
+                        <button type="button" onClick={() => removeLine(i)} disabled={lines.length === 1}
+                          className="text-slate-300 hover:text-red-500 disabled:opacity-0">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </td>
@@ -297,35 +534,105 @@ export default function NewSalesInvoicePage() {
                   );
                 })}
               </tbody>
-              <tfoot className="border-t-2 border-slate-200 bg-slate-50">
-                <tr>
-                  <td colSpan={3} className="px-3 py-2 text-sm font-semibold text-slate-700 text-left">
-                    الإجمالي الكلي
-                  </td>
-                  <td colSpan={2} className="px-3 py-2 text-sm font-bold text-slate-900">
-                    {formatEGP(grandTotal)}
-                  </td>
-                </tr>
-              </tfoot>
             </table>
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex gap-3">
-          <button
-            type="submit"
-            disabled={saving}
-            className="flex-1 bg-blue-600 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
-            {saving ? 'جاري الحفظ…' : 'حفظ الفاتورة'}
-          </button>
-          <Link
-            href="/sales/invoices"
-            className="flex-1 text-center bg-slate-100 text-slate-700 rounded-lg py-2.5 text-sm font-medium hover:bg-slate-200 transition-colors"
-          >
-            إلغاء
-          </Link>
+        {/* ── Discount + Tax + Notes ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* Left: Discount + Tax */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5 space-y-4">
+            <h2 className="text-sm font-semibold text-slate-600 uppercase tracking-wide">الخصم والضريبة</h2>
+
+            {/* Discount */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">الخصم</label>
+              <div className="flex gap-2 items-center">
+                <div className="flex border border-slate-300 rounded-lg overflow-hidden text-xs">
+                  <button type="button" onClick={() => setDiscountType('percentage')}
+                    className={`px-3 py-2 flex items-center gap-1 font-medium transition-colors ${discountType === 'percentage' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
+                    <Percent className="w-3 h-3" /> نسبة
+                  </button>
+                  <button type="button" onClick={() => setDiscountType('fixed')}
+                    className={`px-3 py-2 flex items-center gap-1 font-medium transition-colors ${discountType === 'fixed' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}>
+                    <DollarSign className="w-3 h-3" /> مبلغ ثابت
+                  </button>
+                </div>
+                <input type="number" min="0" step="0.01" value={discountValue}
+                  onChange={e => setDiscountValue(e.target.value)}
+                  placeholder={discountType === 'percentage' ? '0%' : '0.00'}
+                  className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              {discountAmt > 0 && (
+                <p className="text-green-600 text-xs mt-1">
+                  خصم: {fmt(discountAmt)} ج.م
+                  {discountType === 'percentage' && discountValue && ` (${discountValue}%)`}
+                </p>
+              )}
+            </div>
+
+            {/* Tax */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">ضريبة القيمة المضافة (14%)</label>
+              <button type="button" onClick={() => setTaxEnabled(v => !v)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                  taxEnabled ? 'bg-green-600 text-white border-green-600' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+                }`}>
+                {taxEnabled ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
+                {taxEnabled ? `تشمل الضريبة (+${fmt(taxAmt)} ج.م)` : 'إضافة ضريبة 14%'}
+              </button>
+            </div>
+          </div>
+
+          {/* Right: Notes */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
+            <h2 className="text-sm font-semibold text-slate-600 uppercase tracking-wide mb-3">ملاحظات</h2>
+            <textarea rows={5} value={notes} onChange={e => setNotes(e.target.value)}
+              placeholder="أي ملاحظات أو شروط خاصة بهذه الفاتورة…"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+          </div>
+        </div>
+
+        {/* ── Summary + Actions ── */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
+          <div className="flex flex-col lg:flex-row gap-6 items-start justify-between">
+
+            {/* Totals breakdown */}
+            <div className="w-full lg:w-80 space-y-2 text-sm">
+              <div className="flex justify-between text-slate-600">
+                <span>المجموع الفرعي</span>
+                <span className="font-medium">{fmt(subtotal)} ج.م</span>
+              </div>
+              {discountAmt > 0 && (
+                <div className="flex justify-between text-green-700">
+                  <span>الخصم</span>
+                  <span className="font-medium">− {fmt(discountAmt)} ج.م</span>
+                </div>
+              )}
+              {taxEnabled && (
+                <div className="flex justify-between text-orange-600">
+                  <span>ضريبة القيمة المضافة (14%)</span>
+                  <span className="font-medium">+ {fmt(taxAmt)} ج.م</span>
+                </div>
+              )}
+              <div className="flex justify-between font-bold text-lg text-slate-900 border-t border-slate-200 pt-2 mt-2">
+                <span>الإجمالي الكلي</span>
+                <span className="text-blue-700">{fmt(grandTotal)} ج.م</span>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+              <button type="submit" disabled={saving}
+                className="px-8 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm min-w-[140px]">
+                {saving ? 'جاري الحفظ…' : 'حفظ الفاتورة'}
+              </button>
+              <Link href="/sales/invoices"
+                className="px-8 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-medium hover:bg-slate-200 transition-colors text-sm text-center">
+                إلغاء
+              </Link>
+            </div>
+          </div>
         </div>
       </form>
     </div>
