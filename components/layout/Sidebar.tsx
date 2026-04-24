@@ -17,6 +17,7 @@ import {
   Warehouse,
   Building2,
   BarChart3,
+  ArrowUpDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -53,9 +54,14 @@ const navItems: NavItem[] = [
     icon: <Truck className="w-5 h-5" />,
   },
   {
-    title: 'المخزون',
+    title: 'المنتجات',
     href: '/inventory/products',
     icon: <Package className="w-5 h-5" />,
+  },
+  {
+    title: 'تسوية المخزون',
+    href: '/inventory/stock-adjustments/new',
+    icon: <ArrowUpDown className="w-5 h-5" />,
   },
   {
     title: 'المستودعات',
@@ -73,12 +79,12 @@ const navItems: NavItem[] = [
     icon: <BarChart3 className="w-5 h-5" />,
   },
   {
-    title: 'التصنيع',
+    title: 'إحصائيات الإنتاج',
     href: '/analytics/production',
     icon: <Factory className="w-5 h-5" />,
   },
   {
-    title: 'التقارير',
+    title: 'التقارير والتحليلات',
     href: '/analytics',
     icon: <FileText className="w-5 h-5" />,
   },
