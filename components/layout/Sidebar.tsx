@@ -18,6 +18,7 @@ import {
   Building2,
   BarChart3,
   ArrowUpDown,
+  TrendingUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -69,6 +70,11 @@ const navItems: NavItem[] = [
     icon: <Warehouse className="w-5 h-5" />,
   },
   {
+    title: 'دليل الحسابات',
+    href: '/accounting/accounts',
+    icon: <Scale className="w-5 h-5" />,
+  },
+  {
     title: 'القيود المحاسبية',
     href: '/accounting/journal-entries',
     icon: <Scale className="w-5 h-5" />,
@@ -79,14 +85,34 @@ const navItems: NavItem[] = [
     icon: <BarChart3 className="w-5 h-5" />,
   },
   {
+    title: 'قائمة الدخل',
+    href: '/accounting/reports/profit-loss',
+    icon: <TrendingUp className="w-5 h-5" />,
+  },
+  {
+    title: 'الميزانية العمومية',
+    href: '/accounting/reports/balance-sheet',
+    icon: <Scale className="w-5 h-5" />,
+  },
+  {
+    title: 'تحليلات المبيعات',
+    href: '/analytics/sales',
+    icon: <BarChart3 className="w-5 h-5" />,
+  },
+  {
+    title: 'تحليلات المخزون',
+    href: '/analytics/inventory',
+    icon: <Package className="w-5 h-5" />,
+  },
+  {
+    title: 'التقارير المالية',
+    href: '/analytics/financial',
+    icon: <FileText className="w-5 h-5" />,
+  },
+  {
     title: 'إحصائيات الإنتاج',
     href: '/analytics/production',
     icon: <Factory className="w-5 h-5" />,
-  },
-  {
-    title: 'التقارير والتحليلات',
-    href: '/analytics',
-    icon: <FileText className="w-5 h-5" />,
   },
 ];
 

@@ -7,6 +7,16 @@
 import { prisma } from './db';
 import { formatDate } from './format';
 
+/** In-process cache: tracks which tenants have had accounts seeded this session */
+const seededTenants = new Set<string>();
+
+async function ensureAccountsSeeded(tenantId: string): Promise<void> {
+  if (!seededTenants.has(tenantId)) {
+    await seedChartOfAccounts(tenantId);
+    seededTenants.add(tenantId);
+  }
+}
+
 export interface JournalEntryInput {
   entryDate: Date;
   description: string;
@@ -81,7 +91,6 @@ export async function seedChartOfAccounts(tenantId: string = 'default') {
         },
       });
     }
-    console.log('Chart of Accounts seeded successfully');
   } catch (error) {
     console.error('Error seeding chart of accounts:', error);
   }
@@ -130,6 +139,7 @@ export async function createJournalEntry(entry: JournalEntryInput, createdBy?: s
         description: entry.description,
         referenceType: entry.referenceType,
         referenceId: entry.referenceId,
+        tenantId: entry.tenantId || 'default',
         totalDebit,
         totalCredit,
         isPosted: false,
@@ -149,7 +159,6 @@ export async function createJournalEntry(entry: JournalEntryInput, createdBy?: s
       },
     });
 
-    console.log(`Journal entry created: ${entryNumber}`);
     return journalEntry;
   } catch (error) {
     console.error('Error creating journal entry:', error);
@@ -222,7 +231,6 @@ export async function postJournalEntry(entryId: string, userId?: string): Promis
       },
     });
 
-    console.log(`Journal entry posted: ${journalEntry.entryNumber}`);
     return postedEntry;
   } catch (error) {
     console.error('Error posting journal entry:', error);
@@ -410,7 +418,7 @@ export async function reverseJournalEntry(journalEntryId: string, tx?: any): Pro
         const reverseBalanceChange = -originalBalanceChange;
 
         await prismaClient.account.update({
-          where: { code: line.accountCode },
+          where: { tenantId_code: { tenantId: (line as any).tenantId, code: line.accountCode } },
           data: {
             balance: {
               increment: reverseBalanceChange,
@@ -430,7 +438,6 @@ export async function reverseJournalEntry(journalEntryId: string, tx?: any): Pro
       where: { id: journalEntryId },
     });
 
-    console.log(`Journal entry reversed: ${journalEntry.entryNumber}`);
     return journalEntry;
   } catch (error) {
     console.error('Error reversing journal entry:', error);
@@ -444,8 +451,21 @@ export async function reverseJournalEntry(journalEntryId: string, tx?: any): Pro
  *   DR Receivables (1020)    CR Sales Revenue (4010)   — for the sale price
  *   DR COGS (5010)           CR Inventory (1030)        — for the cost of goods sold
  */
-export async function createSalesInvoiceEntry(invoiceId: string, totalAmount: number): Promise<any> {
+export async function createSalesInvoiceEntry(invoiceId: string, totalAmount: number, tenantId?: string): Promise<any> {
   try {
+    // Prevent duplicate journal entries for the same invoice
+    const tid = tenantId || 'default';
+    const existing = await prisma.journalEntry.findFirst({
+      where: { referenceType: 'SalesInvoice', referenceId: invoiceId, tenantId: tid },
+    });
+    if (existing) {
+      console.warn(`[ACCOUNTING] Journal entry already exists for SalesInvoice ${invoiceId} — skipping`);
+      return existing;
+    }
+
+    // Ensure chart of accounts is seeded for this tenant
+    await ensureAccountsSeeded(tid);
+
     // Fetch invoice items with product costs to calculate COGS
     const invoiceItems = await prisma.salesInvoiceItem.findMany({
       where: { salesInvoiceId: invoiceId },
@@ -496,6 +516,7 @@ export async function createSalesInvoiceEntry(invoiceId: string, totalAmount: nu
       description: `فاتورة بيع #${invoiceId}`,
       referenceType: 'SalesInvoice',
       referenceId: invoiceId,
+      tenantId: tid,
       lines,
     };
 
@@ -512,13 +533,28 @@ export async function createSalesInvoiceEntry(invoiceId: string, totalAmount: nu
  * Purchase invoice booking:
  *   DR Inventory/COGS    CR Payables
  */
-export async function createPurchaseInvoiceEntry(invoiceId: string, totalAmount: number): Promise<any> {
+export async function createPurchaseInvoiceEntry(invoiceId: string, totalAmount: number, tenantId?: string): Promise<any> {
   try {
+    const tid = tenantId || 'default';
+
+    // Prevent duplicate journal entries for the same invoice
+    const existing = await prisma.journalEntry.findFirst({
+      where: { referenceType: 'PurchaseInvoice', referenceId: invoiceId, tenantId: tid },
+    });
+    if (existing) {
+      console.warn(`[ACCOUNTING] Journal entry already exists for PurchaseInvoice ${invoiceId} — skipping`);
+      return existing;
+    }
+
+    // Ensure chart of accounts is seeded for this tenant
+    await ensureAccountsSeeded(tid);
+
     const entry: JournalEntryInput = {
       entryDate: new Date(),
       description: `فاتورة شراء #${invoiceId}`,
       referenceType: 'PurchaseInvoice',
       referenceId: invoiceId,
+      tenantId: tid,
       lines: [
         {
           accountCode: '1030', // Inventory / COGS
@@ -832,9 +868,24 @@ export async function createPaymentJournalEntry(
   paymentId: string,
   amount: number,
   type: 'incoming' | 'outgoing',
-  paymentDate: Date
+  paymentDate: Date,
+  tenantId?: string
 ): Promise<any> {
   try {
+    const tid = tenantId || 'default';
+
+    // Prevent duplicate journal entries for the same payment
+    const existing = await prisma.journalEntry.findFirst({
+      where: { referenceType: 'Payment', referenceId: paymentId, tenantId: tid },
+    });
+    if (existing) {
+      console.warn(`[ACCOUNTING] Journal entry already exists for Payment ${paymentId} — skipping`);
+      return existing;
+    }
+
+    // Ensure chart of accounts is seeded for this tenant
+    await ensureAccountsSeeded(tid);
+
     const lines: JournalEntryInput['lines'] = [];
 
     if (type === 'incoming') {
@@ -876,6 +927,7 @@ export async function createPaymentJournalEntry(
       description: type === 'incoming' ? 'دفعة واردة' : 'دفعة صادرة',
       referenceType: 'Payment',
       referenceId: paymentId,
+      tenantId: tid,
       lines,
     };
 

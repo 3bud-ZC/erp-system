@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     const purchaseInvoiceId = searchParams.get('purchaseInvoiceId');
     const type = searchParams.get('type');
 
-    const where: any = {};
+    const where: Record<string, unknown> = { tenantId: user.tenantId };
     if (customerId) where.customerId = customerId;
     if (supplierId) where.supplierId = supplierId;
     if (salesInvoiceId) where.salesInvoiceId = salesInvoiceId;
@@ -109,40 +109,58 @@ export async function POST(request: Request) {
         }
       });
 
-      // Update invoice paid amount
+      // Update invoice paidAmount + auto paymentStatus
       if (salesInvoiceId) {
-        await tx.salesInvoice.update({
+        const inv = await tx.salesInvoice.update({
           where: { id: salesInvoiceId },
-          data: { paidAmount: { increment: amount } }
+          data: { paidAmount: { increment: amount } },
         });
+        const newPaid = inv.paidAmount;
+        const due     = inv.grandTotal || inv.total;
+        const paymentStatus =
+          newPaid <= 0       ? 'unpaid'
+          : newPaid >= due   ? 'paid'
+                             : 'partial';
+        await tx.salesInvoice.update({ where: { id: salesInvoiceId }, data: { paymentStatus } });
       }
       if (purchaseInvoiceId) {
-        await tx.purchaseInvoice.update({
+        const inv = await tx.purchaseInvoice.update({
           where: { id: purchaseInvoiceId },
-          data: { paidAmount: { increment: amount } }
+          data: { paidAmount: { increment: amount } },
         });
+        const newPaid = inv.paidAmount;
+        const due     = inv.total;
+        const paymentStatus =
+          newPaid <= 0       ? 'unpaid'
+          : newPaid >= due   ? 'paid'
+                             : 'partial';
+        await tx.purchaseInvoice.update({ where: { id: purchaseInvoiceId }, data: { paymentStatus } });
       }
-
-      // TODO: Create journal entry for payment (integrate cash into General Ledger)
-      // Temporarily commented out due to missing account relation in journal entry lines
-      // const journalEntry = await createPaymentJournalEntry(
-      //   newPayment.id,
-      //   amount,
-      //   type,
-      //   new Date(date)
-      // );
-
-      // // Link journal entry to payment
-      // await tx.payment.update({
-      //   where: { id: newPayment.id },
-      //   data: { journalEntryId: journalEntry.id }
-      // });
-
-      // // Post the journal entry to update account balances
-      // await postJournalEntry(journalEntry.id);
 
       return newPayment;
     });
+
+    // Create & post journal entry AFTER the payment transaction commits
+    // (avoids cross-transaction issues since createPaymentJournalEntry uses its own prisma instance)
+    try {
+      const journalEntry = await createPaymentJournalEntry(
+        payment.id,
+        amount,
+        type as 'incoming' | 'outgoing',
+        new Date(date),
+        user.tenantId
+      );
+      if (journalEntry) {
+        await postJournalEntry(journalEntry.id);
+        await prisma.payment.update({
+          where: { id: payment.id },
+          data: { journalEntryId: journalEntry.id },
+        });
+      }
+    } catch (jeErr) {
+      // Journal entry failure must NOT roll back the already-committed payment
+      console.error('[ACCOUNTING] Payment journal entry failed — payment was saved:', jeErr);
+    }
 
     // Log audit action
     await logAuditAction(
@@ -317,18 +335,26 @@ export async function DELETE(request: Request) {
         await reverseJournalEntry(payment.journalEntryId, tx);
       }
 
-      // Reverse invoice paid amount
+      // Reverse invoice paid amount + recalculate paymentStatus
       if (payment.salesInvoiceId) {
-        await tx.salesInvoice.update({
+        const inv = await tx.salesInvoice.update({
           where: { id: payment.salesInvoiceId },
-          data: { paidAmount: { decrement: payment.amount } }
+          data: { paidAmount: { decrement: payment.amount } },
         });
+        const newPaid = Math.max(0, inv.paidAmount);
+        const due     = inv.grandTotal || inv.total;
+        const paymentStatus = newPaid <= 0 ? 'unpaid' : newPaid >= due ? 'paid' : 'partial';
+        await tx.salesInvoice.update({ where: { id: payment.salesInvoiceId }, data: { paymentStatus } });
       }
       if (payment.purchaseInvoiceId) {
-        await tx.purchaseInvoice.update({
+        const inv = await tx.purchaseInvoice.update({
           where: { id: payment.purchaseInvoiceId },
-          data: { paidAmount: { decrement: payment.amount } }
+          data: { paidAmount: { decrement: payment.amount } },
         });
+        const newPaid = Math.max(0, inv.paidAmount);
+        const due     = inv.total;
+        const paymentStatus = newPaid <= 0 ? 'unpaid' : newPaid >= due ? 'paid' : 'partial';
+        await tx.purchaseInvoice.update({ where: { id: payment.purchaseInvoiceId }, data: { paymentStatus } });
       }
 
       // Delete payment

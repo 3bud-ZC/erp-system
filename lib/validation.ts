@@ -76,18 +76,19 @@ export async function validatePaymentAmount(invoiceId: string, invoiceType: 'sal
   if (invoiceType === 'sales') {
     const invoice = await prisma.salesInvoice.findUnique({
       where: { id: invoiceId },
-      select: { total: true, paidAmount: true, invoiceNumber: true }
+      select: { total: true, grandTotal: true, paidAmount: true, invoiceNumber: true }
     });
 
     if (!invoice) {
       return { valid: false, error: 'Sales invoice not found' };
     }
 
-    const remaining = invoice.total - invoice.paidAmount;
-    if (paymentAmount > remaining) {
-      return { 
-        valid: false, 
-        error: `Payment amount ${paymentAmount} exceeds remaining balance ${remaining} for invoice ${invoice.invoiceNumber}` 
+    const due       = invoice.grandTotal || invoice.total;
+    const remaining = due - invoice.paidAmount;
+    if (paymentAmount > remaining + 0.01) {
+      return {
+        valid: false,
+        error: `المبلغ (${paymentAmount}) يتجاوز الرصيد المتبقي (${remaining.toFixed(2)}) للفاتورة ${invoice.invoiceNumber}`,
       };
     }
   } else {
@@ -101,10 +102,10 @@ export async function validatePaymentAmount(invoiceId: string, invoiceType: 'sal
     }
 
     const remaining = invoice.total - invoice.paidAmount;
-    if (paymentAmount > remaining) {
-      return { 
-        valid: false, 
-        error: `Payment amount ${paymentAmount} exceeds remaining balance ${remaining} for invoice ${invoice.invoiceNumber}` 
+    if (paymentAmount > remaining + 0.01) {
+      return {
+        valid: false,
+        error: `المبلغ (${paymentAmount}) يتجاوز الرصيد المتبقي (${remaining.toFixed(2)}) للفاتورة ${invoice.invoiceNumber}`,
       };
     }
   }

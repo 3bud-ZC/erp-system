@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, X, Pencil, Trash2 } from 'lucide-react';
+import { Plus, X, Pencil, Trash2, FileText, AlertCircle, CheckCircle } from 'lucide-react';
+import Link from 'next/link';
 
 interface Supplier {
   id: string;
@@ -41,6 +42,14 @@ export default function SuppliersPage() {
   // Delete confirm
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Toast
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  function showToast(msg: string, type: 'success' | 'error' = 'success') {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  }
 
   function load() {
     setLoading(true);
@@ -69,7 +78,7 @@ export default function SuppliersPage() {
         }),
       });
       const j = await res.json();
-      if (j.success) { setShowModal(false); setForm(emptyForm); load(); }
+      if (j.success) { setShowModal(false); setForm(emptyForm); load(); showToast('تم إضافة المورد بنجاح'); }
       else setFormError(j.message || j.error || 'فشل الحفظ');
     } catch { setFormError('تعذر الاتصال بالخادم'); }
     finally { setSaving(false); }
@@ -106,7 +115,7 @@ export default function SuppliersPage() {
         }),
       });
       const j = await res.json();
-      if (j.success) { setEditItem(null); load(); }
+      if (j.success) { setEditItem(null); load(); showToast('تم تحديث بيانات المورد'); }
       else setEditError(j.message || j.error || 'فشل الحفظ');
     } catch { setEditError('تعذر الاتصال بالخادم'); }
     finally { setEditSaving(false); }
@@ -118,9 +127,9 @@ export default function SuppliersPage() {
     try {
       const res = await fetch(`/api/suppliers?id=${deleteId}`, { method: 'DELETE', credentials: 'include' });
       const j = await res.json();
-      if (j.success) { setDeleteId(null); load(); }
-      else alert(j.message || j.error || 'فشل الحذف');
-    } catch { alert('تعذر الاتصال بالخادم'); }
+      if (j.success) { setDeleteId(null); setDeleteError(null); load(); showToast('تم حذف المورد'); }
+      else setDeleteError(j.message || j.error || 'فشل الحذف');
+    } catch { setDeleteError('تعذر الاتصال بالخادم'); }
     finally { setDeleting(false); }
   }
 
@@ -129,6 +138,17 @@ export default function SuppliersPage() {
 
   return (
     <div dir="rtl">
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed top-5 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-2 px-5 py-3 rounded-xl shadow-xl text-white text-sm font-medium
+          ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
+          {toast.type === 'success'
+            ? <CheckCircle className="w-4 h-4 flex-shrink-0" />
+            : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
+          {toast.msg}
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-slate-900">الموردون</h1>
         <button onClick={() => setShowModal(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
@@ -262,7 +282,12 @@ export default function SuppliersPage() {
               <Trash2 className="w-6 h-6 text-red-600" />
             </div>
             <h3 className="text-lg font-semibold text-slate-900 mb-2">تأكيد الحذف</h3>
-            <p className="text-sm text-slate-500 mb-6">هل أنت متأكد من حذف هذا المورد؟ لا يمكن حذف مورد مرتبط بفواتير أو طلبات.</p>
+            <p className="text-sm text-slate-500 mb-4">هل أنت متأكد من حذف هذا المورد؟ لا يمكن حذف مورد مرتبط بفواتير أو طلبات.</p>
+            {deleteError && (
+              <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />{deleteError}
+              </div>
+            )}
             <div className="flex gap-3">
               <button onClick={handleDelete} disabled={deleting}
                 className="flex-1 bg-red-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors">
@@ -301,12 +326,16 @@ export default function SuppliersPage() {
                   <td className="px-5 py-3 text-sm text-slate-500">{s.email ?? '—'}</td>
                   <td className="px-5 py-3 text-sm text-slate-600">{formatEGP(s.creditLimit)}</td>
                   <td className="px-5 py-3">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <Link href={`/purchases/invoices?supplier=${encodeURIComponent(s.nameAr)}`}
+                        className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="فواتير المورد">
+                        <FileText className="w-4 h-4" />
+                      </Link>
                       <button onClick={() => openEdit(s)}
                         className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="تعديل">
                         <Pencil className="w-4 h-4" />
                       </button>
-                      <button onClick={() => setDeleteId(s.id)}
+                      <button onClick={() => { setDeleteId(s.id); setDeleteError(null); }}
                         className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="حذف">
                         <Trash2 className="w-4 h-4" />
                       </button>
