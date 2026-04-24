@@ -144,7 +144,7 @@ export default function WarehousesPage() {
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">الاسم بالإنجليزية</label>
         <input value={f.nameEn} onChange={e => setF(p => ({ ...p, nameEn: e.target.value }))}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Main Warehouse" />
+          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Main Warehouse (اختياري)" />
       </div>
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">العنوان</label>

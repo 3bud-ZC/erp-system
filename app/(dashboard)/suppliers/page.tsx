@@ -166,7 +166,7 @@ export default function SuppliersPage() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">الاسم بالإنجليزية</label>
                 <input value={form.nameEn} onChange={e => setForm(f => ({ ...f, nameEn: e.target.value }))}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Supply Company" />
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Supply Company (اختياري)" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
