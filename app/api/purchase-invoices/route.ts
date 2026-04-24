@@ -53,15 +53,17 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-      const { items, ...invoiceData } = body;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { items, tenantId: _clientTenantId, ...invoiceData } = body;
 
-      // Calculate total server-side
+      // Calculate total server-side (ignore client-sent total)
       const total = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
 
       const invoice = await prisma.$transaction(async (tx) => {
         const newInvoice = await (tx as any).purchaseInvoice.create({
           data: {
             ...invoiceData,
+            tenantId: user.tenantId,   // always from server — never trust client
             total,
             items: {
               create: items.map((item: any) => ({
