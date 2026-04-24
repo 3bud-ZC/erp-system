@@ -24,6 +24,7 @@ export async function GET(request: Request) {
     // Get all journal entries for the period
     const allEntries = await prisma.journalEntry.findMany({
       where: {
+        tenantId: user.tenantId,
         isPosted: true,
         entryDate: { gte: fromDate, lte: toDate },
       },

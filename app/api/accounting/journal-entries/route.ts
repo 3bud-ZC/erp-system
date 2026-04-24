@@ -4,9 +4,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { journalEntryService, CreateJournalEntryInput, PostJournalEntryInput } from '@/lib/accounting/journal-entry.service';
+import { journalEntryService, CreateJournalEntryInput } from '@/lib/accounting/journal-entry.service';
 import { journalEntryValidator } from '@/lib/accounting/validation.service';
 import { validationEngine, ValidationContext } from '@/lib/validation/validation-engine';
+import { getAuthenticatedUser, checkPermission } from '@/lib/auth';
+import { apiError } from '@/lib/api-response';
 
 // ============================================================================
 // POST /api/accounting/journal-entries
@@ -15,30 +17,25 @@ import { validationEngine, ValidationContext } from '@/lib/validation/validation
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const tenantId = req.headers.get('x-tenant-id');
-    const userId = req.headers.get('x-user-id');
+    const user = await getAuthenticatedUser(req);
+    if (!user) return apiError('لم يتم المصادقة', 401);
+    if (!checkPermission(user, 'manage_accounting')) return apiError('ليس لديك صلاحية', 403);
 
-    if (!tenantId) {
-      return NextResponse.json(
-        { error: 'Tenant ID is required' },
-        { status: 400 }
-      );
-    }
+    const body = await req.json();
 
     const input: CreateJournalEntryInput = {
       ...body,
-      tenantId,
-      createdBy: userId || undefined,
+      tenantId: user.tenantId!,
+      createdBy: user.id!,
     };
 
     // Validate using validation engine
     const validationContext: ValidationContext = {
-      tenantId,
-      userId: userId || undefined,
+      tenantId: user.tenantId!,
+      userId: user.id!,
       requestId: `req_${Date.now()}`,
       timestamp: new Date(),
-      prisma: null as any, // Would be actual prisma client
+      prisma: null as any,
       snapshot: {
         products: new Map(),
         customers: new Map(),
@@ -81,14 +78,9 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
-    const tenantId = req.headers.get('x-tenant-id');
-
-    if (!tenantId) {
-      return NextResponse.json(
-        { error: 'Tenant ID is required' },
-        { status: 400 }
-      );
-    }
+    const user = await getAuthenticatedUser(req);
+    if (!user) return apiError('لم يتم المصادقة', 401);
+    if (!checkPermission(user, 'view_accounting')) return apiError('ليس لديك صلاحية', 403);
 
     const searchParams = req.nextUrl.searchParams;
     const status = searchParams.get('status');
@@ -99,7 +91,7 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    const result = await journalEntryService.listEntries(tenantId, {
+    const result = await journalEntryService.listEntries(user.tenantId!, {
       status: status as any,
       startDate: startDate ? new Date(startDate) : undefined,
       endDate: endDate ? new Date(endDate) : undefined,

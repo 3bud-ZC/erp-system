@@ -293,7 +293,7 @@ export function FormField({ config, value, onChange, error, readonly, mode }: Fo
                 type="button"
                 onClick={() => {
                   // Open item selector modal
-                  console.log('Add item');
+                  // TODO: open item selector modal
                 }}
                 className="w-full py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 text-sm font-medium transition-colors"
               >

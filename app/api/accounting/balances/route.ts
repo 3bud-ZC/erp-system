@@ -5,6 +5,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { accountingService } from '@/lib/accounting/accounting.service';
+import { getAuthenticatedUser, checkPermission } from '@/lib/auth';
+import { apiError } from '@/lib/api-response';
 
 // ============================================================================
 // GET /api/accounting/balances
@@ -13,21 +15,15 @@ import { accountingService } from '@/lib/accounting/accounting.service';
 
 export async function GET(req: NextRequest) {
   try {
-    const tenantId = req.headers.get('x-tenant-id');
-
-    if (!tenantId) {
-      return NextResponse.json(
-        { error: 'Tenant ID is required' },
-        { status: 400 }
-      );
-    }
+    const user = await getAuthenticatedUser(req);
+    if (!user) return apiError('لم يتم المصادقة', 401);
+    if (!checkPermission(user, 'view_accounting')) return apiError('ليس لديك صلاحية', 403);
 
     const searchParams = req.nextUrl.searchParams;
     const accountCodes = searchParams.getAll('accountCode');
     const asOfDate = searchParams.get('asOfDate');
     const fiscalYearId = searchParams.get('fiscalYearId');
     const accountingPeriodId = searchParams.get('accountingPeriodId');
-    const useCache = searchParams.get('useCache') !== 'false';
 
     if (accountCodes.length === 0) {
       return NextResponse.json(
@@ -38,7 +34,7 @@ export async function GET(req: NextRequest) {
 
     const balances = await accountingService.getAccountBalances(
       accountCodes,
-      tenantId,
+      user.tenantId!,
       {
         asOfDate: asOfDate ? new Date(asOfDate) : undefined,
         fiscalYearId: fiscalYearId || undefined,

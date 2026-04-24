@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    console.log('Starting setup...');
+    // Setup started
 
     // Create demo role
     const demoRole = await (prisma as any).role.upsert({
@@ -22,7 +22,6 @@ export async function GET() {
         description: 'Demo access for testing',
       },
     });
-    console.log('Demo role created/updated');
 
     // Create ALL permissions required by API routes
     const permissions = [
@@ -90,7 +89,6 @@ export async function GET() {
         },
       });
     }
-    console.log('Permissions created');
 
     // Create demo user
     const hashedPassword = await bcrypt.hash('demo12345', 10);
@@ -105,7 +103,6 @@ export async function GET() {
         isActive: true,
       },
     });
-    console.log('Demo user created');
 
     // Assign role to user
     await (prisma as any).userRole.upsert({
@@ -116,7 +113,6 @@ export async function GET() {
         roleId: demoRole.id,
       },
     });
-    console.log('Role assigned to user');
 
     // Create sample products
     const sampleProducts = [
@@ -131,7 +127,6 @@ export async function GET() {
         create: product,
       });
     }
-    console.log('Sample products created');
 
     return NextResponse.json({
       success: true,

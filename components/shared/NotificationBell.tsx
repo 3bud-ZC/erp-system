@@ -34,7 +34,7 @@ export function NotificationBell() {
 
   const markAsRead = (id: string) => {
     // In production, call API to mark as read
-    console.log('Mark as read:', id);
+    // TODO: call API to mark as read
   };
 
   return (

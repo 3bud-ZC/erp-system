@@ -18,9 +18,9 @@ export async function GET(request: Request) {
     const productId = searchParams.get('productId');
     const validateOnly = searchParams.get('validateOnly') === 'true';
 
-    const products = productId 
-      ? await prisma.product.findMany({ where: { id: productId } })
-      : await prisma.product.findMany({ where: { stock: { gt: 0 } } });
+    const products = productId
+      ? await prisma.product.findMany({ where: { id: productId, tenantId: user.tenantId } })
+      : await prisma.product.findMany({ where: { tenantId: user.tenantId, stock: { gt: 0 } } });
 
     const analysis: any[] = [];
     const inconsistencies: any[] = [];
@@ -136,9 +136,9 @@ export async function POST(request: Request) {
       return apiError('Method must be fifo, wac, or average', 400);
     }
 
-    const products = productId 
-      ? await prisma.product.findMany({ where: { id: productId } })
-      : await prisma.product.findMany({ where: { stock: { gt: 0 } } });
+    const products = productId
+      ? await prisma.product.findMany({ where: { id: productId, tenantId: user.tenantId } })
+      : await prisma.product.findMany({ where: { tenantId: user.tenantId, stock: { gt: 0 } } });
 
     const updatedProducts: any[] = [];
 
