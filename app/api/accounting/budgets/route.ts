@@ -26,7 +26,7 @@ export async function GET(request: Request) {
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '50', 10)));
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: any = { tenantId: user.tenantId };
     if (fiscalYear) where.fiscalYear = parseInt(fiscalYear);
     if (status) where.status = status;
 
@@ -142,10 +142,10 @@ export async function PUT(request: Request) {
       return apiError('Budget ID is required', 400);
     }
 
-    // Check if budget exists
+    // Check if budget exists and belongs to this tenant
     // @ts-ignore - Prisma client type issue
-    const existingBudget = await (prisma as any).budget.findUnique({
-      where: { id },
+    const existingBudget = await (prisma as any).budget.findFirst({
+      where: { id, tenantId: user.tenantId },
       include: {
         entries: true,
       },
@@ -205,9 +205,9 @@ export async function DELETE(request: Request) {
       return apiError('Budget ID is required', 400);
     }
 
-    // Check if budget exists
-    const deleted = await (prisma as any).budget.findUnique({
-      where: { id },
+    // Check if budget exists and belongs to this tenant
+    const deleted = await (prisma as any).budget.findFirst({
+      where: { id, tenantId: user.tenantId },
     });
 
     if (!deleted) {

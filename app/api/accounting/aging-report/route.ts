@@ -39,6 +39,7 @@ export async function GET(request: Request) {
     if (type === 'ar' || type === 'all') {
       const salesInvoices = await prisma.salesInvoice.findMany({
         where: {
+          tenantId: user.tenantId,
           paymentStatus: { not: 'paid' },
           date: { lte: asOf },
         },
@@ -81,6 +82,7 @@ export async function GET(request: Request) {
     if (type === 'ap' || type === 'all') {
       const purchaseInvoices = await prisma.purchaseInvoice.findMany({
         where: {
+          tenantId: user.tenantId,
           paymentStatus: { not: 'paid' },
           date: { lte: asOf },
         },
