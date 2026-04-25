@@ -98,13 +98,30 @@ export default function TrialBalancePage() {
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="text-slate-500">جاري تحميل ميزان المراجعة…</div>
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden animate-pulse">
+          <div className="bg-slate-50 border-b border-slate-200 px-5 py-3 flex gap-6">
+            {['w-20', 'w-40', 'w-20', 'w-32', 'w-32', 'w-32'].map((w, i) => (
+              <div key={i} className={`${w} h-3.5 bg-slate-200 rounded`} />
+            ))}
+          </div>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="px-5 py-3.5 border-b border-slate-100 flex gap-6 items-center last:border-0">
+              <div className="w-20 h-4 bg-slate-100 rounded" />
+              <div className="w-40 h-4 bg-slate-100 rounded" />
+              <div className="w-20 h-4 bg-slate-100 rounded" />
+              <div className="w-32 h-4 bg-slate-100 rounded" />
+              <div className="w-32 h-4 bg-slate-100 rounded" />
+              <div className="w-32 h-4 bg-slate-100 rounded" />
+            </div>
+          ))}
         </div>
       ) : rows.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-12 text-center">
-          <p className="text-slate-400">لا توجد قيود محاسبية مرحَّلة حتى الآن</p>
-          <p className="text-xs text-slate-300 mt-1">ستظهر الحسابات هنا بعد إنشاء فواتير أو دفعات</p>
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-16 text-center">
+          <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <BookOpen className="w-6 h-6 text-slate-400" />
+          </div>
+          <p className="text-slate-600 font-medium">لا توجد قيود محاسبية مرحَّلة حتى الآن</p>
+          <p className="text-slate-400 text-sm mt-1">ستظهر الحسابات هنا بعد إنشاء فواتير أو دفعات</p>
         </div>
       ) : (
         <>

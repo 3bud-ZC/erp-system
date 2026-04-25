@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Plus, X, Pencil, Trash2, FileText, AlertCircle, CheckCircle } from 'lucide-react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
+import { Plus, X, Pencil, Trash2, FileText, AlertCircle, CheckCircle, Search, Users } from 'lucide-react';
 import Link from 'next/link';
 
 interface Customer {
@@ -15,52 +15,103 @@ interface Customer {
   balance?: number;
 }
 
-function formatEGP(v?: number) {
+function fmtEGP(v?: number | null) {
   if (v == null) return '—';
-  return `${v.toLocaleString('ar-EG')} ج.م`;
+  return v.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م';
 }
 
 const emptyForm = { code: '', nameAr: '', nameEn: '', email: '', phone: '', creditLimit: '' };
 
+/* ─── Skeleton ────────────────────────────────────────────── */
+function TableSkeleton() {
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden animate-pulse">
+      <div className="bg-slate-50 border-b border-slate-200 px-5 py-3 flex gap-8">
+        {['w-16', 'w-36', 'w-24', 'w-32', 'w-24', 'w-24', 'w-20'].map((w, i) => (
+          <div key={i} className={`${w} h-3.5 bg-slate-200 rounded`} />
+        ))}
+      </div>
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="px-5 py-3.5 border-b border-slate-100 flex gap-8 items-center last:border-0">
+          <div className="w-16 h-4 bg-slate-100 rounded" />
+          <div className="w-36 h-4 bg-slate-100 rounded" />
+          <div className="w-24 h-4 bg-slate-100 rounded" />
+          <div className="w-32 h-4 bg-slate-100 rounded" />
+          <div className="w-24 h-4 bg-slate-100 rounded" />
+          <div className="w-24 h-4 bg-slate-100 rounded" />
+          <div className="flex gap-1.5 mr-auto">
+            <div className="w-7 h-7 bg-slate-100 rounded-lg" />
+            <div className="w-7 h-7 bg-slate-100 rounded-lg" />
+            <div className="w-7 h-7 bg-slate-100 rounded-lg" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Modal helpers ───────────────────────────────────────── */
+function InputField({ label, required, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string; required?: boolean }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-slate-700 mb-1">{label}{required && ' *'}</label>
+      <input {...props} required={required}
+        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+    </div>
+  );
+}
+
+/* ─── Page ────────────────────────────────────────────────── */
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState<string | null>(null);
+  const [search, setSearch]       = useState('');
 
   // Add modal
   const [showModal, setShowModal] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving]       = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm]           = useState(emptyForm);
 
   // Edit modal
-  const [editItem, setEditItem] = useState<Customer | null>(null);
-  const [editForm, setEditForm] = useState(emptyForm);
+  const [editItem, setEditItem]   = useState<Customer | null>(null);
+  const [editForm, setEditForm]   = useState(emptyForm);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
   // Delete confirm
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [deleteId, setDeleteId]   = useState<string | null>(null);
+  const [deleting, setDeleting]   = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Toast
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
-  function showToast(msg: string, type: 'success' | 'error' = 'success') {
+  const showToast = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
-  }
+  }, []);
 
-  function load() {
-    setLoading(true);
+  const load = useCallback(() => {
+    setLoading(true); setError(null);
     fetch('/api/customers', { credentials: 'include' })
       .then(r => r.json())
       .then(j => { if (j.success) setCustomers(j.data ?? []); else setError(j.message || 'فشل التحميل'); })
       .catch(() => setError('تعذر الاتصال بالخادم'))
       .finally(() => setLoading(false));
-  }
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = useMemo(() =>
+    customers.filter(c =>
+      !search ||
+      c.nameAr.includes(search) ||
+      (c.nameEn || '').toLowerCase().includes(search.toLowerCase()) ||
+      c.code.toLowerCase().includes(search.toLowerCase()) ||
+      (c.phone || '').includes(search) ||
+      (c.email || '').toLowerCase().includes(search.toLowerCase())
+    ), [customers, search]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -86,14 +137,8 @@ export default function CustomersPage() {
 
   function openEdit(c: Customer) {
     setEditItem(c);
-    setEditForm({
-      code: c.code || '',
-      nameAr: c.nameAr || '',
-      nameEn: c.nameEn || '',
-      email: c.email || '',
-      phone: c.phone || '',
-      creditLimit: c.creditLimit != null ? String(c.creditLimit) : '',
-    });
+    setEditForm({ code: c.code, nameAr: c.nameAr, nameEn: c.nameEn || '', email: c.email || '', phone: c.phone || '',
+      creditLimit: c.creditLimit != null ? String(c.creditLimit) : '' });
     setEditError(null);
   }
 
@@ -105,14 +150,9 @@ export default function CustomersPage() {
       const res = await fetch('/api/customers', {
         method: 'PUT', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: editItem.id,
-          code: editForm.code, nameAr: editForm.nameAr,
-          nameEn: editForm.nameEn || null,
-          email: editForm.email || null,
-          phone: editForm.phone || null,
-          creditLimit: editForm.creditLimit ? Number(editForm.creditLimit) : null,
-        }),
+        body: JSON.stringify({ id: editItem.id, code: editForm.code, nameAr: editForm.nameAr,
+          nameEn: editForm.nameEn || null, email: editForm.email || null, phone: editForm.phone || null,
+          creditLimit: editForm.creditLimit ? Number(editForm.creditLimit) : null }),
       });
       const j = await res.json();
       if (j.success) { setEditItem(null); load(); showToast('تم تحديث بيانات العميل'); }
@@ -133,28 +173,127 @@ export default function CustomersPage() {
     finally { setDeleting(false); }
   }
 
-  if (loading) return <div className="flex items-center justify-center h-64" dir="rtl"><div className="text-slate-500">جاري تحميل العملاء…</div></div>;
-  if (error) return <div className="flex items-center justify-center h-64" dir="rtl"><div className="text-red-500">{error}</div></div>;
-
   return (
     <div dir="rtl">
       {/* Toast */}
       {toast && (
-        <div className={`fixed top-5 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-2 px-5 py-3 rounded-xl shadow-xl text-white text-sm font-medium
+        <div className={`fixed top-5 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-2 px-5 py-3 rounded-xl shadow-xl text-white text-sm font-medium transition-all
           ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
-          {toast.type === 'success'
-            ? <CheckCircle className="w-4 h-4 flex-shrink-0" />
-            : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
+          {toast.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
           {toast.msg}
         </div>
       )}
 
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">العملاء</h1>
-        <button onClick={() => setShowModal(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">العملاء</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            {loading ? 'جاري التحميل…' : `${customers.length} عميل`}
+          </p>
+        </div>
+        <button onClick={() => setShowModal(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all text-sm font-medium">
           <Plus className="w-4 h-4" /> إضافة عميل
         </button>
       </div>
+
+      {/* Search bar */}
+      <div className="flex flex-wrap gap-3 mb-5">
+        <div className="relative flex-1 min-w-52">
+          <Search className="absolute right-3 top-2.5 w-4 h-4 text-slate-400" />
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="بحث بالاسم أو الرمز أو الهاتف…"
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute left-3 top-2.5 text-slate-400 hover:text-slate-600">
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        {search && (
+          <div className="flex items-center text-sm text-slate-500 self-center">
+            {filtered.length} نتيجة
+          </div>
+        )}
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-5 text-sm">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span className="flex-1">{error}</span>
+          <button onClick={load} className="text-red-700 font-medium hover:underline">إعادة المحاولة</button>
+        </div>
+      )}
+
+      {/* Content */}
+      {loading ? (
+        <TableSkeleton />
+      ) : filtered.length === 0 ? (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-16 text-center">
+          <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <Users className="w-6 h-6 text-slate-400" />
+          </div>
+          <p className="text-slate-600 font-medium">
+            {search ? 'لا توجد نتائج مطابقة' : 'لا يوجد عملاء حتى الآن'}
+          </p>
+          {!search && (
+            <p className="text-slate-400 text-sm mt-1">ابدأ بإضافة أول عميل لمتابعة المعاملات</p>
+          )}
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">الرمز</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">الاسم</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">الهاتف</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">البريد الإلكتروني</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500">حد الائتمان</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500">الرصيد</th>
+                <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500">إجراءات</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filtered.map(c => (
+                <tr key={c.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-5 py-3 text-sm font-mono text-slate-500">{c.code}</td>
+                  <td className="px-5 py-3 text-sm font-medium text-slate-900">
+                    {c.nameAr}
+                    {c.nameEn && <span className="block text-xs text-slate-400 font-normal">{c.nameEn}</span>}
+                  </td>
+                  <td className="px-5 py-3 text-sm text-slate-500">{c.phone || '—'}</td>
+                  <td className="px-5 py-3 text-sm text-slate-500">{c.email || '—'}</td>
+                  <td className="px-5 py-3 text-sm text-slate-600 text-left tabular-nums">{fmtEGP(c.creditLimit)}</td>
+                  <td className="px-5 py-3 text-sm text-left tabular-nums">
+                    <span className={c.balance != null && c.balance > 0 ? 'text-orange-600 font-medium' : 'text-slate-600'}>
+                      {fmtEGP(c.balance)}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3">
+                    <div className="flex items-center justify-center gap-1">
+                      <Link href={`/sales/invoices?customer=${encodeURIComponent(c.nameAr)}`}
+                        className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="فواتير العميل">
+                        <FileText className="w-4 h-4" />
+                      </Link>
+                      <button onClick={() => openEdit(c)}
+                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="تعديل">
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => { setDeleteId(c.id); setDeleteError(null); }}
+                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="حذف">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Add Modal */}
       {showModal && (
@@ -167,38 +306,20 @@ export default function CustomersPage() {
             <form onSubmit={handleSubmit} className="p-5 space-y-4">
               {formError && <div className="text-red-600 text-sm bg-red-50 border border-red-200 p-3 rounded-lg">{formError}</div>}
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">الرمز *</label>
-                  <input required value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="CUS-001" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">حد الائتمان (ج.م)</label>
-                  <input type="number" min="0" value={form.creditLimit} onChange={e => setForm(f => ({ ...f, creditLimit: e.target.value }))}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
-                </div>
+                <InputField label="الرمز" required value={form.code} placeholder="CUS-001"
+                  onChange={e => setForm(f => ({ ...f, code: e.target.value }))} />
+                <InputField label="حد الائتمان (ج.م)" type="number" min="0" value={form.creditLimit} placeholder="0"
+                  onChange={e => setForm(f => ({ ...f, creditLimit: e.target.value }))} />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">الاسم بالعربية *</label>
-                <input required value={form.nameAr} onChange={e => setForm(f => ({ ...f, nameAr: e.target.value }))}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="شركة الأمل" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">الاسم بالإنجليزية</label>
-                <input value={form.nameEn} onChange={e => setForm(f => ({ ...f, nameEn: e.target.value }))}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Al Amal Company (اختياري)" />
-              </div>
+              <InputField label="الاسم بالعربية" required value={form.nameAr} placeholder="شركة الأمل"
+                onChange={e => setForm(f => ({ ...f, nameAr: e.target.value }))} />
+              <InputField label="الاسم بالإنجليزية" value={form.nameEn} placeholder="Al Amal Company (اختياري)"
+                onChange={e => setForm(f => ({ ...f, nameEn: e.target.value }))} />
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">الهاتف</label>
-                  <input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0501234567" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">البريد الإلكتروني</label>
-                  <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="info@co.com" />
-                </div>
+                <InputField label="الهاتف" value={form.phone} placeholder="0501234567"
+                  onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
+                <InputField label="البريد الإلكتروني" type="email" value={form.email} placeholder="info@co.com"
+                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
               </div>
               <div className="flex gap-3 pt-1">
                 <button type="submit" disabled={saving}
@@ -226,38 +347,20 @@ export default function CustomersPage() {
             <form onSubmit={handleEdit} className="p-5 space-y-4">
               {editError && <div className="text-red-600 text-sm bg-red-50 border border-red-200 p-3 rounded-lg">{editError}</div>}
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">الرمز *</label>
-                  <input required value={editForm.code} onChange={e => setEditForm(f => ({ ...f, code: e.target.value }))}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">حد الائتمان (ج.م)</label>
-                  <input type="number" min="0" value={editForm.creditLimit} onChange={e => setEditForm(f => ({ ...f, creditLimit: e.target.value }))}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
+                <InputField label="الرمز" required value={editForm.code}
+                  onChange={e => setEditForm(f => ({ ...f, code: e.target.value }))} />
+                <InputField label="حد الائتمان (ج.م)" type="number" min="0" value={editForm.creditLimit}
+                  onChange={e => setEditForm(f => ({ ...f, creditLimit: e.target.value }))} />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">الاسم بالعربية *</label>
-                <input required value={editForm.nameAr} onChange={e => setEditForm(f => ({ ...f, nameAr: e.target.value }))}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">الاسم بالإنجليزية</label>
-                <input value={editForm.nameEn} onChange={e => setEditForm(f => ({ ...f, nameEn: e.target.value }))}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
+              <InputField label="الاسم بالعربية" required value={editForm.nameAr}
+                onChange={e => setEditForm(f => ({ ...f, nameAr: e.target.value }))} />
+              <InputField label="الاسم بالإنجليزية" value={editForm.nameEn}
+                onChange={e => setEditForm(f => ({ ...f, nameEn: e.target.value }))} />
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">الهاتف</label>
-                  <input value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">البريد الإلكتروني</label>
-                  <input type="email" value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
+                <InputField label="الهاتف" value={editForm.phone}
+                  onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} />
+                <InputField label="البريد الإلكتروني" type="email" value={editForm.email}
+                  onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} />
               </div>
               <div className="flex gap-3 pt-1">
                 <button type="submit" disabled={editSaving}
@@ -285,7 +388,7 @@ export default function CustomersPage() {
             <p className="text-sm text-slate-500 mb-4">هل أنت متأكد من حذف هذا العميل؟ لا يمكن التراجع عن هذا الإجراء.</p>
             {deleteError && (
               <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />{deleteError}
+                <AlertCircle className="w-4 h-4 shrink-0" />{deleteError}
               </div>
             )}
             <div className="flex gap-3">
@@ -299,54 +402,6 @@ export default function CustomersPage() {
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {customers.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-12 text-center text-slate-400">لا يوجد عملاء حتى الآن</div>
-      ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">الرمز</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">الاسم</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">الهاتف</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">البريد الإلكتروني</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">حد الائتمان</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">الرصيد</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">إجراءات</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {customers.map(c => (
-                <tr key={c.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-5 py-3 text-sm font-mono text-slate-600">{c.code}</td>
-                  <td className="px-5 py-3 text-sm font-medium text-slate-900">{c.nameAr}</td>
-                  <td className="px-5 py-3 text-sm text-slate-500">{c.phone || '—'}</td>
-                  <td className="px-5 py-3 text-sm text-slate-500">{c.email || '—'}</td>
-                  <td className="px-5 py-3 text-sm text-slate-600">{formatEGP(c.creditLimit)}</td>
-                  <td className="px-5 py-3 text-sm text-slate-600">{formatEGP(c.balance)}</td>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-1.5">
-                      <Link href={`/sales/invoices?customer=${encodeURIComponent(c.nameAr)}`}
-                        className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="فواتير العميل">
-                        <FileText className="w-4 h-4" />
-                      </Link>
-                      <button onClick={() => openEdit(c)}
-                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="تعديل">
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => { setDeleteId(c.id); setDeleteError(null); }}
-                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="حذف">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       )}
     </div>

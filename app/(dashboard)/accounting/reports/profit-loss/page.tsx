@@ -122,8 +122,23 @@ export default function ProfitLossPage() {
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="text-slate-500">جاري تحميل قائمة الدخل…</div>
+        <div className="space-y-4 animate-pulse">
+          <div className="grid grid-cols-3 gap-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
+                <div className="h-3 w-24 bg-slate-200 rounded mb-3" />
+                <div className="h-8 w-32 bg-slate-200 rounded" />
+              </div>
+            ))}
+          </div>
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <div key={i} className={`flex items-center justify-between px-6 py-3 border-b border-slate-100 last:border-0 ${i % 4 === 0 ? 'bg-slate-50' : ''}`}>
+                <div className={`h-4 bg-slate-${i % 4 === 0 ? '200' : '100'} rounded ${i % 4 === 0 ? 'w-24' : 'w-48'}`} />
+                <div className="h-4 w-28 bg-slate-100 rounded" />
+              </div>
+            ))}
+          </div>
         </div>
       ) : !data ? null : (
         <>

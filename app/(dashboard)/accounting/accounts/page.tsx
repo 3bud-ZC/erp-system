@@ -134,12 +134,32 @@ export default function AccountsPage() {
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="text-slate-500">جاري تحميل الحسابات…</div>
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden animate-pulse">
+          <div className="bg-slate-50 border-b border-slate-200 px-5 py-3 flex gap-6">
+            {['w-12', 'w-40', 'w-20', 'w-28', 'w-28', 'w-28', 'w-16'].map((w, i) => (
+              <div key={i} className={`${w} h-3.5 bg-slate-200 rounded`} />
+            ))}
+          </div>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="px-5 py-3.5 border-b border-slate-100 flex gap-6 items-center last:border-0">
+              <div className="w-12 h-4 bg-slate-100 rounded" />
+              <div className="w-40 h-4 bg-slate-100 rounded" />
+              <div className="w-20 h-5 bg-slate-100 rounded-full" />
+              <div className="w-28 h-4 bg-slate-100 rounded" />
+              <div className="w-28 h-4 bg-slate-100 rounded" />
+              <div className="w-28 h-4 bg-slate-100 rounded" />
+              <div className="w-16 h-6 bg-slate-100 rounded-lg" />
+            </div>
+          ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-12 text-center">
-          <p className="text-slate-400">{accounts.length === 0 ? 'لا توجد حسابات بعد' : 'لا نتائج مطابقة للبحث'}</p>
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-16 text-center">
+          <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <BookOpen className="w-6 h-6 text-slate-400" />
+          </div>
+          <p className="text-slate-600 font-medium">
+            {accounts.length === 0 ? 'لا توجد حسابات بعد' : 'لا نتائج مطابقة للبحث'}
+          </p>
         </div>
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">

@@ -189,6 +189,18 @@ export default function LedgerPage({ params }: { params: { accountId: string } }
         )}
       </div>
 
+      {/* Summary cards skeleton */}
+      {loading && (
+        <div className="grid grid-cols-4 gap-4 mb-5 no-print animate-pulse">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+              <div className="h-3 w-20 bg-slate-200 rounded mb-3" />
+              <div className="h-6 w-28 bg-slate-200 rounded" />
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Summary cards */}
       {data && !loading && (
         <div className="grid grid-cols-4 gap-4 mb-5 no-print">
@@ -225,16 +237,32 @@ export default function LedgerPage({ params }: { params: { accountId: string } }
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="text-slate-500">جاري تحميل دفتر الأستاذ…</div>
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden animate-pulse">
+          <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex gap-5">
+            {['w-24', 'w-28', 'flex-1', 'w-20', 'w-28', 'w-28', 'w-32'].map((w, i) => (
+              <div key={i} className={`${w} h-3.5 bg-slate-200 rounded`} />
+            ))}
+          </div>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="px-4 py-3.5 border-b border-slate-100 flex gap-5 items-center last:border-0">
+              <div className="w-24 h-4 bg-slate-100 rounded" />
+              <div className="w-28 h-4 bg-slate-100 rounded" />
+              <div className="flex-1 h-4 bg-slate-100 rounded" />
+              <div className="w-20 h-4 bg-slate-100 rounded" />
+              <div className="w-28 h-4 bg-slate-100 rounded" />
+              <div className="w-28 h-4 bg-slate-100 rounded" />
+              <div className="w-32 h-4 bg-slate-100 rounded" />
+            </div>
+          ))}
         </div>
       ) : !data || data.lines.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-12 text-center">
-          <p className="text-slate-400">لا توجد حركات لهذا الحساب</p>
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-16 text-center">
+          <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <ArrowRight className="w-6 h-6 text-slate-400" />
+          </div>
+          <p className="text-slate-600 font-medium">لا توجد حركات لهذا الحساب</p>
           {hasFilters && (
-            <button onClick={clearFilters} className="mt-3 text-sm text-blue-600 hover:underline">
-              مسح الفلاتر
-            </button>
+            <button onClick={clearFilters} className="mt-3 text-sm text-blue-600 hover:underline">مسح الفلاتر</button>
           )}
         </div>
       ) : (

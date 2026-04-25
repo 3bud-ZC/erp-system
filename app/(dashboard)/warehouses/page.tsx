@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Plus, X, Pencil, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
+import { Plus, X, Pencil, Trash2, CheckCircle, XCircle, AlertCircle, Warehouse } from 'lucide-react';
 
-interface Warehouse {
+interface WarehouseItem {
   id: string;
   code: string;
   nameAr: string;
@@ -16,37 +16,79 @@ interface Warehouse {
 
 const emptyForm = { code: '', nameAr: '', nameEn: '', address: '', phone: '', manager: '' };
 
+/* ─── Skeleton ────────────────────────────────────────────── */
+function CardSkeleton() {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-pulse">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
+          <div className="flex items-start justify-between mb-4">
+            <div className="space-y-2">
+              <div className="h-5 w-36 bg-slate-200 rounded" />
+              <div className="h-3 w-24 bg-slate-100 rounded" />
+            </div>
+            <div className="flex gap-2">
+              <div className="h-5 w-14 bg-slate-100 rounded-full" />
+              <div className="w-7 h-7 bg-slate-100 rounded-lg" />
+              <div className="w-7 h-7 bg-slate-100 rounded-lg" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <div className="h-3.5 w-28 bg-slate-100 rounded" />
+            <div className="h-3.5 w-40 bg-slate-100 rounded" />
+            <div className="h-3.5 w-24 bg-slate-100 rounded" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function InputField({ label, required, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string; required?: boolean }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-slate-700 mb-1">{label}{required && ' *'}</label>
+      <input {...props} required={required}
+        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+    </div>
+  );
+}
+
 export default function WarehousesPage() {
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [warehouses, setWarehouses] = useState<WarehouseItem[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState<string | null>(null);
 
-  // Add modal
-  const [showModal, setShowModal] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [form, setForm] = useState(emptyForm);
+  const [showModal, setShowModal]   = useState(false);
+  const [saving, setSaving]         = useState(false);
+  const [formError, setFormError]   = useState<string | null>(null);
+  const [form, setForm]             = useState(emptyForm);
 
-  // Edit modal
-  const [editItem, setEditItem] = useState<Warehouse | null>(null);
-  const [editForm, setEditForm] = useState(emptyForm);
+  const [editItem, setEditItem]     = useState<WarehouseItem | null>(null);
+  const [editForm, setEditForm]     = useState(emptyForm);
   const [editSaving, setEditSaving] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
+  const [editError, setEditError]   = useState<string | null>(null);
 
-  // Delete confirm
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [deleteId, setDeleteId]     = useState<string | null>(null);
+  const [deleting, setDeleting]     = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  function load() {
-    setLoading(true);
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const showToast = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  const load = useCallback(() => {
+    setLoading(true); setError(null);
     fetch('/api/warehouses', { credentials: 'include' })
       .then(r => r.json())
       .then(j => { if (j.success) setWarehouses(j.data ?? []); else setError(j.message || 'فشل التحميل'); })
       .catch(() => setError('تعذر الاتصال بالخادم'))
       .finally(() => setLoading(false));
-  }
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -64,22 +106,15 @@ export default function WarehousesPage() {
         }),
       });
       const j = await res.json();
-      if (j.success) { setShowModal(false); setForm(emptyForm); load(); }
+      if (j.success) { setShowModal(false); setForm(emptyForm); load(); showToast('تم إضافة المستودع بنجاح'); }
       else setFormError(j.message || j.error || 'فشل الحفظ');
     } catch { setFormError('تعذر الاتصال بالخادم'); }
     finally { setSaving(false); }
   }
 
-  function openEdit(w: Warehouse) {
+  function openEdit(w: WarehouseItem) {
     setEditItem(w);
-    setEditForm({
-      code: w.code || '',
-      nameAr: w.nameAr || '',
-      nameEn: w.nameEn || '',
-      address: w.address || '',
-      phone: w.phone || '',
-      manager: w.manager || '',
-    });
+    setEditForm({ code: w.code, nameAr: w.nameAr, nameEn: w.nameEn || '', address: w.address || '', phone: w.phone || '', manager: w.manager || '' });
     setEditError(null);
   }
 
@@ -91,23 +126,16 @@ export default function WarehousesPage() {
       const res = await fetch('/api/warehouses', {
         method: 'PUT', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: editItem.id,
-          code: editForm.code, nameAr: editForm.nameAr,
-          nameEn: editForm.nameEn || null,
-          address: editForm.address || null,
-          phone: editForm.phone || null,
-          manager: editForm.manager || null,
-        }),
+        body: JSON.stringify({ id: editItem.id, code: editForm.code, nameAr: editForm.nameAr,
+          nameEn: editForm.nameEn || null, address: editForm.address || null, phone: editForm.phone || null,
+          manager: editForm.manager || null }),
       });
       const j = await res.json();
-      if (j.success) { setEditItem(null); load(); }
+      if (j.success) { setEditItem(null); load(); showToast('تم تحديث بيانات المستودع'); }
       else setEditError(j.message || j.error || 'فشل الحفظ');
     } catch { setEditError('تعذر الاتصال بالخادم'); }
     finally { setEditSaving(false); }
   }
-
-  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function handleDelete() {
     if (!deleteId) return;
@@ -115,60 +143,111 @@ export default function WarehousesPage() {
     try {
       const res = await fetch(`/api/warehouses?id=${deleteId}`, { method: 'DELETE', credentials: 'include' });
       const j = await res.json();
-      if (j.success) { setDeleteId(null); load(); }
+      if (j.success) { setDeleteId(null); load(); showToast('تم حذف المستودع'); }
       else setDeleteError(j.message || j.error || 'فشل الحذف');
     } catch { setDeleteError('تعذر الاتصال بالخادم'); }
     finally { setDeleting(false); }
   }
 
-  if (loading) return <div className="flex items-center justify-center h-64" dir="rtl"><div className="text-slate-500">جاري تحميل المستودعات…</div></div>;
-  if (error) return <div className="flex items-center justify-center h-64" dir="rtl"><div className="text-red-500">{error}</div></div>;
-
   const WarehouseFormFields = ({ f, setF }: { f: typeof emptyForm; setF: (fn: (prev: typeof emptyForm) => typeof emptyForm) => void }) => (
     <>
       <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">الرمز *</label>
-          <input required value={f.code} onChange={e => setF(p => ({ ...p, code: e.target.value }))}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="WH-001" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">الهاتف</label>
-          <input value={f.phone} onChange={e => setF(p => ({ ...p, phone: e.target.value }))}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0501234567" />
-        </div>
+        <InputField label="الرمز" required value={f.code} placeholder="WH-001"
+          onChange={e => setF(p => ({ ...p, code: e.target.value }))} />
+        <InputField label="الهاتف" value={f.phone} placeholder="0501234567"
+          onChange={e => setF(p => ({ ...p, phone: e.target.value }))} />
       </div>
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">الاسم بالعربية *</label>
-        <input required value={f.nameAr} onChange={e => setF(p => ({ ...p, nameAr: e.target.value }))}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="المستودع الرئيسي" />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">الاسم بالإنجليزية</label>
-        <input value={f.nameEn} onChange={e => setF(p => ({ ...p, nameEn: e.target.value }))}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Main Warehouse (اختياري)" />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">العنوان</label>
-        <input value={f.address} onChange={e => setF(p => ({ ...p, address: e.target.value }))}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="القاهرة، مصر" />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">المدير المسؤول</label>
-        <input value={f.manager} onChange={e => setF(p => ({ ...p, manager: e.target.value }))}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="أحمد محمد" />
-      </div>
+      <InputField label="الاسم بالعربية" required value={f.nameAr} placeholder="المستودع الرئيسي"
+        onChange={e => setF(p => ({ ...p, nameAr: e.target.value }))} />
+      <InputField label="الاسم بالإنجليزية" value={f.nameEn} placeholder="Main Warehouse (اختياري)"
+        onChange={e => setF(p => ({ ...p, nameEn: e.target.value }))} />
+      <InputField label="العنوان" value={f.address} placeholder="القاهرة، مصر"
+        onChange={e => setF(p => ({ ...p, address: e.target.value }))} />
+      <InputField label="المدير المسؤول" value={f.manager} placeholder="أحمد محمد"
+        onChange={e => setF(p => ({ ...p, manager: e.target.value }))} />
     </>
   );
 
   return (
     <div dir="rtl">
+      {toast && (
+        <div className={`fixed top-5 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-2 px-5 py-3 rounded-xl shadow-xl text-white text-sm font-medium
+          ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
+          {toast.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+          {toast.msg}
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">المستودعات</h1>
-        <button onClick={() => setShowModal(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">المستودعات</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            {loading ? 'جاري التحميل…' : `${warehouses.length} مستودع`}
+          </p>
+        </div>
+        <button onClick={() => setShowModal(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all text-sm font-medium">
           <Plus className="w-4 h-4" /> إضافة مستودع
         </button>
       </div>
+
+      {error && (
+        <div className="flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-5 text-sm">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span className="flex-1">{error}</span>
+          <button onClick={load} className="font-medium hover:underline">إعادة المحاولة</button>
+        </div>
+      )}
+
+      {loading ? (
+        <CardSkeleton />
+      ) : warehouses.length === 0 ? (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-16 text-center">
+          <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <Warehouse className="w-6 h-6 text-slate-400" />
+          </div>
+          <p className="text-slate-600 font-medium">لا توجد مستودعات حتى الآن</p>
+          <p className="text-slate-400 text-sm mt-1">أضف مستودعاً لإدارة المخزون بفعالية</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {warehouses.map(w => (
+            <div key={w.id} className="bg-white rounded-xl shadow-sm border border-slate-100 p-5 hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <h3 className="font-semibold text-slate-900">{w.nameAr}</h3>
+                  {w.nameEn && <p className="text-xs text-slate-400 mt-0.5">{w.nameEn}</p>}
+                </div>
+                <div className="flex items-center gap-2">
+                  {w.isActive !== false ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-50 text-green-700 rounded-full text-xs font-medium">
+                      <CheckCircle className="w-3 h-3" /> نشط
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full text-xs font-medium">
+                      <XCircle className="w-3 h-3" /> غير نشط
+                    </span>
+                  )}
+                  <button onClick={() => openEdit(w)}
+                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="تعديل">
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => { setDeleteId(w.id); setDeleteError(null); }}
+                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="حذف">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1.5 text-sm text-slate-500">
+                <div><span className="text-slate-400">الرمز: </span><span className="font-mono text-slate-600">{w.code}</span></div>
+                {w.address && <div><span className="text-slate-400">العنوان: </span>{w.address}</div>}
+                {w.phone && <div><span className="text-slate-400">الهاتف: </span>{w.phone}</div>}
+                {w.manager && <div><span className="text-slate-400">المدير: </span>{w.manager}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Add Modal */}
       {showModal && (
@@ -243,48 +322,6 @@ export default function WarehousesPage() {
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {warehouses.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-12 text-center text-slate-400">لا توجد مستودعات حتى الآن</div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {warehouses.map(w => (
-            <div key={w.id} className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <h3 className="font-semibold text-slate-900">{w.nameAr}</h3>
-                  {w.nameEn && <p className="text-xs text-slate-400 mt-0.5">{w.nameEn}</p>}
-                </div>
-                <div className="flex items-center gap-2">
-                  {w.isActive !== false ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-50 text-green-700 rounded-full text-xs font-medium">
-                      <CheckCircle className="w-3 h-3" /> نشط
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full text-xs font-medium">
-                      <XCircle className="w-3 h-3" /> غير نشط
-                    </span>
-                  )}
-                  <button onClick={() => openEdit(w)}
-                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="تعديل">
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => setDeleteId(w.id)}
-                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="حذف">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-              <div className="space-y-1 text-sm text-slate-500">
-                <div><span className="text-slate-400">الرمز: </span><span className="font-mono text-slate-600">{w.code}</span></div>
-                {w.address && <div><span className="text-slate-400">العنوان: </span>{w.address}</div>}
-                {w.phone && <div><span className="text-slate-400">الهاتف: </span>{w.phone}</div>}
-                {w.manager && <div><span className="text-slate-400">المدير: </span>{w.manager}</div>}
-              </div>
-            </div>
-          ))}
         </div>
       )}
     </div>

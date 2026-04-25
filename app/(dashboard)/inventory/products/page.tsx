@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Plus, AlertTriangle, X, Pencil, Trash2 } from 'lucide-react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
+import { Plus, AlertTriangle, X, Pencil, Trash2, Search, Package, CheckCircle, AlertCircle } from 'lucide-react';
 
 interface Product {
   id: string;
@@ -16,59 +16,109 @@ interface Product {
   price: number;
 }
 
-function formatEGP(v?: number) {
+function fmtEGP(v?: number | null) {
   if (v == null) return '—';
-  return `${v.toLocaleString('ar-EG')} ج.م`;
+  return v.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م';
 }
 
 const typeLabels: Record<string, string> = {
   finished_product: 'منتج نهائي',
-  raw_material: 'مواد خام',
-  packaging: 'تغليف',
+  raw_material:     'مواد خام',
+  packaging:        'تغليف',
+};
+
+const typeColors: Record<string, string> = {
+  finished_product: 'bg-blue-50 text-blue-700',
+  raw_material:     'bg-amber-50 text-amber-700',
+  packaging:        'bg-purple-50 text-purple-700',
 };
 
 const typeTabs = [
-  { key: 'all', label: 'الكل' },
+  { key: 'all',              label: 'الكل' },
   { key: 'finished_product', label: 'منتجات نهائية' },
-  { key: 'raw_material', label: 'مواد خام' },
-  { key: 'packaging', label: 'تغليف' },
+  { key: 'raw_material',     label: 'مواد خام' },
+  { key: 'packaging',        label: 'تغليف' },
 ];
 
 const emptyForm = { code: '', nameAr: '', nameEn: '', type: 'finished_product', unit: 'قطعة', price: '', cost: '', stock: '0', minStock: '' };
 
+/* ─── Skeleton ────────────────────────────────────────────── */
+function TableSkeleton() {
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden animate-pulse">
+      <div className="bg-slate-50 border-b border-slate-200 px-5 py-3 flex gap-6">
+        {['w-16', 'w-32', 'w-20', 'w-16', 'w-16', 'w-24', 'w-24', 'w-16', 'w-16'].map((w, i) => (
+          <div key={i} className={`${w} h-3.5 bg-slate-200 rounded`} />
+        ))}
+      </div>
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="px-5 py-3.5 border-b border-slate-100 flex gap-6 items-center last:border-0">
+          <div className="w-16 h-4 bg-slate-100 rounded" />
+          <div className="w-32 h-4 bg-slate-100 rounded" />
+          <div className="w-20 h-5 bg-slate-100 rounded-full" />
+          <div className="w-16 h-4 bg-slate-100 rounded" />
+          <div className="w-16 h-4 bg-slate-100 rounded" />
+          <div className="w-24 h-4 bg-slate-100 rounded" />
+          <div className="w-24 h-4 bg-slate-100 rounded" />
+          <div className="w-16 h-5 bg-slate-100 rounded-full" />
+          <div className="flex gap-1.5 mr-auto">
+            <div className="w-7 h-7 bg-slate-100 rounded-lg" />
+            <div className="w-7 h-7 bg-slate-100 rounded-lg" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function ProductsPage() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [products, setProducts]   = useState<Product[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState<string | null>(null);
   const [activeType, setActiveType] = useState<string>('all');
+  const [search, setSearch]       = useState('');
 
-  // Add modal
   const [showModal, setShowModal] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving]       = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm]           = useState(emptyForm);
 
-  // Edit modal
-  const [editItem, setEditItem] = useState<Product | null>(null);
-  const [editForm, setEditForm] = useState(emptyForm);
+  const [editItem, setEditItem]   = useState<Product | null>(null);
+  const [editForm, setEditForm]   = useState(emptyForm);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
-  // Delete confirm
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [deleteId, setDeleteId]   = useState<string | null>(null);
+  const [deleting, setDeleting]   = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  function load(type = activeType) {
-    setLoading(true);
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const showToast = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  const load = useCallback((type = activeType) => {
+    setLoading(true); setError(null);
     const url = type === 'all' ? '/api/products' : `/api/products?type=${type}`;
     fetch(url, { credentials: 'include' })
       .then(r => r.json())
       .then(j => { if (j.success) setProducts(j.data ?? []); else setError(j.message || 'فشل التحميل'); })
       .catch(() => setError('تعذر الاتصال بالخادم'))
       .finally(() => setLoading(false));
-  }
+  }, [activeType]);
 
   useEffect(() => { load(activeType); }, [activeType]);
+
+  const filtered = useMemo(() =>
+    products.filter(p =>
+      !search ||
+      p.nameAr.includes(search) ||
+      (p.nameEn || '').toLowerCase().includes(search.toLowerCase()) ||
+      p.code.toLowerCase().includes(search.toLowerCase())
+    ), [products, search]);
+
+  const lowStockCount = useMemo(() => products.filter(p => p.stock <= (p.minStock ?? 0)).length, [products]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -78,19 +128,16 @@ export default function ProductsPage() {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          code: form.code,
-          nameAr: form.nameAr,
+          code: form.code, nameAr: form.nameAr,
           ...(form.nameEn && { nameEn: form.nameEn }),
-          type: form.type,
-          unit: form.unit || 'قطعة',
-          price: Number(form.price) || 0,
-          cost: Number(form.cost) || 0,
+          type: form.type, unit: form.unit || 'قطعة',
+          price: Number(form.price) || 0, cost: Number(form.cost) || 0,
           stock: Number(form.stock) || 0,
           ...(form.minStock && { minStock: Number(form.minStock) }),
         }),
       });
       const j = await res.json();
-      if (j.success) { setShowModal(false); setForm(emptyForm); load(); }
+      if (j.success) { setShowModal(false); setForm(emptyForm); load(); showToast('تم إضافة المنتج بنجاح'); }
       else setFormError(j.message || j.error || 'فشل الحفظ');
     } catch { setFormError('تعذر الاتصال بالخادم'); }
     finally { setSaving(false); }
@@ -98,17 +145,9 @@ export default function ProductsPage() {
 
   function openEdit(p: Product) {
     setEditItem(p);
-    setEditForm({
-      code: p.code || '',
-      nameAr: p.nameAr || '',
-      nameEn: p.nameEn || '',
-      type: p.type || 'finished_product',
-      unit: p.unit || 'قطعة',
-      price: p.price != null ? String(p.price) : '',
-      cost: p.cost != null ? String(p.cost) : '',
-      stock: '',      // stock cannot be changed directly
-      minStock: p.minStock != null ? String(p.minStock) : '',
-    });
+    setEditForm({ code: p.code, nameAr: p.nameAr, nameEn: p.nameEn || '', type: p.type || 'finished_product',
+      unit: p.unit || 'قطعة', price: p.price != null ? String(p.price) : '',
+      cost: p.cost != null ? String(p.cost) : '', stock: '', minStock: p.minStock != null ? String(p.minStock) : '' });
     setEditError(null);
   }
 
@@ -120,27 +159,17 @@ export default function ProductsPage() {
       const res = await fetch('/api/products', {
         method: 'PUT', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: editItem.id,
-          code: editForm.code,
-          nameAr: editForm.nameAr,
-          nameEn: editForm.nameEn || null,
-          type: editForm.type,
-          unit: editForm.unit || 'قطعة',
-          price: Number(editForm.price) || 0,
-          cost: Number(editForm.cost) || 0,
-          minStock: editForm.minStock ? Number(editForm.minStock) : null,
-          // stock is intentionally omitted (controlled via inventory ops)
-        }),
+        body: JSON.stringify({ id: editItem.id, code: editForm.code, nameAr: editForm.nameAr,
+          nameEn: editForm.nameEn || null, type: editForm.type, unit: editForm.unit || 'قطعة',
+          price: Number(editForm.price) || 0, cost: Number(editForm.cost) || 0,
+          minStock: editForm.minStock ? Number(editForm.minStock) : null }),
       });
       const j = await res.json();
-      if (j.success) { setEditItem(null); load(); }
+      if (j.success) { setEditItem(null); load(); showToast('تم تحديث بيانات المنتج'); }
       else setEditError(j.message || j.error || 'فشل الحفظ');
     } catch { setEditError('تعذر الاتصال بالخادم'); }
     finally { setEditSaving(false); }
   }
-
-  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function handleDelete() {
     if (!deleteId) return;
@@ -148,13 +177,13 @@ export default function ProductsPage() {
     try {
       const res = await fetch(`/api/products?id=${deleteId}`, { method: 'DELETE', credentials: 'include' });
       const j = await res.json();
-      if (j.success) { setDeleteId(null); load(); }
+      if (j.success) { setDeleteId(null); load(); showToast('تم حذف المنتج'); }
       else setDeleteError(j.message || j.error || 'فشل الحذف');
     } catch { setDeleteError('تعذر الاتصال بالخادم'); }
     finally { setDeleting(false); }
   }
 
-  const ProductFormFields = ({ f, setF }: { f: typeof emptyForm; setF: (fn: (p: typeof emptyForm) => typeof emptyForm) => void; showStock?: boolean }) => (
+  const ProductFormFields = ({ f, setF }: { f: typeof emptyForm; setF: (fn: (p: typeof emptyForm) => typeof emptyForm) => void }) => (
     <>
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -165,7 +194,7 @@ export default function ProductsPage() {
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">النوع</label>
           <select value={f.type} onChange={e => setF(p => ({ ...p, type: e.target.value }))}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
             <option value="finished_product">منتج نهائي</option>
             <option value="raw_material">مواد خام</option>
             <option value="packaging">تغليف</option>
@@ -199,37 +228,153 @@ export default function ProductsPage() {
             className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="قطعة" />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">الحد الأدنى للمخزون</label>
-          <input type="number" min="0" value={f.minStock} onChange={e => setF(p => ({ ...p, minStock: e.target.value }))}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
-        </div>
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">الحد الأدنى للمخزون</label>
+        <input type="number" min="0" value={f.minStock} onChange={e => setF(p => ({ ...p, minStock: e.target.value }))}
+          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
       </div>
     </>
   );
 
-  if (loading) return <div className="flex items-center justify-center h-64" dir="rtl"><div className="text-slate-500">جاري تحميل المنتجات…</div></div>;
-  if (error) return <div className="flex items-center justify-center h-64" dir="rtl"><div className="text-red-500">{error}</div></div>;
-
   return (
     <div dir="rtl">
+      {toast && (
+        <div className={`fixed top-5 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-2 px-5 py-3 rounded-xl shadow-xl text-white text-sm font-medium
+          ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
+          {toast.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+          {toast.msg}
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">المنتجات والمخزون</h1>
-        <button onClick={() => setShowModal(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">المنتجات والمخزون</h1>
+          <p className="text-sm text-slate-500 mt-0.5 flex items-center gap-2">
+            {loading ? 'جاري التحميل…' : `${products.length} منتج`}
+            {!loading && lowStockCount > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-600 rounded-full text-xs font-medium">
+                <AlertTriangle className="w-3 h-3" /> {lowStockCount} منخفض المخزون
+              </span>
+            )}
+          </p>
+        </div>
+        <button onClick={() => setShowModal(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all text-sm font-medium">
           <Plus className="w-4 h-4" /> إضافة منتج
         </button>
       </div>
 
-      {/* Type filter tabs */}
-      <div className="flex gap-1 mb-4 bg-slate-100 p-1 rounded-lg w-fit">
-        {typeTabs.map(t => (
-          <button key={t.key} onClick={() => setActiveType(t.key)}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${activeType === t.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-            {t.label}
-          </button>
-        ))}
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3 mb-5">
+        <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
+          {typeTabs.map(t => (
+            <button key={t.key} onClick={() => setActiveType(t.key)}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${activeType === t.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="relative flex-1 min-w-48">
+          <Search className="absolute right-3 top-2.5 w-4 h-4 text-slate-400" />
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="بحث بالاسم أو الرمز…"
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute left-3 top-2.5 text-slate-400 hover:text-slate-600">
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
+
+      {error && (
+        <div className="flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-5 text-sm">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span className="flex-1">{error}</span>
+          <button onClick={() => load()} className="font-medium hover:underline">إعادة المحاولة</button>
+        </div>
+      )}
+
+      {loading ? (
+        <TableSkeleton />
+      ) : filtered.length === 0 ? (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-16 text-center">
+          <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <Package className="w-6 h-6 text-slate-400" />
+          </div>
+          <p className="text-slate-600 font-medium">
+            {search ? 'لا توجد نتائج مطابقة للبحث' : 'لا توجد منتجات في هذا التصنيف'}
+          </p>
+          {!search && <p className="text-slate-400 text-sm mt-1">أضف منتجات لبدء إدارة المخزون</p>}
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">الرمز</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">الاسم</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">النوع</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500">المخزون</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500">الحد الأدنى</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500">التكلفة</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500">سعر البيع</th>
+                <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500">حالة</th>
+                <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500">إجراءات</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filtered.map(p => {
+                const lowStock = p.stock <= (p.minStock ?? 0);
+                return (
+                  <tr key={p.id} className={`hover:bg-slate-50 transition-colors ${lowStock ? 'bg-red-50/30' : ''}`}>
+                    <td className="px-5 py-3 text-sm font-mono text-slate-500">{p.code}</td>
+                    <td className="px-5 py-3 text-sm font-medium text-slate-900">
+                      {p.nameAr}
+                      {p.nameEn && <span className="block text-xs text-slate-400 font-normal">{p.nameEn}</span>}
+                    </td>
+                    <td className="px-5 py-3">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${typeColors[p.type ?? ''] || 'bg-slate-100 text-slate-600'}`}>
+                        {typeLabels[p.type ?? ''] ?? p.type ?? '—'}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-sm font-semibold text-slate-700 text-left tabular-nums">
+                      {p.stock.toLocaleString('ar-EG')} {p.unit ?? ''}
+                    </td>
+                    <td className="px-5 py-3 text-sm text-slate-500 text-left tabular-nums">
+                      {p.minStock != null ? p.minStock.toLocaleString('ar-EG') : '—'}
+                    </td>
+                    <td className="px-5 py-3 text-sm text-slate-600 text-left tabular-nums">{fmtEGP(p.cost)}</td>
+                    <td className="px-5 py-3 text-sm text-slate-700 font-medium text-left tabular-nums">{fmtEGP(p.price)}</td>
+                    <td className="px-5 py-3 text-center">
+                      {lowStock
+                        ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-xs font-medium">
+                            <AlertTriangle className="w-3 h-3" /> منخفض
+                          </span>
+                        : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">
+                            <CheckCircle className="w-3 h-3" /> متاح
+                          </span>
+                      }
+                    </td>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button onClick={() => openEdit(p)}
+                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="تعديل">
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => setDeleteId(p.id)}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="حذف">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Add Modal */}
       {showModal && (
@@ -242,12 +387,10 @@ export default function ProductsPage() {
             <form onSubmit={handleSubmit} className="p-5 space-y-4">
               {formError && <div className="text-red-600 text-sm bg-red-50 border border-red-200 p-3 rounded-lg">{formError}</div>}
               <ProductFormFields f={form} setF={setForm} />
-              <div className="grid grid-cols-1 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">المخزون الابتدائي</label>
-                  <input type="number" min="0" value={form.stock} onChange={e => setForm(f => ({ ...f, stock: e.target.value }))}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">المخزون الابتدائي</label>
+                <input type="number" min="0" value={form.stock} onChange={e => setForm(f => ({ ...f, stock: e.target.value }))}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
               </div>
               <div className="flex gap-3 pt-1">
                 <button type="submit" disabled={saving}
@@ -314,62 +457,6 @@ export default function ProductsPage() {
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {products.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-12 text-center text-slate-400">لا توجد منتجات في هذا التصنيف</div>
-      ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">الرمز</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">الاسم</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">النوع</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">المخزون</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">الحد الأدنى</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">التكلفة</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">سعر البيع</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">حالة</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500">إجراءات</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {products.map(p => {
-                const lowStock = p.stock <= (p.minStock ?? 0);
-                return (
-                  <tr key={p.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-5 py-3 text-sm font-mono text-slate-600">{p.code}</td>
-                    <td className="px-5 py-3 text-sm font-medium text-slate-900">{p.nameAr}</td>
-                    <td className="px-5 py-3 text-sm text-slate-500">{typeLabels[p.type ?? ''] ?? p.type ?? '—'}</td>
-                    <td className="px-5 py-3 text-sm text-slate-700 font-semibold">{p.stock} {p.unit ?? ''}</td>
-                    <td className="px-5 py-3 text-sm text-slate-500">{p.minStock ?? '—'}</td>
-                    <td className="px-5 py-3 text-sm text-slate-600">{formatEGP(p.cost)}</td>
-                    <td className="px-5 py-3 text-sm text-slate-600">{formatEGP(p.price)}</td>
-                    <td className="px-5 py-3 text-sm">
-                      {lowStock
-                        ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-xs font-medium"><AlertTriangle className="w-3 h-3" /> منخفض</span>
-                        : <span className="inline-flex px-2 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">متاح</span>
-                      }
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => openEdit(p)}
-                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="تعديل">
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => setDeleteId(p.id)}
-                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="حذف">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
         </div>
       )}
     </div>
