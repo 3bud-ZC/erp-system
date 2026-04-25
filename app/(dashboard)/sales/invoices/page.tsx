@@ -221,23 +221,59 @@ const EditModal = memo(function EditModal({
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
+    console.log("🔴 CLICKED UPDATE");
+    
+    const payload = {
+      id: inv.id, status, paymentStatus,
+      notes: notes.trim() || undefined,
+      items: (inv.items ?? []).map(i => ({
+        productId: i.productId, quantity: i.quantity, price: i.price, total: i.total,
+      })),
+    };
+    
+    console.log("UPDATE REQUEST:", {
+      id: inv.id,
+      invoiceNumber: inv.invoiceNumber,
+      itemCount: payload.items.length,
+      payload: JSON.stringify(payload).substring(0, 300)
+    });
+    
     setSaving(true); setErr('');
     try {
-      const res = await fetch('/api/sales-invoices', {
-        method: 'PUT', credentials: 'include',
+      const url = '/api/sales-invoices';
+      const method = 'PUT';
+      
+      console.log("API URL:", url);
+      console.log("METHOD:", method);
+      console.log("Full payload:", payload);
+      console.log("Sending UPDATE request...");
+      
+      const res = await fetch(url, {
+        method, credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: inv.id, status, paymentStatus,
-          notes: notes.trim() || undefined,
-          items: (inv.items ?? []).map(i => ({
-            productId: i.productId, quantity: i.quantity, price: i.price, total: i.total,
-          })),
-        }),
+        body: JSON.stringify(payload),
       });
+      
+      console.log("Response status:", res.status);
+      console.log("Response ok:", res.ok);
+      
       const j = await res.json();
-      if (j.success) { onSaved(); onClose(); }
-      else setErr(j.message || j.error || 'فشل الحفظ');
-    } catch { setErr('تعذر الاتصال بالخادم'); }
+      
+      console.log("Response body:", j);
+      
+      if (j.success) { 
+        console.log("✅ UPDATE SUCCESS");
+        onSaved(); 
+        onClose(); 
+      }
+      else {
+        console.error("❌ UPDATE FAILED:", j.message || j.error);
+        setErr(j.message || j.error || 'فشل الحفظ');
+      }
+    } catch (e: any) { 
+      console.error("❌ UPDATE ERROR:", e);
+      setErr('تعذر الاتصال بالخادم'); 
+    }
     finally { setSaving(false); }
   }
 
@@ -305,13 +341,40 @@ const DeleteModal = memo(function DeleteModal({
   const [err, setErr] = useState('');
 
   async function confirm() {
+    console.log("🔴 CLICKED DELETE");
+    console.log("DELETE REQUEST:", { id: inv.id, invoiceNumber: inv.invoiceNumber });
+    
     setDeleting(true); setErr('');
     try {
-      const res = await fetch(`/api/sales-invoices?id=${inv.id}`, { method: 'DELETE', credentials: 'include' });
+      const url = `/api/sales-invoices?id=${inv.id}`;
+      const method = 'DELETE';
+      
+      console.log("API URL:", url);
+      console.log("METHOD:", method);
+      console.log("Sending DELETE request...");
+      
+      const res = await fetch(url, { method, credentials: 'include' });
+      
+      console.log("Response status:", res.status);
+      console.log("Response ok:", res.ok);
+      
       const j = await res.json();
-      if (j.success) { onDeleted(); onClose(); }
-      else setErr(j.message || j.error || 'فشل الحذف');
-    } catch { setErr('تعذر الاتصال بالخادم'); }
+      
+      console.log("Response body:", j);
+      
+      if (j.success) { 
+        console.log("✅ DELETE SUCCESS");
+        onDeleted(); 
+        onClose(); 
+      }
+      else {
+        console.error("❌ DELETE FAILED:", j.message || j.error);
+        setErr(j.message || j.error || 'فشل الحذف');
+      }
+    } catch (e: any) { 
+      console.error("❌ DELETE ERROR:", e);
+      setErr('تعذر الاتصال بالخادم'); 
+    }
     finally { setDeleting(false); }
   }
 
