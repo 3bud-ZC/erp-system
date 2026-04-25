@@ -211,9 +211,16 @@ export async function PUT(request: Request) {
 
       // STEP 4: Execute update atomically with stock delta adjustments
       const invoice = await prisma.$transaction(async (tx) => {
-        await (tx as any).purchaseInvoiceItem.deleteMany({
-          where: { purchaseInvoiceId: id },
-        });
+        console.log('[PURCHASE UPDATE - DELETE ITEMS]', { invoiceId: id });
+        try {
+          await (tx as any).purchaseInvoiceItem.deleteMany({
+            where: { purchaseInvoiceId: id },
+          });
+          console.log('[PURCHASE UPDATE - DELETE ITEMS SUCCESS]');
+        } catch (e: any) {
+          console.error('[PURCHASE UPDATE - DELETE ITEMS ERROR]', e.message);
+          throw e;
+        }
 
         const updatedInvoice = await (tx as any).purchaseInvoice.update({
           where: { id },
@@ -337,9 +344,16 @@ export async function DELETE(request: Request) {
         }
 
         // Delete items first to avoid foreign key constraints
-        await (tx as any).purchaseInvoiceItem.deleteMany({
-          where: { purchaseInvoiceId: id },
-        });
+        console.log('[PURCHASE DELETE - DELETE ITEMS]', { invoiceId: id });
+        try {
+          await (tx as any).purchaseInvoiceItem.deleteMany({
+            where: { purchaseInvoiceId: id },
+          });
+          console.log('[PURCHASE DELETE - DELETE ITEMS SUCCESS]');
+        } catch (e: any) {
+          console.error('[PURCHASE DELETE - DELETE ITEMS ERROR]', e.message);
+          throw e;
+        }
 
         await (tx as any).purchaseInvoice.delete({
           where: { id, tenantId: user.tenantId },
