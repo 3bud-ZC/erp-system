@@ -173,14 +173,16 @@ export async function PUT(request: Request) {
     const body = await request.json();
       const { id, items, ...invoiceData } = body;
 
-      // STEP 1: Fetch existing invoice to calculate stock delta
-      const existingInvoice = await (prisma as any).purchaseInvoice.findUnique({
-        where: { id },
+      if (!user.tenantId) return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+
+      // STEP 1: Fetch existing invoice (scoped to tenant)
+      const existingInvoice = await (prisma as any).purchaseInvoice.findFirst({
+        where: { id, tenantId: user.tenantId },
         include: { items: true },
       });
 
       if (!existingInvoice) {
-        return handleApiError(new Error('Invoice not found'), 'Update purchase invoice');
+        return apiError('الفاتورة غير موجودة', 404);
       }
 
       // STEP 2: Calculate net stock effect by comparing old vs new items
@@ -296,7 +298,7 @@ export async function DELETE(request: Request) {
       const id = searchParams.get('id');
       
       if (!id) {
-        return handleApiError(new Error('ID is required'), 'Delete purchase invoice');
+        return apiError('معرف الفاتورة مطلوب', 400);
       }
 
       // STEP 1: Reverse journal entry to restore account balances
@@ -309,13 +311,13 @@ export async function DELETE(request: Request) {
 
       // STEP 2: Delete invoice and reverse stock in transaction
       const deletedInvoice = await prisma.$transaction(async (tx) => {
-        const invoice = await (tx as any).purchaseInvoice.findUnique({
-          where: { id },
+        const invoice = await (tx as any).purchaseInvoice.findFirst({
+          where: { id, tenantId: user.tenantId },
           include: { items: true },
         });
 
         if (!invoice) {
-          throw new Error('Invoice not found');
+          throw new Error('الفاتورة غير موجودة');
         }
 
         // Reverse stock: remove the quantities that were added by this invoice

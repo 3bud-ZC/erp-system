@@ -176,14 +176,16 @@ export async function PUT(request: Request) {
     const body = await request.json();
       const { id, items, ...invoiceData } = body;
 
-      // STEP 1: Fetch existing invoice to calculate stock delta
-      const existingInvoice = await prisma.salesInvoice.findUnique({
-        where: { id },
+      if (!user.tenantId) return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+
+      // STEP 1: Fetch existing invoice (scoped to tenant)
+      const existingInvoice = await prisma.salesInvoice.findFirst({
+        where: { id, tenantId: user.tenantId },
         include: { items: true },
       });
 
       if (!existingInvoice) {
-        return apiError('Invoice not found', 404);
+        return apiError('الفاتورة غير موجودة', 404);
       }
 
       // STEP 2: Calculate net stock effect by comparing old vs new items
@@ -328,13 +330,13 @@ export async function DELETE(request: Request) {
 
       // STEP 2: Delete invoice and reverse stock in transaction
       const deletedInvoice = await prisma.$transaction(async (tx) => {
-        const invoice = await tx.salesInvoice.findUnique({
-          where: { id },
+        const invoice = await tx.salesInvoice.findFirst({
+          where: { id, tenantId: user.tenantId },
           include: { items: true },
         });
 
         if (!invoice) {
-          throw new Error('Invoice not found');
+          throw new Error('الفاتورة غير موجودة');
         }
 
         // Reverse stock: return the quantities that were deducted by this invoice
