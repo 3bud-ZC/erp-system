@@ -264,7 +264,7 @@ function PaymentsPanel({
                 </p>
               </div>
               <button onClick={() => deletePayment(p.id, p.amount)}
-                className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-red-500 transition-all">
+                className="p-1 text-slate-400 hover:text-red-600 transition-colors">
                 <X className="w-4 h-4" />
               </button>
             </div>

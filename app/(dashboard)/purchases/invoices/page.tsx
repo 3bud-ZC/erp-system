@@ -372,7 +372,7 @@ const InvoiceRow = memo(function InvoiceRow({
         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${pt.cls}`}>{pt.label}</span>
       </td>
       <td className="px-4 py-3">
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-1">
           <button onClick={() => onView(inv)}
             className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
             title="عرض التفاصيل">

@@ -68,12 +68,12 @@ const paymentLabels: Record<string, { label: string; cls: string }> = {
 const Pagination = memo(function Pagination({
   page, totalPages, onPage,
 }: { page: number; totalPages: number; onPage: (p: number) => void }) {
-  if (totalPages <= 1) return null;
-
   const pages = useMemo(() => {
     const all = Array.from({ length: totalPages }, (_, i) => i + 1);
     return all.filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1);
   }, [totalPages, page]);
+
+  if (totalPages <= 1) return null;
 
   return (
     <div className="flex items-center gap-1">
@@ -224,8 +224,6 @@ const EditModal = memo(function EditModal({
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    console.log("🔴 CLICKED UPDATE");
-    
     const payload = {
       id: inv.id, status, paymentStatus,
       notes: notes.trim() || undefined,
@@ -233,51 +231,21 @@ const EditModal = memo(function EditModal({
         productId: i.productId, quantity: i.quantity, price: i.price, total: i.total,
       })),
     };
-    
-    console.log("UPDATE REQUEST:", {
-      id: inv.id,
-      invoiceNumber: inv.invoiceNumber,
-      itemCount: payload.items.length,
-      payload: JSON.stringify(payload).substring(0, 300)
-    });
-    
     setSaving(true); setErr('');
     try {
-      const url = '/api/sales-invoices';
-      const method = 'PUT';
-      
-      console.log("API URL:", url);
-      console.log("METHOD:", method);
-      console.log("Full payload:", payload);
-      console.log("Sending UPDATE request...");
-      
-      const res = await fetch(url, {
-        method, credentials: 'include',
+      const res = await fetch('/api/sales-invoices', {
+        method: 'PUT', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      
-      console.log("Response status:", res.status);
-      console.log("Response ok:", res.ok);
-      
       const j = await res.json();
-      
-      console.log("Response body:", j);
-      
-      if (j.success) { 
-        console.log("✅ UPDATE SUCCESS");
-        onSaved(); 
-        onClose(); 
-      }
-      else {
-        console.error("❌ UPDATE FAILED:", j.message || j.error);
-        setErr(j.message || j.error || 'فشل الحفظ');
-      }
-    } catch (e: any) { 
-      console.error("❌ UPDATE ERROR:", e);
-      setErr('تعذر الاتصال بالخادم'); 
+      if (j.success) { onSaved(); onClose(); }
+      else setErr(j.message || j.error || 'فشل الحفظ');
+    } catch {
+      setErr('تعذر الاتصال بالخادم');
+    } finally {
+      setSaving(false);
     }
-    finally { setSaving(false); }
   }
 
   return (
@@ -363,41 +331,19 @@ const DeleteModal = memo(function DeleteModal({
   const [err, setErr] = useState('');
 
   async function confirm() {
-    console.log("🔴 CLICKED DELETE");
-    console.log("DELETE REQUEST:", { id: inv.id, invoiceNumber: inv.invoiceNumber });
-    
     setDeleting(true); setErr('');
     try {
-      const url = `/api/sales-invoices?id=${inv.id}`;
-      const method = 'DELETE';
-      
-      console.log("API URL:", url);
-      console.log("METHOD:", method);
-      console.log("Sending DELETE request...");
-      
-      const res = await fetch(url, { method, credentials: 'include' });
-      
-      console.log("Response status:", res.status);
-      console.log("Response ok:", res.ok);
-      
+      const res = await fetch(`/api/sales-invoices?id=${inv.id}`, {
+        method: 'DELETE', credentials: 'include',
+      });
       const j = await res.json();
-      
-      console.log("Response body:", j);
-      
-      if (j.success) { 
-        console.log("✅ DELETE SUCCESS");
-        onDeleted(); 
-        onClose(); 
-      }
-      else {
-        console.error("❌ DELETE FAILED:", j.message || j.error);
-        setErr(j.message || j.error || 'فشل الحذف');
-      }
-    } catch (e: any) { 
-      console.error("❌ DELETE ERROR:", e);
-      setErr('تعذر الاتصال بالخادم'); 
+      if (j.success) { onDeleted(); onClose(); }
+      else setErr(j.message || j.error || 'فشل الحذف');
+    } catch {
+      setErr('تعذر الاتصال بالخادم');
+    } finally {
+      setDeleting(false);
     }
-    finally { setDeleting(false); }
   }
 
   return (
@@ -478,7 +424,7 @@ const InvoiceRow = memo(function InvoiceRow({
         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${pt.cls}`}>{pt.label}</span>
       </td>
       <td className="px-4 py-3">
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-1">
           <button onClick={() => onView(inv)}
             className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
             title="عرض التفاصيل">

@@ -137,8 +137,8 @@ export async function POST(request: Request) {
 
       return apiSuccess(invoice, 'Purchase invoice created successfully');
     } catch (error: any) {
-      // Log to secure logging service in production (not console)
-      // Do NOT expose error details to client
+      // Server-side: full error logged via handleApiError; client gets translated message
+      console.error('[purchase-invoices:POST] failed', error);
       const msg = translatePurchaseError(error);
       return apiError(msg, 500);
     }
