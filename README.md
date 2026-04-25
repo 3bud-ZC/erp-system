@@ -1,4 +1,4 @@
-# 🏢 نظام ERP متكامل | ERP System
+# 🏢 نظام ERP متكامل | Enterprise ERP System
 
 <div align="center">
 
@@ -7,14 +7,17 @@
 ![Prisma](https://img.shields.io/badge/Prisma-5.0-2D3748?style=flat-square&logo=prisma)
 ![TailwindCSS](https://img.shields.io/badge/Tailwind-3.4-38B2AC?style=flat-square&logo=tailwind-css)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?style=flat-square&logo=postgresql)
+![Production Ready](https://img.shields.io/badge/Status-Production%20Ready-success?style=flat-square)
 
-**نظام ERP احترافي - جاهز للإنتاج**
+**🎯 نظام ERP احترافي - جاهز للإنتاج**
 
-**Production-Ready ERP System**
+**Production-Ready Enterprise Resource Planning System**
 
 نظام متكامل لإدارة المخزون والمبيعات والمشتريات والتصنيع والمحاسبة
 
-Integrated system for inventory, sales, purchases, manufacturing, and accounting
+Integrated system for inventory, sales, purchases, manufacturing, and accounting management
+
+[Features](#-features) • [Quick Start](#-quick-start) • [Architecture](#-architecture) • [Documentation](#-documentation)
 
 </div>
 
@@ -151,32 +154,84 @@ Start: npm start
 | **Auth** | JWT, bcryptjs |
 | **Language** | Arabic (RTL)
 
-### Project Structure
+### 🏗️ Clean Architecture (Production-Ready)
+
+**Component Structure (14 files, 3 folders)**
 ```
-app/(dashboard)/          # Protected UI routes (34 pages)
-├── inventory/           # Product management
-├── sales/               # Invoices, orders, customers, reports
-├── purchases/           # Invoices, orders, suppliers, expenses, reports
-├── manufacturing/       # Production orders, BOM, cost study
-└── accounting/          # Financial summary, journal, P&L
+/components
+├── /layout (3 files)          # Layout components ONLY
+│   ├── Sidebar.tsx            # Single navigation sidebar
+│   ├── Topbar.tsx             # Search + notifications
+│   └── Workspace.tsx          # Layout wrapper
+│
+├── /ui (10 files)             # Design system ONLY
+│   ├── patterns.tsx           # Unified UI patterns
+│   ├── dialog.tsx             # Modal system
+│   ├── card.tsx               # Card component
+│   ├── button.tsx             # Button component
+│   ├── Table.tsx              # Table component
+│   └── ... (5 more)
+│
+└── /providers (1 file)        # Context providers
+    └── AppProviders.tsx
+```
 
-app/api/                 # REST API routes (12 endpoints, 34+ operations)
-├── products/            # CRUD for products
-├── sales-invoices/      # Sales with auto GL posting
-├── purchase-invoices/   # Purchases with auto GL posting
-├── expenses/            # Expenses with auto GL posting
-├── production-orders/   # Manufacturing with BOM
-├── bom/                 # Bill of Materials
-└── reports/             # Financial reports (real-time)
+**Page Structure (20 pages)**
+```
+/app
+├── /(dashboard)               # Protected routes
+│   ├── dashboard/             # Main dashboard
+│   ├── sales/                 # Sales invoices
+│   ├── purchases/             # Purchase invoices
+│   ├── inventory/             # Products & stock
+│   ├── accounting/            # Journal entries
+│   ├── finance/               # Financial management
+│   ├── reports/               # Reporting
+│   ├── customers/             # Customer management
+│   ├── suppliers/             # Supplier management
+│   └── warehouses/            # Warehouse management
+│
+├── /login                     # Authentication
+├── /onboarding                # Company setup
+├── /setup                     # System initialization
+└── /preview                   # Health check
+```
 
-lib/
-├── db.ts               # Prisma client
-├── accounting.ts       # GL posting engine
-└── inventory.ts        # Stock validation
+**API Structure (50+ endpoints)**
+```
+/app/api
+├── products/                  # CRUD for products
+├── customers/                 # Customer management
+├── suppliers/                 # Supplier management
+├── warehouses/                # Warehouse management
+├── sales-invoices/            # Sales with auto GL posting
+├── purchase-invoices/         # Purchases with auto GL posting
+├── expenses/                  # Expenses with auto GL posting
+├── accounting/                # Journal entries
+├── reports/                   # Financial reports
+└── dashboard/                 # Dashboard KPIs
+```
 
-prisma/
-├── schema.prisma       # Database schema (14 models)
-└── dev.db             # SQLite database
+**Business Logic Layer**
+```
+/lib
+├── accounting/                # Accounting services
+│   ├── accounting.service.ts  # GL posting engine
+│   └── journal-entry.service.ts
+├── api/                       # API clients
+│   ├── client.ts              # Base API client
+│   └── accounting.ts          # Accounting API
+├── store/                     # State management
+│   └── auth.ts                # Auth store (Zustand)
+└── ... (38 utility files)
+```
+
+**Database Layer**
+```
+/prisma
+├── schema.prisma              # Database schema (14 models)
+├── seed.ts                    # Database seeding
+└── migrations/                # Migration history
 ```
 
 ---

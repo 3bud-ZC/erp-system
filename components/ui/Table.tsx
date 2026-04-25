@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import EmptyState from './EmptyState';
+import { EmptyState } from './patterns';
 
 export interface Column<T> {
   key: string;
@@ -16,7 +16,7 @@ interface Props<T> {
 }
 
 export default function Table<T extends Record<string, any>>({ columns, rows, keyField, emptyLabel }: Props<T>) {
-  if (!rows || rows.length === 0) return <EmptyState title={emptyLabel || 'لا توجد بيانات'} />;
+  if (!rows || rows.length === 0) return <EmptyState title={emptyLabel || 'لا توجد بيانات'} icon={undefined} />;
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
