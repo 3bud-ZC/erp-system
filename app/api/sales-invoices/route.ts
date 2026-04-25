@@ -317,7 +317,7 @@ export async function DELETE(request: Request) {
       const id = searchParams.get('id');
       
       if (!id) {
-        return apiError('ID is required', 400);
+        return apiError('معرف الفاتورة مطلوب', 400);
       }
 
       // STEP 1: Reverse journal entry to restore account balances

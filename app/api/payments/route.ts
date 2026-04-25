@@ -83,13 +83,13 @@ export async function POST(request: Request) {
     if (salesInvoiceId) {
       const validation = await validatePaymentAmount(salesInvoiceId, 'sales', amount);
       if (!validation.valid) {
-        return apiError(validation.error || 'Payment amount exceeds remaining balance', 400);
+        return apiError(validation.error || 'المبلغ يتجاوز الرصيد المتبقي للفاتورة', 400);
       }
     }
     if (purchaseInvoiceId) {
       const validation = await validatePaymentAmount(purchaseInvoiceId, 'purchase', amount);
       if (!validation.valid) {
-        return apiError(validation.error || 'Payment amount exceeds remaining balance', 400);
+        return apiError(validation.error || 'المبلغ يتجاوز الرصيد المتبقي للفاتورة', 400);
       }
     }
 
@@ -206,14 +206,14 @@ export async function PUT(request: Request) {
 
     // Update payment with transaction to handle journal reversal
     const payment = await prisma.$transaction(async (tx) => {
-      // Get existing payment with journal entry
-      const existingPayment = await tx.payment.findUnique({
-        where: { id },
+      // Get existing payment with journal entry — scoped to tenant (prevents cross-tenant updates)
+      const existingPayment = await (tx as any).payment.findFirst({
+        where: { id, tenantId: user.tenantId },
         include: { journalEntry: true }
       });
 
       if (!existingPayment) {
-        throw new Error('Payment not found');
+        throw new Error('الدفعة غير موجودة أو لا تملك صلاحية الوصول إليها');
       }
 
       // Reverse existing journal entry if it exists
@@ -318,9 +318,9 @@ export async function DELETE(request: Request) {
       return apiError('معرف الدفع مطلوب', 400);
     }
 
-    // Get payment details before deletion
-    const payment = await prisma.payment.findUnique({
-      where: { id },
+    // Get payment details before deletion — scoped to tenant (prevents cross-tenant deletes)
+    const payment = await (prisma as any).payment.findFirst({
+      where: { id, tenantId: user.tenantId },
       include: { journalEntry: true }
     });
 
