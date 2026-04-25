@@ -16,12 +16,16 @@ import {
 // Translate backend errors to user-friendly Arabic messages
 function translateSalesError(error: any): string {
   const msg: string = error?.message || String(error);
+  if (msg.includes('INVOICE_FAILED')) return 'فشل إنشاء الفاتورة';
+  if (msg.includes('INVENTORY_FAILED')) return 'فشل تحديث المخزون';
+  if (msg.includes('ACCOUNTING_FAILED')) return 'فشل إنشاء القيود المحاسبية';
+  if (msg.includes('VALIDATION_FAILED')) return 'بيانات الفاتورة غير صحيحة';
   if (msg.includes('Foreign key') || msg.includes('foreign key') || msg.includes('P2003')) return 'هذا العنصر مرتبط ببيانات أخرى';
   if (msg.includes('Unique constraint') || msg.includes('P2002')) return 'رقم الفاتورة مستخدم بالفعل';
   if (msg.includes('Stock') || msg.includes('stock') || msg.includes('insufficient')) return 'رصيد المخزون غير كافٍ';
   if (msg.includes('Validation') || msg.includes('validation') || msg.includes('P2000')) return 'بيانات غير مكتملة أو غير صحيحة';
   if (msg.includes('Record to update not found') || msg.includes('P2025')) return 'السجل غير موجود';
-  return 'حدث خطأ غير متوقع — يرجى المحاولة مرة أخرى';
+  return 'فشل إنشاء الفاتورة — يرجى المحاولة مرة أخرى';
 }
 
 // GET - Read sales invoices (requires read_sales_invoice permission)
@@ -73,62 +77,155 @@ export async function GET(request: Request) {
 
 // POST - Create sales invoice (requires create_sales_invoice permission)
 export async function POST(request: Request) {
+  const requestId = `[SalesInvoice-${Date.now()}]`;
+  
   try {
+    console.log(`${requestId} ✓ Request started`);
+    
+    // ========================================================================
+    // STEP 1: Authentication & Authorization
+    // ========================================================================
     const user = await getAuthenticatedUser(request);
     if (!user) {
+      console.log(`${requestId} ✗ Not authenticated`);
       return apiError('لم يتم المصادقة', 401);
     }
 
     if (!checkPermission(user, 'create_sales_invoice')) {
+      console.log(`${requestId} ✗ No permission for user ${user.id}`);
       return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
 
-    const body = await request.json();
-      const { items, ...invoiceData } = body;
+    console.log(`${requestId} ✓ Auth passed for user ${user.id}, tenant ${user.tenantId}`);
 
-      // Ensure tenantId comes from user context, not request body
-      const { tenantId, ...safeInvoiceData } = invoiceData;
+    // ========================================================================
+    // STEP 2: Parse Request Body
+    // ========================================================================
+    let body;
+    try {
+      body = await request.json();
+      console.log(`${requestId} ✓ Request parsed`, { itemsCount: body.items?.length });
+    } catch (parseErr) {
+      console.log(`${requestId} ✗ Failed to parse request body`, parseErr);
+      return apiError('بيانات الطلب غير صحيحة', 400);
+    }
 
-      if (!user.tenantId) {
-        return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
-      }
+    const { items, ...invoiceData } = body;
+    const { tenantId: _clientTenantId, ...safeInvoiceData } = invoiceData;
 
-      // Explicit input validation
-      if (!safeInvoiceData.customerId) {
-        return apiError('يجب اختيار العميل', 400);
-      }
-      if (!Array.isArray(items) || items.length === 0) {
-        return apiError('يجب إضافة صنف واحد على الأقل', 400);
-      }
-      for (const item of items) {
-        if (!item.productId) return apiError('كل صنف يجب أن يحتوي على منتج محدد', 400);
-        if (Number(item.quantity) <= 0) return apiError('الكمية يجب أن تكون أكبر من صفر', 400);
-        if (Number(item.price) < 0) return apiError('السعر يجب أن يكون صحيحاً', 400);
-      }
+    // ========================================================================
+    // STEP 3: Tenant Validation
+    // ========================================================================
+    if (!user.tenantId) {
+      console.log(`${requestId} ✗ No tenant assigned to user`);
+      return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    }
 
-      // STEP 1: Quick pre-check for early user-friendly error (outside transaction)
-      const validation = await validateStockAvailability(items);
+    // ========================================================================
+    // STEP 4: Input Validation (Strict)
+    // ========================================================================
+    console.log(`${requestId} → Validating inputs...`);
+    
+    if (!safeInvoiceData.customerId) {
+      console.log(`${requestId} ✗ Validation failed: no customerId`);
+      return apiError('يجب اختيار العميل', 400);
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      console.log(`${requestId} ✗ Validation failed: items not array or empty`);
+      return apiError('يجب إضافة صنف واحد على الأقل', 400);
+    }
+
+    // Validate each item
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (!item.productId) {
+        console.log(`${requestId} ✗ Validation failed: item ${i} missing productId`);
+        return apiError('كل صنف يجب أن يحتوي على منتج محدد', 400);
+      }
+      if (!item.quantity || Number(item.quantity) <= 0) {
+        console.log(`${requestId} ✗ Validation failed: item ${i} invalid quantity`, item.quantity);
+        return apiError('الكمية يجب أن تكون أكبر من صفر', 400);
+      }
+      if (item.price == null || Number(item.price) < 0) {
+        console.log(`${requestId} ✗ Validation failed: item ${i} invalid price`, item.price);
+        return apiError('السعر يجب أن يكون صحيحاً', 400);
+      }
+    }
+
+    console.log(`${requestId} ✓ All inputs valid`);
+
+    // ========================================================================
+    // STEP 5: Verify Customer Exists in Tenant
+    // ========================================================================
+    console.log(`${requestId} → Checking customer exists...`);
+    let customerExists = false;
+    try {
+      const customer = await (prisma as any).customer.findFirst({
+        where: { id: safeInvoiceData.customerId, tenantId: user.tenantId },
+        select: { id: true },
+      });
+      customerExists = !!customer;
+      if (!customerExists) {
+        console.log(`${requestId} ✗ Customer ${safeInvoiceData.customerId} not found`);
+        return apiError('العميل المختار غير موجود', 404);
+      }
+      console.log(`${requestId} ✓ Customer verified`);
+    } catch (custErr) {
+      console.log(`${requestId} ✗ Error verifying customer`, custErr);
+      return apiError('خطأ في التحقق من العميل', 500);
+    }
+
+    // ========================================================================
+    // STEP 6: Stock Availability Check
+    // ========================================================================
+    console.log(`${requestId} → Checking stock availability...`);
+    let validation;
+    try {
+      validation = await validateStockAvailability(items);
       if (!validation.valid) {
+        console.log(`${requestId} ✗ Stock check failed`, validation.errors);
         return apiError(
           'رصيد المخزون غير كافٍ لأحد المنتجات أو أكثر',
           400,
           { details: validation.errors }
         );
       }
+      console.log(`${requestId} ✓ Stock available`);
+    } catch (stockErr) {
+      console.log(`${requestId} ✗ Stock validation error`, stockErr);
+      return apiError('خطأ في التحقق من المخزون', 500);
+    }
 
-      // STEP 2: Create invoice + update inventory + create journal entry ATOMICALLY
-      // All operations succeed or all rollback - NO partial writes allowed
-      const { invoice } = await createSalesInvoiceAtomic({
+    // ========================================================================
+    // STEP 7: Create Invoice Atomically
+    // ========================================================================
+    console.log(`${requestId} → Creating invoice atomically...`);
+    let invoice;
+    try {
+      const result = await createSalesInvoiceAtomic({
         invoiceData: {
           ...safeInvoiceData,
           invoiceNumber: safeInvoiceData.invoiceNumber || `INV-${Date.now()}`,
+          date: safeInvoiceData.date ? new Date(safeInvoiceData.date) : new Date(),
         },
         items,
         tenantId: user.tenantId,
         userId: user.id,
       });
+      invoice = result.invoice;
+      console.log(`${requestId} ✓ Invoice created: ${invoice.id}`);
+    } catch (txnErr: any) {
+      console.error(`${requestId} ✗ Invoice creation transaction failed:`, txnErr);
+      const txnMsg = translateSalesError(txnErr);
+      return apiError(txnMsg || 'فشل إنشاء الفاتورة', 500);
+    }
 
-      // Log audit action
+    // ========================================================================
+    // STEP 8: Log Audit (Non-Critical)
+    // ========================================================================
+    console.log(`${requestId} → Logging audit action...`);
+    try {
       await logAuditAction(
         user.id,
         'CREATE',
@@ -139,8 +236,17 @@ export async function POST(request: Request) {
         request.headers.get('x-forwarded-for') || undefined,
         request.headers.get('user-agent') || undefined
       );
+      console.log(`${requestId} ✓ Audit logged`);
+    } catch (auditErr) {
+      console.error(`${requestId} ! Audit logging failed (non-critical):`, auditErr);
+      // Do NOT fail if audit fails
+    }
 
-      // Log activity for audit trail
+    // ========================================================================
+    // STEP 9: Log Activity (Non-Critical)
+    // ========================================================================
+    console.log(`${requestId} → Logging activity...`);
+    try {
       await logActivity({
         entity: 'SalesInvoice',
         entityId: invoice.id,
@@ -148,15 +254,22 @@ export async function POST(request: Request) {
         userId: user.id,
         after: invoice,
       });
-
-      return apiSuccess(invoice, 'Sales invoice created successfully');
-    } catch (error: any) {
-      // Log to secure logging service in production (not console)
-      // Do NOT expose error details to client
-      const msg = translateSalesError(error);
-      return apiError(msg, 500);
+      console.log(`${requestId} ✓ Activity logged`);
+    } catch (actErr) {
+      console.error(`${requestId} ! Activity logging failed (non-critical):`, actErr);
+      // Do NOT fail if activity fails
     }
+
+    console.log(`${requestId} ✓✓✓ SUCCESS - Invoice saved with ID: ${invoice.id}`);
+    return apiSuccess(invoice, 'تم حفظ الفاتورة بنجاح');
+    
+  } catch (error: any) {
+    const msg = error?.message || String(error);
+    console.error(`[SalesInvoice-ERROR] Unexpected error in POST:`, msg);
+    const translatedMsg = translateSalesError(error);
+    return apiError(translatedMsg || 'فشل إنشاء الفاتورة', 500);
   }
+}
 
 // PUT - Update sales invoice (requires update_sales_invoice permission)
 export async function PUT(request: Request) {
