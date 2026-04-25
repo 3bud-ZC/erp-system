@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+import { salesInvoiceRepo } from '@/lib/repositories/sales-invoice.repo';
 
 // Disable caching for real-time data
 export const dynamic = 'force-dynamic';
@@ -45,30 +46,12 @@ export async function GET(request: Request) {
 
     // Single invoice by id
     if (id) {
-      const invoice = await (prisma as any).salesInvoice.findFirst({
-        where: { id, tenantId: user.tenantId },
-        include: {
-          customer: true,
-          items: { include: { product: true } },
-          payments: { orderBy: { date: 'desc' } },
-        },
-      });
+      const invoice = await salesInvoiceRepo.findByIdAndTenant(id, user.tenantId);
       if (!invoice) return apiError('الفاتورة غير موجودة', 404);
       return apiSuccess(invoice, 'Sales invoice fetched successfully');
     }
 
-    const invoices = await (prisma as any).salesInvoice.findMany({
-      where: { tenantId: user.tenantId },
-      include: {
-        customer: true,
-        items: {
-          include: {
-            product: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const invoices = await salesInvoiceRepo.listByTenant(user.tenantId);
     return apiSuccess(invoices, 'Sales invoices fetched successfully');
   } catch (error) {
     return handleApiError(error, 'Fetch sales invoices');

@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/db';
+import { customerRepo } from '@/lib/repositories/customer.repo';
 
 // Disable caching for real-time data
 export const dynamic = 'force-dynamic';
@@ -18,10 +18,7 @@ export async function GET(request: Request) {
       return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
     }
 
-    const customers = await prisma.customer.findMany({
-      where: { tenantId: user.tenantId },
-      orderBy: { createdAt: 'desc' },
-    });
+    const customers = await customerRepo.listByTenant(user.tenantId);
     return apiSuccess(customers, 'Customers fetched successfully');
   } catch (error) {
     return handleApiError(error, 'Fetch customers');
@@ -49,18 +46,16 @@ export async function POST(request: Request) {
     // Remove tenantId from body if present - will be set from user context
     const { tenantId, ...customerData } = body;
     
-    const customer = await prisma.customer.create({
-      data: { 
-        code: customerData.code,
-        nameAr: customerData.nameAr,
-        nameEn: customerData.nameEn,
-        email: customerData.email,
-        phone: customerData.phone,
-        address: customerData.address,
-        creditLimit: customerData.creditLimit,
-        taxNumber: customerData.taxNumber,
-        tenantId: user.tenantId
-      },
+    const customer = await customerRepo.create({
+      code: customerData.code,
+      nameAr: customerData.nameAr,
+      nameEn: customerData.nameEn,
+      email: customerData.email,
+      phone: customerData.phone,
+      address: customerData.address,
+      creditLimit: customerData.creditLimit,
+      taxNumber: customerData.taxNumber,
+      tenantId: user.tenantId,
     });
 
     await logAuditAction(
@@ -97,17 +92,12 @@ export async function PUT(request: Request) {
     const { id, ...data } = body;
 
     // SECURITY: Verify customer belongs to user's tenant
-    const existingCustomer = await prisma.customer.findFirst({
-      where: { id, tenantId: user.tenantId },
-    });
+    const existingCustomer = await customerRepo.findByIdAndTenant(id, user.tenantId!);
     if (!existingCustomer) {
       return apiError('العميل غير موجود', 404);
     }
 
-    const customer = await prisma.customer.update({
-      where: { id },
-      data,
-    });
+    const customer = await customerRepo.update(id, data);
 
     await logAuditAction(
       user.id,
@@ -143,22 +133,18 @@ export async function DELETE(request: Request) {
     if (!id) return apiError('Customer ID is required', 400);
 
     // SECURITY: Verify customer belongs to user's tenant
-    const existingCustomer = await prisma.customer.findFirst({
-      where: { id, tenantId: user.tenantId },
-    });
+    const existingCustomer = await customerRepo.findByIdAndTenant(id, user.tenantId!);
     if (!existingCustomer) {
       return apiError('العميل غير موجود', 404);
     }
 
     // SECURITY: Check linked records with tenant scope
-    const linkedCount =
-      (await prisma.salesOrder.count({ where: { customerId: id, tenantId: user.tenantId } })) +
-      (await prisma.salesInvoice.count({ where: { customerId: id, tenantId: user.tenantId } }));
-    if (linkedCount > 0) {
+    const linked = await customerRepo.countLinkedDocuments(id, user.tenantId!);
+    if (linked.total > 0) {
       return apiError('Cannot delete customer with existing orders or invoices', 400);
     }
 
-    await prisma.customer.delete({ where: { id } });
+    await customerRepo.delete(id);
 
     await logAuditAction(
       user.id,

@@ -1,5 +1,4 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { warehouseRepo } from '@/lib/repositories/warehouse.repo';
 
 // Disable caching for real-time data
 export const dynamic = 'force-dynamic';
@@ -21,22 +20,11 @@ export async function GET(request: Request) {
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '50', 10)));
     const skip = (page - 1) * limit;
 
-    const where = search
-      ? {
-          tenantId: user.tenantId,
-          OR: [
-            { nameAr: { contains: search, mode: 'insensitive' as const } },
-            { nameEn: { contains: search, mode: 'insensitive' as const } },
-            { code: { contains: search, mode: 'insensitive' as const } },
-          ],
-        }
-      : { tenantId: user.tenantId };
-
-    const [data, total] = await Promise.all([
-      prisma.warehouse.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take: limit }),
-      prisma.warehouse.count({ where }),
-    ]);
-
+    const { data } = await warehouseRepo.listByTenant(user.tenantId!, {
+      search,
+      skip,
+      take: limit,
+    });
     return apiSuccess(data, 'Warehouses fetched successfully');
   } catch (error) {
     return handleApiError(error, 'Fetch warehouses');
@@ -80,8 +68,8 @@ export async function POST(request: Request) {
       return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
     }
 
-    const warehouse = await prisma.warehouse.create({
-      data: { code, nameAr, nameEn, address, phone, manager, tenantId: user.tenantId },
+    const warehouse = await warehouseRepo.create({
+      code, nameAr, nameEn, address, phone, manager, tenantId: user.tenantId,
     });
 
     await logAuditAction(
@@ -134,10 +122,7 @@ export async function PUT(request: Request) {
       return handleApiError(new Error('الاسم العربي مطلوب'), 'Update warehouse');
     }
 
-    const warehouse = await prisma.warehouse.update({
-      where: { id },
-      data: { code, nameAr, nameEn, address, phone, manager },
-    });
+    const warehouse = await warehouseRepo.update(id, { code, nameAr, nameEn, address, phone, manager });
 
     await logAuditAction(
       user.id,
@@ -180,12 +165,12 @@ export async function DELETE(request: Request) {
       return handleApiError(new Error('id مطلوب'), 'Delete warehouse');
     }
 
-    const productCount = await prisma.product.count({ where: { warehouseId: id } });
+    const productCount = await warehouseRepo.countAssignedProducts(id);
     if (productCount > 0) {
       return apiError('Cannot delete warehouse with assigned products', 400);
     }
 
-    await prisma.warehouse.delete({ where: { id } });
+    await warehouseRepo.delete(id);
 
     await logAuditAction(
       user.id,

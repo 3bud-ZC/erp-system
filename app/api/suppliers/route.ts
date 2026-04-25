@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/db';
+import { supplierRepo } from '@/lib/repositories/supplier.repo';
 
 // Disable caching for real-time data
 export const dynamic = 'force-dynamic';
@@ -18,10 +18,7 @@ export async function GET(request: Request) {
       return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
     }
 
-    const suppliers = await prisma.supplier.findMany({
-      where: { tenantId: user.tenantId },
-      orderBy: { createdAt: 'desc' },
-    });
+    const suppliers = await supplierRepo.listByTenant(user.tenantId);
     return apiSuccess(suppliers, 'Suppliers fetched successfully');
   } catch (error) {
     return handleApiError(error, 'Fetch suppliers');
@@ -46,17 +43,15 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const { tenantId: _t, ...supplierData } = body;
-    const supplier = await prisma.supplier.create({
-      data: {
-        code: supplierData.code,
-        nameAr: supplierData.nameAr,
-        ...(supplierData.nameEn && { nameEn: supplierData.nameEn }),
-        ...(supplierData.phone && { phone: supplierData.phone }),
-        ...(supplierData.email && { email: supplierData.email }),
-        ...(supplierData.creditLimit != null && { creditLimit: Number(supplierData.creditLimit) }),
-        ...(supplierData.address && { address: supplierData.address }),
-        tenantId: user.tenantId,
-      },
+    const supplier = await supplierRepo.create({
+      code: supplierData.code,
+      nameAr: supplierData.nameAr,
+      ...(supplierData.nameEn && { nameEn: supplierData.nameEn }),
+      ...(supplierData.phone && { phone: supplierData.phone }),
+      ...(supplierData.email && { email: supplierData.email }),
+      ...(supplierData.creditLimit != null && { creditLimit: Number(supplierData.creditLimit) }),
+      ...(supplierData.address && { address: supplierData.address }),
+      tenantId: user.tenantId,
     });
 
     await logAuditAction(
@@ -92,17 +87,12 @@ export async function PUT(request: Request) {
     const { id, ...data } = body;
 
     // SECURITY: Verify supplier belongs to user's tenant
-    const existingSupplier = await prisma.supplier.findFirst({
-      where: { id, tenantId: user.tenantId },
-    });
+    const existingSupplier = await supplierRepo.findByIdAndTenant(id, user.tenantId!);
     if (!existingSupplier) {
       return apiError('المورد غير موجود', 404);
     }
 
-    const supplier = await prisma.supplier.update({
-      where: { id },
-      data,
-    });
+    const supplier = await supplierRepo.update(id, data);
 
     await logAuditAction(
       user.id,
@@ -141,24 +131,18 @@ export async function DELETE(request: Request) {
     }
 
     // SECURITY: Verify supplier belongs to user's tenant
-    const existingSupplier = await prisma.supplier.findFirst({
-      where: { id, tenantId: user.tenantId },
-    });
+    const existingSupplier = await supplierRepo.findByIdAndTenant(id, user.tenantId!);
     if (!existingSupplier) {
       return apiError('المورد غير موجود', 404);
     }
 
     // SECURITY: Check linked records with tenant scope
-    const linkedCount =
-      (await prisma.purchaseOrder.count({ where: { supplierId: id, tenantId: user.tenantId } })) +
-      (await prisma.purchaseInvoice.count({ where: { supplierId: id, tenantId: user.tenantId } }));
-    if (linkedCount > 0) {
+    const linked = await supplierRepo.countLinkedDocuments(id, user.tenantId!);
+    if (linked.total > 0) {
       return apiError('Cannot delete supplier with existing orders or invoices', 400);
     }
 
-    await prisma.supplier.delete({
-      where: { id },
-    });
+    await supplierRepo.delete(id);
 
     await logAuditAction(
       user.id,

@@ -1,5 +1,4 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { productRepo } from '@/lib/repositories/product.repo';
 
 // Disable caching
 export const dynamic = 'force-dynamic';
@@ -22,22 +21,8 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const typeParam = searchParams.get('type');
-
-    // If type is omitted or 'all', return all types; otherwise filter by specific type
-    const where: any = { tenantId: user.tenantId };
-    if (typeParam && typeParam !== 'all') where.type = typeParam;
-
-    const products = await prisma.product.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        unitRef: true,
-        company: true,
-        itemGroup: true,
-        warehouse: true,
-      },
-    });
+    const typeParam = searchParams.get('type') || undefined;
+    const products = await productRepo.listByTenant(user.tenantId, { type: typeParam });
     return apiSuccess(products, 'Products fetched successfully');
   } catch (error) {
     return handleApiError(error, 'Fetch products');
@@ -105,9 +90,7 @@ export async function POST(request: Request) {
       ...(companyId && { companyId: String(companyId) }),
     };
 
-    const product = await prisma.product.create({
-      data: productData,
-    });
+    const product = await productRepo.create(productData);
 
     // Log audit action
     await logAuditAction(
@@ -161,14 +144,9 @@ export async function PUT(request: Request) {
     }
 
     // Fetch existing product for activity logging
-    const existingProduct = await prisma.product.findUnique({
-      where: { id },
-    });
+    const existingProduct = await productRepo.findById(id);
 
-    const product = await prisma.product.update({
-      where: { id },
-      data,
-    });
+    const product = await productRepo.update(id, data);
 
     // Log audit action
     await logAuditAction(
@@ -218,16 +196,9 @@ export async function DELETE(request: Request) {
     }
 
     // Check if product is used in any sales orders, purchase orders, invoices, or production
-    const [salesOrderItems, purchaseOrderItems, salesInvoiceItems, purchaseInvoiceItems, inventoryTransactions, productionOrders] = await Promise.all([
-      prisma.salesOrderItem.count({ where: { productId: id } }),
-      prisma.purchaseOrderItem.count({ where: { productId: id } }),
-      prisma.salesInvoiceItem.count({ where: { productId: id } }),
-      prisma.purchaseInvoiceItem.count({ where: { productId: id } }),
-      prisma.inventoryTransaction.count({ where: { productId: id } }),
-      prisma.productionOrder.count({ where: { productId: id } }),
-    ]);
-
-    const totalUsage = salesOrderItems + purchaseOrderItems + salesInvoiceItems + purchaseInvoiceItems + inventoryTransactions + productionOrders;
+    const usage = await productRepo.countUsage(id);
+    const { salesOrderItems, purchaseOrderItems, salesInvoiceItems, purchaseInvoiceItems, inventoryTransactions, productionOrders } = usage;
+    const totalUsage = usage.total;
 
     if (totalUsage > 0) {
       const lines = [];
@@ -245,18 +216,14 @@ export async function DELETE(request: Request) {
     }
 
     // Fetch existing product for activity logging
-    const existingProduct = await prisma.product.findUnique({
-      where: { id },
-    });
+    const existingProduct = await productRepo.findById(id);
 
     // Delete inventory transactions first (these are history records)
     if (inventoryTransactions > 0) {
-      await prisma.inventoryTransaction.deleteMany({ where: { productId: id } });
+      await productRepo.deleteInventoryTransactions(id);
     }
 
-    await prisma.product.delete({
-      where: { id },
-    });
+    await productRepo.delete(id);
 
     // Log audit action
     await logAuditAction(

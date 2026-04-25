@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { journalEntryRepo } from '@/lib/repositories/journal-entry.repo';
 
 // Disable caching for real-time data
 export const dynamic = 'force-dynamic';
@@ -35,23 +36,7 @@ export async function GET(request: Request) {
       if (fromDate) where.entryDate.gte = new Date(fromDate);
       if (toDate) where.entryDate.lte = new Date(toDate + 'T23:59:59.999Z');
     }
-
-    const [data, total] = await Promise.all([
-      prisma.journalEntry.findMany({
-        where,
-        include: {
-          lines: {
-            include: {
-              account: true,
-            },
-          },
-        },
-        orderBy: { entryDate: 'desc' },
-        skip,
-        take: limit,
-      }),
-      prisma.journalEntry.count({ where }),
-    ]);
+    const { entries: data, total } = await journalEntryRepo.listByWhere(where, { skip, take: limit });
 
     return apiSuccess({ entries: data, total, page, limit }, 'Journal entries fetched successfully');
   } catch (error) {

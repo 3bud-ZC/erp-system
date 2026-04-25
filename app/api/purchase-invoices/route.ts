@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+import { purchaseInvoiceRepo } from '@/lib/repositories/purchase-invoice.repo';
 
 // Disable caching for real-time data
 export const dynamic = 'force-dynamic';
@@ -36,30 +37,12 @@ export async function GET(request: Request) {
 
     // Single invoice by id
     if (id) {
-      const invoice = await (prisma as any).purchaseInvoice.findFirst({
-        where: { id, tenantId: user.tenantId },
-        include: {
-          supplier: true,
-          items: { include: { product: true } },
-          payments: { orderBy: { date: 'desc' } },
-        },
-      });
+      const invoice = await purchaseInvoiceRepo.findByIdAndTenant(id, user.tenantId);
       if (!invoice) return apiError('الفاتورة غير موجودة', 404);
       return apiSuccess(invoice, 'Purchase invoice fetched successfully');
     }
 
-    const invoices = await (prisma as any).purchaseInvoice.findMany({
-      where: { tenantId: user.tenantId },
-      include: {
-        supplier: true,
-        items: {
-          include: {
-            product: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const invoices = await purchaseInvoiceRepo.listByTenant(user.tenantId);
     return apiSuccess(invoices, 'Purchase invoices fetched successfully');
   } catch (error) {
     return handleApiError(error, 'Fetch purchase invoices');

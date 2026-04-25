@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 import { createExpenseEntry, postJournalEntry, reverseJournalEntry } from '@/lib/accounting';
+import { expenseRepo } from '@/lib/repositories/expense.repo';
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
 import { logActivity } from '@/lib/activity-log';
@@ -17,9 +18,7 @@ export async function GET(request: Request) {
       return apiError('لم يتم المصادقة', 401);
     }
 
-    const expenses = await prisma.expense.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
+    const expenses = await expenseRepo.listAll();
     return apiSuccess(expenses, 'Expenses fetched successfully');
   } catch (error) {
     return handleApiError(error, 'Fetch expenses');
@@ -113,9 +112,7 @@ export async function PUT(request: Request) {
       const { id, expenseType } = body;
 
       // STEP 1: Fetch existing expense for activity logging
-      const existingExpense = await prisma.expense.findUnique({
-        where: { id },
-      });
+      const existingExpense = await expenseRepo.findById(id);
 
       // STEP 2: Reverse existing journal entry for this expense (if any)
       const existingEntry = await prisma.journalEntry.findFirst({
@@ -200,9 +197,7 @@ export async function DELETE(request: Request) {
       }
 
       // STEP 1: Fetch existing expense for activity logging
-      const existingExpense = await prisma.expense.findUnique({
-        where: { id },
-      });
+      const existingExpense = await expenseRepo.findById(id);
 
       // STEP 2: Reverse journal entry to restore account balances
       const existingEntry = await prisma.journalEntry.findFirst({
