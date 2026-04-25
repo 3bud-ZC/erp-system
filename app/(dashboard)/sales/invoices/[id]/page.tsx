@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowRight, Printer, Plus, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { ArrowRight, Printer, Download, Plus, X, CheckCircle, AlertCircle, Wallet } from 'lucide-react';
 
 /* ─── Types ─────────────────────────────────────────────── */
 interface InvoiceItem {
@@ -154,6 +154,15 @@ function PaymentsPanel({
     if (j.success) { showSuccess('تم حذف الدفعة'); onPaymentAdded(); }
   }
 
+  const paidPercent   = grandTotal > 0 ? Math.min(100, (paidAmount / grandTotal) * 100) : 0;
+  const statusLabel   = remaining <= 0 ? 'مدفوعة بالكامل' : paidAmount > 0 ? 'مدفوعة جزئياً' : 'غير مدفوعة';
+  const statusCls     = remaining <= 0
+    ? 'text-green-700 bg-green-50 border-green-200'
+    : paidAmount > 0
+      ? 'text-amber-700 bg-amber-50 border-amber-200'
+      : 'text-red-700 bg-red-50 border-red-200';
+  const barCls        = remaining <= 0 ? 'bg-green-500' : paidAmount > 0 ? 'bg-amber-500' : 'bg-red-400';
+
   return (
     <div className="no-print bg-white rounded-xl shadow-sm border border-slate-100 p-6 mt-6">
       {toast && (
@@ -162,29 +171,50 @@ function PaymentsPanel({
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="font-semibold text-slate-900">المدفوعات</h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            مدفوع: <span className="font-medium text-green-600">{paidAmount.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</span>
-            {' · '}
-            متبقي: <span className={`font-medium ${remaining > 0 ? 'text-red-600' : 'text-slate-500'}`}>
-              {remaining.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
-            </span>
-          </p>
+      {/* Header + Status */}
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Wallet className="w-5 h-5 text-slate-400 flex-shrink-0" />
+          <div>
+            <h2 className="font-semibold text-slate-900">المدفوعات</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              مدفوع:{' '}
+              <span className="font-semibold text-green-600 tabular-nums">
+                {paidAmount.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+              </span>
+              {' · '}
+              متبقي:{' '}
+              <span className={`font-semibold tabular-nums ${remaining > 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                {remaining.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+              </span>
+            </p>
+          </div>
         </div>
-        {remaining > 0 && !showForm && (
-          <button onClick={() => setShowForm(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
-            <Plus className="w-4 h-4" /> إضافة دفعة
-          </button>
-        )}
-        {remaining <= 0 && (
-          <span className="text-xs font-medium text-green-600 bg-green-50 border border-green-200 px-3 py-1 rounded-full">
-            ✓ مسددة بالكامل
+        <div className="flex items-center gap-2">
+          <span className={`text-xs font-semibold border px-2.5 py-1 rounded-full ${statusCls}`}>
+            {statusLabel}
           </span>
-        )}
+          {remaining > 0 && !showForm && (
+            <button onClick={() => setShowForm(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 active:scale-95 transition-all">
+              <Plus className="w-4 h-4" /> إضافة دفعة
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div className="mb-5">
+        <div className="flex justify-between text-xs text-slate-400 mb-1.5">
+          <span>نسبة السداد</span>
+          <span className="tabular-nums font-medium">{paidPercent.toFixed(0)}%</span>
+        </div>
+        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all duration-700 ${barCls}`}
+            style={{ width: `${paidPercent}%` }}
+          />
+        </div>
       </div>
 
       {/* Payment form */}
@@ -308,6 +338,13 @@ export default function SalesInvoiceDetailPage() {
   const tax        = inv.tax ?? 0;
   const grandTotal = inv.grandTotal ?? subtotal;
 
+  function handleDownloadPDF() {
+    const prev = document.title;
+    document.title = `فاتورة-مبيعات-${inv!.invoiceNumber}`;
+    window.print();
+    document.title = prev;
+  }
+
   return (
     <>
       {/* Scoped print styles */}
@@ -315,7 +352,10 @@ export default function SalesInvoiceDetailPage() {
         @media print {
           body > * { visibility: hidden; }
           #invoice-print, #invoice-print * { visibility: visible; }
-          #invoice-print { position: fixed; inset: 0; padding: 24px; }
+          #invoice-print {
+            position: fixed; inset: 0; padding: 32px;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+          }
           .no-print { display: none !important; }
         }
       `}</style>
@@ -324,16 +364,24 @@ export default function SalesInvoiceDetailPage() {
         {/* Screen toolbar */}
         <div className="no-print flex items-center justify-between mb-6">
           <Link href="/sales/invoices"
-            className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-800 transition-colors">
-            <ArrowRight className="w-4 h-4" />
+            className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-800 transition-colors group">
+            <ArrowRight className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
             العودة للفواتير
           </Link>
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium shadow-sm transition-colors">
-            <Printer className="w-4 h-4" />
-            طباعة الفاتورة
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-2 px-3 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 active:scale-95 text-sm font-medium transition-all">
+              <Printer className="w-4 h-4" />
+              طباعة
+            </button>
+            <button
+              onClick={handleDownloadPDF}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 text-sm font-medium shadow-sm transition-all">
+              <Download className="w-4 h-4" />
+              تحميل PDF
+            </button>
+          </div>
         </div>
 
         {/* Invoice Body */}
