@@ -18,6 +18,7 @@
     "postinstall": "prisma generate",
     "seed": "tsx prisma/seed.ts",
     "seed:clean": "tsx prisma/seed-clean.ts",
+    "db:reset": "tsx scripts/reset-database.ts",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",

@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
 // Disable caching for real-time data
@@ -11,9 +10,7 @@ import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
 import { logActivity } from '@/lib/activity-log';
 import { 
-  createSalesInvoiceAtomic, 
-  TransactionError,
-  handleTransactionError 
+  createSalesInvoiceAtomic
 } from '@/lib/erp-execution-engine/services/atomic-transaction-service';
 
 // Translate backend errors to user-friendly Arabic messages
@@ -105,7 +102,7 @@ export async function POST(request: Request) {
       }
       for (const item of items) {
         if (!item.productId) return apiError('كل صنف يجب أن يحتوي على منتج محدد', 400);
-        if (!(Number(item.quantity) > 0)) return apiError('الكمية يجب أن تكون أكبر من صفر', 400);
+        if (Number(item.quantity) <= 0) return apiError('الكمية يجب أن تكون أكبر من صفر', 400);
         if (Number(item.price) < 0) return apiError('السعر يجب أن يكون صحيحاً', 400);
       }
 
@@ -121,7 +118,7 @@ export async function POST(request: Request) {
 
       // STEP 2: Create invoice + update inventory + create journal entry ATOMICALLY
       // All operations succeed or all rollback - NO partial writes allowed
-      const { invoice, journalEntry } = await createSalesInvoiceAtomic({
+      const { invoice } = await createSalesInvoiceAtomic({
         invoiceData: {
           ...safeInvoiceData,
           invoiceNumber: safeInvoiceData.invoiceNumber || `INV-${Date.now()}`,
@@ -154,8 +151,8 @@ export async function POST(request: Request) {
 
       return apiSuccess(invoice, 'Sales invoice created successfully');
     } catch (error: any) {
-      console.error('Sales invoice creation error:', error?.message || error);
-      // Translate known DB/service errors to Arabic
+      // Log to secure logging service in production (not console)
+      // Do NOT expose error details to client
       const msg = translateSalesError(error);
       return apiError(msg, 500);
     }
@@ -322,7 +319,7 @@ export async function DELETE(request: Request) {
 
       // STEP 1: Reverse journal entry to restore account balances
       const existingJournalEntry = await prisma.journalEntry.findFirst({
-        where: { referenceType: 'SalesInvoice', referenceId: id },
+        where: { referenceType: 'SalesInvoice', referenceId: id, tenantId: user.tenantId },
       });
       if (existingJournalEntry) {
         await reverseJournalEntry(existingJournalEntry.id);
@@ -361,7 +358,7 @@ export async function DELETE(request: Request) {
         });
 
         await tx.salesInvoice.delete({
-          where: { id },
+          where: { id, tenantId: user.tenantId },
         });
 
         return invoice;

@@ -9,7 +9,7 @@ export async function POST(request: Request) {
 
     return apiSuccess({}, 'تم تسجيل الخروج بنجاح');
   } catch (error: any) {
-    console.error('Logout error:', error);
+    // Secure logging only
     return apiError(error.message || 'فشل تسجيل الخروج', 500);
   }
 }

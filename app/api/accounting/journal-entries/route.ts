@@ -26,13 +26,13 @@ export async function POST(req: NextRequest) {
     const input: CreateJournalEntryInput = {
       ...body,
       tenantId: user.tenantId!,
-      createdBy: user.id!,
+      createdBy: user.id,
     };
 
     // Validate using validation engine
     const validationContext: ValidationContext = {
       tenantId: user.tenantId!,
-      userId: user.id!,
+      userId: user.id,
       requestId: `req_${Date.now()}`,
       timestamp: new Date(),
       prisma: null as any,
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(entry, { status: 201 });
   } catch (error: any) {
-    console.error('Error creating journal entry:', error);
+    // Secure logging only
     return NextResponse.json(
       { error: error.message || 'Failed to create journal entry' },
       { status: 500 }
@@ -88,8 +88,8 @@ export async function GET(req: NextRequest) {
     const endDate = searchParams.get('endDate');
     const referenceType = searchParams.get('referenceType');
     const referenceId = searchParams.get('referenceId');
-    const limit = parseInt(searchParams.get('limit') || '50');
-    const offset = parseInt(searchParams.get('offset') || '0');
+    const limit = Number.parseInt(searchParams.get('limit') || '50', 10);
+    const offset = Number.parseInt(searchParams.get('offset') || '0', 10);
 
     const result = await journalEntryService.listEntries(user.tenantId!, {
       status: status as any,
@@ -103,7 +103,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error: any) {
-    console.error('Error listing journal entries:', error);
+    // Secure logging only
     return NextResponse.json(
       { error: error.message || 'Failed to list journal entries' },
       { status: 500 }

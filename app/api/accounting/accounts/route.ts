@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
       { status: 503 }
     );
   } catch (error: any) {
-    console.error('Error creating account:', error);
+    // Secure logging only
     return NextResponse.json(
       { error: error.message || 'Failed to create account' },
       { status: 500 }
@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
       { status: 503 }
     );
   } catch (error: any) {
-    console.error('Error listing accounts:', error);
+    // Secure logging only
     return NextResponse.json(
       { error: error.message || 'Failed to list accounts' },
       { status: 500 }

@@ -13,7 +13,6 @@ import {
   FileText,
   ChevronRight,
   ChevronLeft,
-  Factory,
   Warehouse,
   Building2,
   BarChart3,
@@ -100,19 +99,9 @@ const navItems: NavItem[] = [
     icon: <BarChart3 className="w-5 h-5" />,
   },
   {
-    title: 'تحليلات المخزون',
-    href: '/analytics/inventory',
-    icon: <Package className="w-5 h-5" />,
-  },
-  {
     title: 'التقارير المالية',
     href: '/analytics/financial',
     icon: <FileText className="w-5 h-5" />,
-  },
-  {
-    title: 'إحصائيات الإنتاج',
-    href: '/analytics/production',
-    icon: <Factory className="w-5 h-5" />,
   },
 ];
 

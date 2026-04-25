@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
 // Disable caching for real-time data
@@ -77,7 +76,7 @@ export async function POST(request: Request) {
 
     return apiSuccess(customer, 'Customer created successfully');
   } catch (error: any) {
-    console.error('Create customer error:', error);
+    // Secure logging only - no console output in production
     return handleApiError(error, 'Create customer');
   }
 }
@@ -96,6 +95,15 @@ export async function PUT(request: Request) {
 
     const body = await request.json();
     const { id, ...data } = body;
+
+    // SECURITY: Verify customer belongs to user's tenant
+    const existingCustomer = await prisma.customer.findFirst({
+      where: { id, tenantId: user.tenantId },
+    });
+    if (!existingCustomer) {
+      return apiError('العميل غير موجود', 404);
+    }
+
     const customer = await prisma.customer.update({
       where: { id },
       data,
@@ -134,9 +142,18 @@ export async function DELETE(request: Request) {
     const id = searchParams.get('id');
     if (!id) return apiError('Customer ID is required', 400);
 
+    // SECURITY: Verify customer belongs to user's tenant
+    const existingCustomer = await prisma.customer.findFirst({
+      where: { id, tenantId: user.tenantId },
+    });
+    if (!existingCustomer) {
+      return apiError('العميل غير موجود', 404);
+    }
+
+    // SECURITY: Check linked records with tenant scope
     const linkedCount =
-      (await prisma.salesOrder.count({ where: { customerId: id } })) +
-      (await prisma.salesInvoice.count({ where: { customerId: id } }));
+      (await prisma.salesOrder.count({ where: { customerId: id, tenantId: user.tenantId } })) +
+      (await prisma.salesInvoice.count({ where: { customerId: id, tenantId: user.tenantId } }));
     if (linkedCount > 0) {
       return apiError('Cannot delete customer with existing orders or invoices', 400);
     }

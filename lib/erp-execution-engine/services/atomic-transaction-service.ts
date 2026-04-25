@@ -39,8 +39,8 @@ interface InvoiceItem {
  */
 interface JournalLine {
   accountCode: string;
-  debit: number | { toNumber(): number } | any;
-  credit: number | { toNumber(): number } | any;
+  debit: number | { toNumber(): number };
+  credit: number | { toNumber(): number };
   description?: string | null;
 }
 
@@ -410,7 +410,7 @@ export async function createPurchaseInvoiceAtomic(params: {
  */
 async function generateEntryNumber(txClient: any): Promise<string> {
   const today = new Date();
-  const dateStr = today.toISOString().split('T')[0].replace(/-/g, '');
+  const dateStr = today.toISOString().split('T')[0].replaceAll('-', '');
   
   // Count entries created today within this transaction
   const count = await txClient.journalEntry.count({
@@ -452,14 +452,18 @@ async function updateAccountBalances(
     // Calculate balance change based on account type
     let balanceChange = 0;
     
+    // Convert to numbers (handle both number and Decimal types)
+    const debitAmount = typeof line.debit === 'number' ? line.debit : (line.debit as any).toNumber?.() ?? 0;
+    const creditAmount = typeof line.credit === 'number' ? line.credit : (line.credit as any).toNumber?.() ?? 0;
+    
     // Assets & Expenses: Debit increases, Credit decreases
     // Liabilities, Equity, Revenue: Credit increases, Debit decreases
     const isDebitNormal = ['Asset', 'Expense'].includes(account.type);
     
     if (isDebitNormal) {
-      balanceChange = line.debit - line.credit;
+      balanceChange = debitAmount - creditAmount;
     } else {
-      balanceChange = line.credit - line.debit;
+      balanceChange = creditAmount - debitAmount;
     }
 
     // Atomic balance update

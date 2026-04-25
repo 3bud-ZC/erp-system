@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useCallback, memo } from 'react';
 import { Plus, Eye, Pencil, Trash2, X, AlertCircle, ChevronRight, ChevronLeft, FileText } from 'lucide-react';
 import Link from 'next/link';
+import { TableSkeleton } from '@/components/ui/patterns';
 
 /* ─── Types ─────────────────────────────────────────────── */
 interface InvoiceItem {
@@ -31,7 +32,8 @@ interface SalesInvoice {
 }
 
 /* ─── Constants ──────────────────────────────────────────── */
-const PAGE_SIZE = 20;
+const PAGE_SIZE   = 20;
+const TABLE_COLS  = ['w-20', 'w-28', 'w-16', 'w-24', 'w-16', 'w-16', 'w-12'];
 
 /* ─── Helpers ────────────────────────────────────────────── */
 function formatEGP(v?: number | null) {
@@ -58,29 +60,6 @@ const paymentLabels: Record<string, { label: string; cls: string }> = {
   partial:       { label: 'جزئي',       cls: 'bg-purple-50 text-purple-700' },
   bank_transfer: { label: 'تحويل بنكي', cls: 'bg-sky-50 text-sky-700' },
 };
-
-/* ─── Skeleton ───────────────────────────────────────────── */
-function TableSkeleton() {
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-      <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex gap-8">
-        {['w-20', 'w-28', 'w-16', 'w-24', 'w-16', 'w-16', 'w-12'].map((w, i) => (
-          <div key={i} className={`${w} h-3.5 bg-slate-200 animate-pulse rounded`} />
-        ))}
-      </div>
-      {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="px-4 py-3.5 border-b border-slate-100 flex gap-8 items-center last:border-0">
-          <div className="w-20 h-4 bg-slate-100 animate-pulse rounded" />
-          <div className="w-28 h-4 bg-slate-100 animate-pulse rounded" />
-          <div className="w-16 h-4 bg-slate-100 animate-pulse rounded" />
-          <div className="w-24 h-4 bg-slate-100 animate-pulse rounded" />
-          <div className="w-16 h-5 bg-slate-100 animate-pulse rounded-full" />
-          <div className="w-16 h-5 bg-slate-100 animate-pulse rounded-full" />
-        </div>
-      ))}
-    </div>
-  );
-}
 
 /* ─── Pagination ─────────────────────────────────────────── */
 const Pagination = memo(function Pagination({
@@ -513,7 +492,7 @@ export default function SalesInvoicesPage() {
           </div>
         ))}
       </div>
-      <TableSkeleton />
+      <TableSkeleton cols={TABLE_COLS} />
     </div>
   );
 

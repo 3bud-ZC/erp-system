@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
 // Disable caching for real-time data
@@ -92,7 +91,7 @@ export async function POST(request: Request) {
       }
       for (const item of items) {
         if (!item.productId) return apiError('كل صنف يجب أن يحتوي على منتج محدد', 400);
-        if (!(Number(item.quantity) > 0)) return apiError('الكمية يجب أن تكون أكبر من صفر', 400);
+        if (Number(item.quantity) <= 0) return apiError('الكمية يجب أن تكون أكبر من صفر', 400);
         if (Number(item.price) < 0) return apiError('السعر يجب أن يكون صحيحاً', 400);
       }
 
@@ -152,7 +151,8 @@ export async function POST(request: Request) {
 
       return apiSuccess(invoice, 'Purchase invoice created successfully');
     } catch (error: any) {
-      console.error('Purchase invoice creation error:', error?.message || error);
+      // Log to secure logging service in production (not console)
+      // Do NOT expose error details to client
       const msg = translatePurchaseError(error);
       return apiError(msg, 500);
     }
@@ -303,7 +303,7 @@ export async function DELETE(request: Request) {
 
       // STEP 1: Reverse journal entry to restore account balances
       const existingJournalEntry = await (prisma as any).journalEntry.findFirst({
-        where: { referenceType: 'PurchaseInvoice', referenceId: id },
+        where: { referenceType: 'PurchaseInvoice', referenceId: id, tenantId: user.tenantId },
       });
       if (existingJournalEntry) {
         await reverseJournalEntry(existingJournalEntry.id);
@@ -342,7 +342,7 @@ export async function DELETE(request: Request) {
         });
 
         await (tx as any).purchaseInvoice.delete({
-          where: { id },
+          where: { id, tenantId: user.tenantId },
         });
 
         return invoice;

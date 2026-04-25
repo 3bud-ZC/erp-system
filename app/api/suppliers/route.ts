@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
 // Disable caching for real-time data
@@ -91,6 +90,15 @@ export async function PUT(request: Request) {
 
     const body = await request.json();
     const { id, ...data } = body;
+
+    // SECURITY: Verify supplier belongs to user's tenant
+    const existingSupplier = await prisma.supplier.findFirst({
+      where: { id, tenantId: user.tenantId },
+    });
+    if (!existingSupplier) {
+      return apiError('المورد غير موجود', 404);
+    }
+
     const supplier = await prisma.supplier.update({
       where: { id },
       data,
@@ -132,9 +140,18 @@ export async function DELETE(request: Request) {
       return handleApiError(new Error('ID is required'), 'Delete supplier');
     }
 
+    // SECURITY: Verify supplier belongs to user's tenant
+    const existingSupplier = await prisma.supplier.findFirst({
+      where: { id, tenantId: user.tenantId },
+    });
+    if (!existingSupplier) {
+      return apiError('المورد غير موجود', 404);
+    }
+
+    // SECURITY: Check linked records with tenant scope
     const linkedCount =
-      (await prisma.purchaseOrder.count({ where: { supplierId: id } })) +
-      (await prisma.purchaseInvoice.count({ where: { supplierId: id } }));
+      (await prisma.purchaseOrder.count({ where: { supplierId: id, tenantId: user.tenantId } })) +
+      (await prisma.purchaseInvoice.count({ where: { supplierId: id, tenantId: user.tenantId } }));
     if (linkedCount > 0) {
       return apiError('Cannot delete supplier with existing orders or invoices', 400);
     }
