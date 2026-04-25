@@ -6,7 +6,7 @@ import { apiGet } from '@/lib/api/fetcher';
 import { queryKeys } from '@/lib/api/query-keys';
 import { Plus, Eye, Pencil, Trash2, X, AlertCircle, ChevronRight, ChevronLeft, FileText } from 'lucide-react';
 import Link from 'next/link';
-import { TableSkeleton } from '@/components/ui/patterns';
+import { TableSkeleton, Toast, useToast } from '@/components/ui/patterns';
 
 /* ─── Types ─────────────────────────────────────────────── */
 interface InvoiceItem {
@@ -464,6 +464,8 @@ export default function SalesInvoicesPage() {
   const [editInv,   setEditInv]   = useState<SalesInvoice | null>(null);
   const [deleteInv, setDeleteInv] = useState<SalesInvoice | null>(null);
 
+  const [toast, showToast] = useToast();
+
   const [filterStatus,   setFilterStatus]   = useState('');
   const [filterCustomer, setFilterCustomer] = useState('');
   const [filterFrom,     setFilterFrom]     = useState('');
@@ -551,9 +553,11 @@ export default function SalesInvoicesPage() {
   return (
     <div dir="rtl" className="space-y-4">
       {/* Modals */}
+      <Toast toast={toast} />
+
       {viewInv   && <ViewModal   inv={viewInv}   onClose={closeView} />}
-      {editInv   && <EditModal   inv={editInv}   onClose={closeEdit}   onSaved={load} />}
-      {deleteInv && <DeleteModal inv={deleteInv} onClose={closeDelete} onDeleted={load} />}
+      {editInv   && <EditModal   inv={editInv}   onClose={closeEdit}   onSaved={() => { load(); showToast('تم تحديث الفاتورة'); }} />}
+      {deleteInv && <DeleteModal inv={deleteInv} onClose={closeDelete} onDeleted={() => { load(); showToast('تم حذف الفاتورة'); }} />}
 
       {/* Header */}
       <div className="flex items-center justify-between">
