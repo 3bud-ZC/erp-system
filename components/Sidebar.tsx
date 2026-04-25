@@ -22,6 +22,8 @@ import {
   ArrowUpDown,
   BookOpen,
   Scale,
+  Wallet,
+  PieChart,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -69,17 +71,17 @@ const menuItems: MenuItem[] = [
     icon: Calculator,
     children: [
       { title: 'قيود اليومية',     icon: BookOpen,     href: '/accounting/journal-entries' },
-      { title: 'ميزان المراجعة',   icon: Scale,        href: '/accounting/trial-balance' },
     ],
   },
   {
-    title: 'التصنيع',
-    icon: Factory,
-    badge: 'قريباً',
-    children: [
-      { title: 'أوامر الإنتاج',   icon: FileText,     href: '/manufacturing/production-orders' },
-      { title: 'خطوط الإنتاج',   icon: BarChart3,    href: '/manufacturing/production-lines' },
-    ],
+    title: 'المالية',
+    icon: Wallet,
+    href: '/finance',
+  },
+  {
+    title: 'التقارير',
+    icon: PieChart,
+    href: '/reports',
   },
 ];
 

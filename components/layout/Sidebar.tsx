@@ -18,6 +18,9 @@ import {
   BarChart3,
   ArrowUpDown,
   TrendingUp,
+  Wallet,
+  PieChart,
+  BookOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -34,6 +37,16 @@ const navItems: NavItem[] = [
     icon: <LayoutDashboard className="w-5 h-5" />,
   },
   {
+    title: 'فواتير المبيعات',
+    href: '/sales/invoices',
+    icon: <TrendingUp className="w-5 h-5" />,
+  },
+  {
+    title: 'فواتير المشتريات',
+    href: '/purchases/invoices',
+    icon: <ShoppingCart className="w-5 h-5" />,
+  },
+  {
     title: 'العملاء',
     href: '/customers',
     icon: <Users className="w-5 h-5" />,
@@ -42,16 +55,6 @@ const navItems: NavItem[] = [
     title: 'الموردون',
     href: '/suppliers',
     icon: <Building2 className="w-5 h-5" />,
-  },
-  {
-    title: 'المبيعات',
-    href: '/sales/invoices',
-    icon: <ShoppingCart className="w-5 h-5" />,
-  },
-  {
-    title: 'المشتريات',
-    href: '/purchases/invoices',
-    icon: <Truck className="w-5 h-5" />,
   },
   {
     title: 'المنتجات',
@@ -69,39 +72,19 @@ const navItems: NavItem[] = [
     icon: <Warehouse className="w-5 h-5" />,
   },
   {
-    title: 'دليل الحسابات',
-    href: '/accounting/accounts',
-    icon: <Scale className="w-5 h-5" />,
-  },
-  {
     title: 'القيود المحاسبية',
     href: '/accounting/journal-entries',
-    icon: <Scale className="w-5 h-5" />,
+    icon: <BookOpen className="w-5 h-5" />,
   },
   {
-    title: 'ميزان المراجعة',
-    href: '/accounting/trial-balance',
-    icon: <BarChart3 className="w-5 h-5" />,
+    title: 'المالية',
+    href: '/finance',
+    icon: <Wallet className="w-5 h-5" />,
   },
   {
-    title: 'قائمة الدخل',
-    href: '/accounting/reports/profit-loss',
-    icon: <TrendingUp className="w-5 h-5" />,
-  },
-  {
-    title: 'الميزانية العمومية',
-    href: '/accounting/reports/balance-sheet',
-    icon: <Scale className="w-5 h-5" />,
-  },
-  {
-    title: 'تحليلات المبيعات',
-    href: '/analytics/sales',
-    icon: <BarChart3 className="w-5 h-5" />,
-  },
-  {
-    title: 'التقارير المالية',
-    href: '/analytics/financial',
-    icon: <FileText className="w-5 h-5" />,
+    title: 'التقارير',
+    href: '/reports',
+    icon: <PieChart className="w-5 h-5" />,
   },
 ];
 
