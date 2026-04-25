@@ -409,21 +409,11 @@ export async function createPurchaseInvoiceAtomic(params: {
  * ============================================================================
  */
 async function generateEntryNumber(txClient: any): Promise<string> {
-  const today = new Date();
-  const dateStr = today.toISOString().split('T')[0].replaceAll('-', '');
-  
-  // Count entries created today within this transaction
-  const count = await txClient.journalEntry.count({
-    where: {
-      entryDate: {
-        gte: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
-        lt: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1),
-      },
-    },
-  });
-
-  const sequence = String(count + 1).padStart(4, '0');
-  return `JE-${dateStr}-${sequence}`;
+  const now = new Date();
+  const dateStr = now.toISOString().split('T')[0].replaceAll('-', '');
+  const timestamp = now.getTime();
+  const random = Math.floor(Math.random() * 1000);
+  return `JE-${dateStr}-${timestamp}-${random}`;
 }
 
 /**

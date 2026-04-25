@@ -100,17 +100,11 @@ export async function seedChartOfAccounts(tenantId: string = 'default') {
  * Generate a unique journal entry number
  */
 export async function generateEntryNumber(): Promise<string> {
-  const today = new Date();
-  const dateStr = today.toISOString().split('T')[0].replace(/-/g, '');
-  const count = await prisma.journalEntry.count({
-    where: {
-      entryDate: {
-        gte: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
-        lt: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1),
-      },
-    },
-  });
-  return `JE-${dateStr}-${String(count + 1).padStart(4, '0')}`;
+  const now = new Date();
+  const dateStr = now.toISOString().split('T')[0].replace(/-/g, '');
+  const timestamp = now.getTime();
+  const random = Math.floor(Math.random() * 1000);
+  return `JE-${dateStr}-${timestamp}-${random}`;
 }
 
 /**
