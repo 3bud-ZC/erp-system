@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Plus, X, DollarSign, TrendingDown, Wallet, Settings } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Plus, X, DollarSign, TrendingDown, Wallet, AlertCircle } from 'lucide-react';
 
 interface Expense {
   id: string;
@@ -54,27 +54,8 @@ export default function FinancePage() {
         </button>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <SummaryCard
-          title="إجمالي المصروفات"
-          value="15,250 ج.م"
-          icon={<TrendingDown className="w-5 h-5" />}
-          color="red"
-        />
-        <SummaryCard
-          title="مصروفات الشهر"
-          value="3,420 ج.م"
-          icon={<DollarSign className="w-5 h-5" />}
-          color="orange"
-        />
-        <SummaryCard
-          title="الرصيد النقدي"
-          value="25,000 ج.م"
-          icon={<Wallet className="w-5 h-5" />}
-          color="green"
-        />
-      </div>
+      {/* Summary Cards — derived from real expenses */}
+      <FinanceSummary expenses={expenses} />
 
       {/* Tabs */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200">
@@ -100,13 +81,47 @@ export default function FinancePage() {
 
         <div className="p-6">
           {activeTab === 'expenses' && <ExpensesTab expenses={expenses} loading={loading} />}
-          {activeTab === 'categories' && <CategoriesTab />}
+          {activeTab === 'categories' && <CategoriesTab expenses={expenses} />}
           {activeTab === 'settings' && <SettingsTab />}
         </div>
       </div>
 
       {/* Add Expense Modal */}
       {showForm && <ExpenseForm onClose={() => setShowForm(false)} onSaved={loadExpenses} />}
+    </div>
+  );
+}
+
+function FinanceSummary({ expenses }: { expenses: Expense[] }) {
+  const { total, monthTotal } = useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear(), m = now.getMonth();
+    let total = 0, monthTotal = 0;
+    for (const e of expenses) {
+      const amt = Number(e.amount) || 0;
+      total += amt;
+      const d = e.date ? new Date(e.date) : null;
+      if (d && d.getFullYear() === y && d.getMonth() === m) monthTotal += amt;
+    }
+    return { total, monthTotal };
+  }, [expenses]);
+
+  const fmt = (v: number) => `${v.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ج.م`;
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <SummaryCard
+        title="إجمالي المصروفات"
+        value={fmt(total)}
+        icon={<TrendingDown className="w-5 h-5" />}
+        color="red"
+      />
+      <SummaryCard
+        title="مصروفات الشهر"
+        value={fmt(monthTotal)}
+        icon={<DollarSign className="w-5 h-5" />}
+        color="orange"
+      />
     </div>
   );
 }
@@ -171,34 +186,41 @@ function ExpensesTab({ expenses, loading }: { expenses: Expense[]; loading: bool
             <p className="font-medium text-slate-900">{expense.description}</p>
             <p className="text-sm text-slate-500 mt-1">{expense.category} • {expense.date}</p>
           </div>
-          <p className="text-lg font-bold text-red-600">{expense.amount.toLocaleString('ar-EG')} ج.م</p>
+          <p className="text-lg font-bold text-red-600">{(expense.amount ?? 0).toLocaleString('ar-EG')} ج.م</p>
         </div>
       ))}
     </div>
   );
 }
 
-function CategoriesTab() {
-  const categories = [
-    { id: '1', name: 'رواتب', count: 12 },
-    { id: '2', name: 'إيجار', count: 5 },
-    { id: '3', name: 'كهرباء ومياه', count: 8 },
-    { id: '4', name: 'صيانة', count: 15 },
-    { id: '5', name: 'مصروفات إدارية', count: 20 },
-  ];
+function CategoriesTab({ expenses }: { expenses: Expense[] }) {
+  const categories = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const e of expenses) {
+      const name = (e.category || '').trim();
+      if (!name) continue;
+      map.set(name, (map.get(name) ?? 0) + 1);
+    }
+    return Array.from(map.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [expenses]);
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-slate-900">تصنيفات المصروفات</h3>
-        <button className="text-sm text-blue-600 hover:text-blue-700">+ إضافة تصنيف</button>
       </div>
-      {categories.map((cat) => (
-        <div key={cat.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-          <span className="font-medium text-slate-900">{cat.name}</span>
-          <span className="text-sm text-slate-500">{cat.count} مصروف</span>
-        </div>
-      ))}
+      {categories.length === 0 ? (
+        <div className="text-center py-8 text-slate-400 text-sm">لا توجد تصنيفات بعد</div>
+      ) : (
+        categories.map((cat) => (
+          <div key={cat.name} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+            <span className="font-medium text-slate-900">{cat.name}</span>
+            <span className="text-sm text-slate-500">{cat.count} مصروف</span>
+          </div>
+        ))
+      )}
     </div>
   );
 }
@@ -229,6 +251,7 @@ function SettingsTab() {
 
 function ExpenseForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     category: '',
@@ -240,20 +263,28 @@ function ExpenseForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
+    setError(null);
     try {
       const res = await fetch('/api/expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          amount: Number(formData.amount) || 0,
+          total: Number(formData.amount) || 0,
+        }),
       });
       const json = await res.json();
       if (json.success) {
         onSaved();
         onClose();
+      } else {
+        setError(json.message || json.error || 'فشل حفظ المصروف');
       }
-    } catch (error) {
-      console.error('Failed to save expense:', error);
+    } catch (err) {
+      console.error('Failed to save expense:', err);
+      setError('تعذر الاتصال بالخادم');
     } finally {
       setSaving(false);
     }
@@ -269,6 +300,11 @@ function ExpenseForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
           </button>
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {error && (
+            <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">التاريخ</label>
             <input
