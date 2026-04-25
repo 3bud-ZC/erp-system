@@ -100,76 +100,81 @@ export class InvoicePDFGenerator {
    * Draw invoice header with company info
    */
   private drawHeader(data: InvoiceData) {
-    const { companyName, companyNameAr } = data;
+    const { companyName, companyNameAr, type } = data;
 
-    // Company name (large, bold)
+    // Company name (large, bold, centered)
     this.doc
-      .fontSize(24)
+      .fontSize(26)
       .font('Helvetica-Bold')
+      .fillColor('#1e293b')
       .text(companyNameAr || companyName, this.margin, this.currentY, {
         align: 'center',
       });
 
-    this.currentY += 30;
+    this.currentY += 35;
 
-    // Company details
+    // Company details (centered, smaller)
     if (data.companyAddress || data.companyPhone || data.companyEmail) {
-      this.doc.fontSize(9).font('Helvetica');
+      this.doc.fontSize(9).font('Helvetica').fillColor('#64748b');
       
       const details = [
         data.companyAddress,
         data.companyPhone,
         data.companyEmail,
-        data.companyTaxNumber ? `Tax No: ${data.companyTaxNumber}` : null,
-      ].filter(Boolean).join(' | ');
+        data.companyTaxNumber ? `الرقم الضريبي: ${data.companyTaxNumber}` : null,
+      ].filter(Boolean).join(' • ');
 
       this.doc.text(details, this.margin, this.currentY, {
         align: 'center',
       });
 
-      this.currentY += 20;
+      this.currentY += 25;
     }
 
-    // Horizontal line
+    // Invoice type badge (centered)
+    const invoiceType = type === 'sales' ? 'فاتورة مبيعات' : 'فاتورة مشتريات';
+    const badgeColor = type === 'sales' ? '#10b981' : '#3b82f6';
+    
     this.doc
-      .strokeColor('#2563eb')
-      .lineWidth(2)
+      .fontSize(14)
+      .font('Helvetica-Bold')
+      .fillColor(badgeColor)
+      .text(invoiceType, this.margin, this.currentY, {
+        align: 'center',
+      });
+
+    this.currentY += 25;
+
+    // Horizontal line (thicker, colored)
+    this.doc
+      .strokeColor(badgeColor)
+      .lineWidth(3)
       .moveTo(this.margin, this.currentY)
       .lineTo(this.pageWidth - this.margin, this.currentY)
       .stroke();
 
-    this.currentY += 30;
+    this.currentY += 35;
   }
 
   /**
    * Draw invoice information (number, date, type)
    */
   private drawInvoiceInfo(data: InvoiceData) {
-    const { type, invoiceNumber, date, dueDate } = data;
+    const { invoiceNumber, date, dueDate } = data;
 
-    // Invoice title
-    const title = type === 'sales' ? 'فاتورة مبيعات' : 'فاتورة مشتريات';
-    this.doc
-      .fontSize(18)
-      .font('Helvetica-Bold')
-      .fillColor('#1e293b')
-      .text(title, this.margin, this.currentY);
-
-    this.currentY += 30;
-
-    // Invoice details in two columns
+    // Invoice details in two columns with better spacing
     const leftX = this.margin;
     const rightX = this.pageWidth / 2 + 20;
 
-    this.doc.fontSize(10).font('Helvetica');
+    this.doc.fontSize(10).font('Helvetica').fillColor('#1e293b');
 
-    // Left column
+    // Left column - Invoice Number
     this.doc
       .font('Helvetica-Bold')
-      .text('Invoice Number:', leftX, this.currentY);
+      .text('رقم الفاتورة:', leftX, this.currentY);
     this.doc
       .font('Helvetica')
-      .text(invoiceNumber, leftX + 100, this.currentY);
+      .text(invoiceNumber, leftX + 80, this.currentY);
 
     // Right column
     this.doc

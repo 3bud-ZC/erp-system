@@ -278,11 +278,17 @@ const EditModal = memo(function EditModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" dir="rtl">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-fadeIn" dir="rtl">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm animate-slideUp">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
           <h2 className="font-semibold text-slate-900">تعديل الفاتورة #{inv.invoiceNumber}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
+          <button 
+            onClick={onClose} 
+            disabled={saving}
+            className="text-slate-400 hover:text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
         <form onSubmit={save} className="p-5 space-y-4">
           {err && (
@@ -317,13 +323,26 @@ const EditModal = memo(function EditModal({
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               placeholder="ملاحظات إضافية…" />
           </div>
-          <div className="flex gap-3">
-            <button type="submit" disabled={saving}
-              className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+          <div className="flex gap-3 pt-2">
+            <button 
+              type="submit" 
+              disabled={saving}
+              className="flex-1 bg-blue-600 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center gap-2"
+            >
+              {saving && (
+                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              )}
               {saving ? 'جاري الحفظ…' : 'حفظ التعديلات'}
             </button>
-            <button type="button" onClick={onClose}
-              className="flex-1 bg-slate-100 text-slate-700 rounded-lg py-2 text-sm font-medium hover:bg-slate-200">
+            <button 
+              type="button" 
+              onClick={onClose}
+              disabled={saving}
+              className="flex-1 bg-slate-100 text-slate-700 rounded-lg py-2.5 text-sm font-medium hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150"
+            >
               إلغاء
             </button>
           </div>
@@ -379,27 +398,44 @@ const DeleteModal = memo(function DeleteModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" dir="rtl">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-fadeIn" dir="rtl">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 animate-slideUp">
         <div className="flex items-start gap-3 mb-4">
           <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
             <Trash2 className="w-5 h-5 text-red-600" />
           </div>
-          <div>
+          <div className="flex-1">
             <h3 className="font-semibold text-slate-900">حذف الفاتورة #{inv.invoiceNumber}</h3>
             <p className="text-sm text-slate-500 mt-1">
               سيتم حذف هذه الفاتورة نهائياً وعكس أثرها على المخزون والمحاسبة. هذا الإجراء لا يمكن التراجع عنه.
             </p>
           </div>
         </div>
-        {err && <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{err}</p>}
+        {err && (
+          <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            {err}
+          </div>
+        )}
         <div className="flex gap-3">
-          <button onClick={confirm} disabled={deleting}
-            className="flex-1 bg-red-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-red-700 disabled:opacity-50">
+          <button 
+            onClick={confirm} 
+            disabled={deleting}
+            className="flex-1 bg-red-600 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center gap-2"
+          >
+            {deleting && (
+              <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            )}
             {deleting ? 'جاري الحذف…' : 'نعم، احذف'}
           </button>
-          <button onClick={onClose}
-            className="flex-1 bg-slate-100 text-slate-700 rounded-lg py-2 text-sm font-medium hover:bg-slate-200">
+          <button 
+            onClick={onClose}
+            disabled={deleting}
+            className="flex-1 bg-slate-100 text-slate-700 rounded-lg py-2.5 text-sm font-medium hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150"
+          >
             إلغاء
           </button>
         </div>
