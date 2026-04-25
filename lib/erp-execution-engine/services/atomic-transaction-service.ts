@@ -226,8 +226,8 @@ export async function createSalesInvoiceAtomic(params: {
     };
   }, {
     isolationLevel: 'Serializable',
-    maxWait: 5000,
-    timeout: 15000,
+    maxWait: 15000,
+    timeout: 30000,
   });
 }
 
@@ -398,8 +398,8 @@ export async function createPurchaseInvoiceAtomic(params: {
     };
   }, {
     isolationLevel: 'Serializable',
-    maxWait: 5000,
-    timeout: 15000,
+    maxWait: 15000,
+    timeout: 30000,
   });
 }
 
