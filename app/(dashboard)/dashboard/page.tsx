@@ -1,7 +1,10 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo, memo } from 'react';
+import { useMemo, memo } from 'react';
 import Link from 'next/link';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
+import { apiGet } from '@/lib/api/fetcher';
+import { queryKeys } from '@/lib/api/query-keys';
 import {
   TrendingUp, TrendingDown, ShoppingCart, Package, DollarSign,
   FileText, Users, Truck, AlertTriangle, RefreshCw, ArrowLeft,
@@ -156,45 +159,33 @@ const StatPill = memo(function StatPill({
 
 /* ─── Main Page ──────────────────────────────────────────────────────── */
 export default function DashboardPage() {
-  const [dash,          setDash]          = useState<DashboardData | null>(null);
-  const [customerCount, setCustomerCount] = useState<number | null>(null);
-  const [supplierCount, setSupplierCount] = useState<number | null>(null);
-  const [invoices,      setInvoices]      = useState<SalesInvoice[] | null>(null);
-  const [loading,       setLoading]       = useState(true);
-  const [refreshing,    setRefreshing]    = useState(false);
-  const [error,         setError]         = useState<string | null>(null);
+  const qc = useQueryClient();
 
-  const load = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else { setLoading(true); setError(null); }
+  const results = useQueries({
+    queries: [
+      { queryKey: queryKeys.dashboard,      queryFn: () => apiGet<DashboardData>('/api/dashboard'),       staleTime: 30_000 },
+      { queryKey: queryKeys.customers,      queryFn: () => apiGet<any[]>('/api/customers'),               staleTime: 60_000 },
+      { queryKey: queryKeys.suppliers,      queryFn: () => apiGet<any[]>('/api/suppliers'),               staleTime: 60_000 },
+      { queryKey: queryKeys.salesInvoices,  queryFn: () => apiGet<SalesInvoice[]>('/api/sales-invoices'), staleTime: 30_000 },
+    ],
+  });
+  const [dashQ, custQ, suppQ, salesQ] = results;
 
-    try {
-      const [dashRes, custRes, suppRes, salesRes] = await Promise.all([
-        fetch('/api/dashboard',       { credentials: 'include' }),
-        fetch('/api/customers',       { credentials: 'include' }),
-        fetch('/api/suppliers',       { credentials: 'include' }),
-        fetch('/api/sales-invoices',  { credentials: 'include' }),
-      ]);
+  const dash          = dashQ.data ?? null;
+  const customerCount = custQ.data ? custQ.data.length : null;
+  const supplierCount = suppQ.data ? suppQ.data.length : null;
+  const invoices      = salesQ.data ?? null;
 
-      const [dashJson, custJson, suppJson, salesJson] = await Promise.all([
-        dashRes.json(), custRes.json(), suppRes.json(), salesRes.json(),
-      ]);
+  const loading    = results.some(r => r.isLoading);
+  const refreshing = results.some(r => r.isFetching && !r.isLoading);
+  const error      = dashQ.error ? (dashQ.error as Error).message : null;
 
-      if (dashJson.success) setDash(dashJson.data);
-      else { setError(dashJson.message || 'فشل تحميل البيانات'); return; }
-
-      if (custJson.success)  setCustomerCount(custJson.data?.length  ?? 0);
-      if (suppJson.success)  setSupplierCount(suppJson.data?.length  ?? 0);
-      if (salesJson.success) setInvoices(salesJson.data ?? []);
-    } catch {
-      setError('تعذر الاتصال بالخادم');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
+  const load = (_isRefresh = false) => {
+    qc.invalidateQueries({ queryKey: queryKeys.dashboard });
+    qc.invalidateQueries({ queryKey: queryKeys.customers });
+    qc.invalidateQueries({ queryKey: queryKeys.suppliers });
+    qc.invalidateQueries({ queryKey: queryKeys.salesInvoices });
+  };
 
   /* derived values — memoized to avoid recomputing on unrelated re-renders */
   const unpaid     = useMemo(() => invoices?.filter(i => i.status === 'pending' || i.status === 'draft') ?? [], [invoices]);

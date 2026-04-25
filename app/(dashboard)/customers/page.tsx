@@ -1,6 +1,9 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiGet } from '@/lib/api/fetcher';
+import { queryKeys } from '@/lib/api/query-keys';
 import { Plus, X, Pencil, Trash2, FileText, AlertCircle, Search, Users } from 'lucide-react';
 import Link from 'next/link';
 import { TableSkeleton, EmptyState, ErrorBanner, Toast, useToast, PageHeader } from '@/components/ui/patterns';
@@ -37,9 +40,15 @@ function InputField({ label, required, ...props }: React.InputHTMLAttributes<HTM
 
 /* ─── Page ────────────────────────────────────────────────── */
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState<string | null>(null);
+  const qc = useQueryClient();
+  const customersQ = useQuery({
+    queryKey: queryKeys.customers,
+    queryFn: () => apiGet<Customer[]>('/api/customers'),
+    staleTime: 60_000,
+  });
+  const customers = useMemo(() => customersQ.data ?? [], [customersQ.data]);
+  const loading = customersQ.isLoading;
+  const error = customersQ.error ? (customersQ.error as Error).message : null;
   const [search, setSearch]       = useState('');
 
   // Add modal
@@ -62,15 +71,8 @@ export default function CustomersPage() {
   const [toast, showToast] = useToast();
 
   const load = useCallback(() => {
-    setLoading(true); setError(null);
-    fetch('/api/customers', { credentials: 'include' })
-      .then(r => r.json())
-      .then(j => { if (j.success) setCustomers(j.data ?? []); else setError(j.message || 'فشل التحميل'); })
-      .catch(() => setError('تعذر الاتصال بالخادم'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
+    qc.invalidateQueries({ queryKey: queryKeys.customers });
+  }, [qc]);
 
   const filtered = useMemo(() =>
     customers.filter(c =>

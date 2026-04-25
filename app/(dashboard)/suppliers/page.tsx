@@ -1,6 +1,9 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiGet } from '@/lib/api/fetcher';
+import { queryKeys } from '@/lib/api/query-keys';
 import { Plus, X, Pencil, Trash2, FileText, AlertCircle, Search, Truck } from 'lucide-react';
 import Link from 'next/link';
 import { TableSkeleton, EmptyState, ErrorBanner, Toast, useToast, PageHeader } from '@/components/ui/patterns';
@@ -36,9 +39,15 @@ function InputField({ label, required, ...props }: React.InputHTMLAttributes<HTM
 }
 
 export default function SuppliersPage() {
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState<string | null>(null);
+  const qc = useQueryClient();
+  const suppliersQ = useQuery({
+    queryKey: queryKeys.suppliers,
+    queryFn: () => apiGet<Supplier[]>('/api/suppliers'),
+    staleTime: 60_000,
+  });
+  const suppliers = useMemo(() => suppliersQ.data ?? [], [suppliersQ.data]);
+  const loading = suppliersQ.isLoading;
+  const error = suppliersQ.error ? (suppliersQ.error as Error).message : null;
   const [search, setSearch]       = useState('');
 
   const [showModal, setShowModal] = useState(false);
@@ -58,15 +67,8 @@ export default function SuppliersPage() {
   const [toast, showToast] = useToast();
 
   const load = useCallback(() => {
-    setLoading(true); setError(null);
-    fetch('/api/suppliers', { credentials: 'include' })
-      .then(r => r.json())
-      .then(j => { if (j.success) setSuppliers(j.data ?? []); else setError(j.message || 'فشل التحميل'); })
-      .catch(() => setError('تعذر الاتصال بالخادم'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
+    qc.invalidateQueries({ queryKey: queryKeys.suppliers });
+  }, [qc]);
 
   const filtered = useMemo(() =>
     suppliers.filter(s =>

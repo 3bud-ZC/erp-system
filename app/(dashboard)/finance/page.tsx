@@ -1,6 +1,9 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiGet, apiPost } from '@/lib/api/fetcher';
+import { queryKeys } from '@/lib/api/query-keys';
 import { Plus, X, DollarSign, TrendingDown, Wallet, AlertCircle } from 'lucide-react';
 
 interface Expense {
@@ -13,34 +16,19 @@ interface Expense {
 }
 
 export default function FinancePage() {
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [activeTab, setActiveTab] = useState<'expenses' | 'categories' | 'settings'>('expenses');
 
-  useEffect(() => {
-    loadExpenses();
-  }, []);
+  const expensesQ = useQuery({
+    queryKey: queryKeys.expenses,
+    queryFn: () => apiGet<Expense[]>('/api/expenses'),
+    staleTime: 30_000,
+  });
 
-  async function loadExpenses() {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const res = await fetch('/api/expenses', { credentials: 'include' });
-      const json = await res.json();
-      if (json.success) {
-        setExpenses(json.data || []);
-      } else {
-        setLoadError(json.message || json.error || 'فشل تحميل المصروفات');
-      }
-    } catch (error) {
-      console.error('Failed to load expenses:', error);
-      setLoadError('تعذر الاتصال بالخادم');
-    } finally {
-      setLoading(false);
-    }
-  }
+  const expenses = expensesQ.data ?? [];
+  const loading = expensesQ.isLoading;
+  const loadError = expensesQ.error ? (expensesQ.error as Error).message : null;
+  const loadExpenses = () => expensesQ.refetch();
 
   return (
     <div className="p-6 space-y-6" dir="rtl">
@@ -263,7 +251,7 @@ function SettingsTab() {
 }
 
 function ExpenseForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [saving, setSaving] = useState(false);
+  const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -273,34 +261,27 @@ function ExpenseForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
     paymentMethod: 'نقدي',
   });
 
-  async function handleSubmit(e: React.FormEvent) {
+  type ExpensePayload = Omit<typeof formData, 'amount'> & { amount: number; total: number };
+  const createExpense = useMutation({
+    mutationFn: (payload: ExpensePayload) =>
+      apiPost('/api/expenses', payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.expenses });
+      qc.invalidateQueries({ queryKey: queryKeys.dashboard });
+      onSaved();
+      onClose();
+    },
+    onError: (err: Error) => {
+      setError(err.message || 'تعذر الاتصال بالخادم');
+    },
+  });
+  const saving = createExpense.isPending;
+
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSaving(true);
     setError(null);
-    try {
-      const res = await fetch('/api/expenses', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          ...formData,
-          amount: Number(formData.amount) || 0,
-          total: Number(formData.amount) || 0,
-        }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        onSaved();
-        onClose();
-      } else {
-        setError(json.message || json.error || 'فشل حفظ المصروف');
-      }
-    } catch (err) {
-      console.error('Failed to save expense:', err);
-      setError('تعذر الاتصال بالخادم');
-    } finally {
-      setSaving(false);
-    }
+    const amt = Number(formData.amount) || 0;
+    createExpense.mutate({ ...formData, amount: amt, total: amt });
   }
 
   return (

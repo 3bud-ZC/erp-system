@@ -1,6 +1,9 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback, memo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { apiGet } from '@/lib/api/fetcher';
+import { queryKeys } from '@/lib/api/query-keys';
 import { Plus, Eye, Pencil, Trash2, X, AlertCircle, ChevronRight, ChevronLeft, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { TableSkeleton } from '@/components/ui/patterns';
@@ -499,10 +502,17 @@ const InvoiceRow = memo(function InvoiceRow({
 
 /* ─── Main Page ──────────────────────────────────────────── */
 export default function SalesInvoicesPage() {
-  const [invoices, setInvoices] = useState<SalesInvoice[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState<string | null>(null);
-  const [page,     setPage]     = useState(1);
+  const invoicesQ = useQuery({
+    queryKey: queryKeys.salesInvoices,
+    queryFn: () => apiGet<SalesInvoice[]>('/api/sales-invoices'),
+    staleTime: 30_000,
+  });
+  const invoices = useMemo(() => invoicesQ.data ?? [], [invoicesQ.data]);
+  const loading = invoicesQ.isLoading;
+  const error = invoicesQ.error ? (invoicesQ.error as Error).message : null;
+  const load = useCallback(() => { invoicesQ.refetch(); }, [invoicesQ]);
+
+  const [page, setPage] = useState(1);
 
   const [viewInv,   setViewInv]   = useState<SalesInvoice | null>(null);
   const [editInv,   setEditInv]   = useState<SalesInvoice | null>(null);
@@ -519,21 +529,6 @@ export default function SalesInvoicesPage() {
     const c = p.get('customer');
     if (c) setFilterCustomer(c);
   }, []);
-
-  /* Stable fetch function */
-  const load = useCallback(() => {
-    setLoading(true);
-    fetch('/api/sales-invoices', { credentials: 'include' })
-      .then(r => r.json())
-      .then(j => {
-        if (j.success) setInvoices(j.data ?? []);
-        else setError(j.message || 'فشل تحميل الفواتير');
-      })
-      .catch(() => setError('تعذر الاتصال بالخادم'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
 
   /* Reset to page 1 whenever filters change */
   useEffect(() => { setPage(1); }, [filterStatus, filterCustomer, filterFrom, filterTo]);

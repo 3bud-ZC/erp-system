@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
+import { QueryProvider } from './QueryProvider';
 
 // ---------- Theme ----------
 type Theme = 'light' | 'dark';
@@ -72,11 +73,13 @@ export function AppProviders({ children }: { children: ReactNode }) {
   };
 
   return (
-    <ThemeContext.Provider value={themeCtx}>
-      <AppContext.Provider value={{ user, tenant, loading, refresh }}>
-        {children}
-      </AppContext.Provider>
-    </ThemeContext.Provider>
+    <QueryProvider>
+      <ThemeContext.Provider value={themeCtx}>
+        <AppContext.Provider value={{ user, tenant, loading, refresh }}>
+          {children}
+        </AppContext.Provider>
+      </ThemeContext.Provider>
+    </QueryProvider>
   );
 }
 

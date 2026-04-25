@@ -1,6 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
+import { apiGet } from '@/lib/api/fetcher';
+import { queryKeys } from '@/lib/api/query-keys';
 import { FileText, TrendingUp, TrendingDown, Package, DollarSign, Users, ShoppingCart, AlertCircle } from 'lucide-react';
 
 interface ReportData {
@@ -18,55 +21,44 @@ interface ReportData {
 }
 
 export default function ReportsPage() {
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<ReportData | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<'financial' | 'sales' | 'purchases' | 'inventory'>('financial');
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const results = useQueries({
+    queries: [
+      { queryKey: queryKeys.dashboard, queryFn: () => apiGet<any>('/api/dashboard'), staleTime: 30_000 },
+      { queryKey: queryKeys.customers, queryFn: () => apiGet<any[]>('/api/customers'), staleTime: 60_000 },
+      { queryKey: queryKeys.suppliers, queryFn: () => apiGet<any[]>('/api/suppliers'), staleTime: 60_000 },
+    ],
+  });
+  const [dashQ, custQ, suppQ] = results;
 
-  async function loadData() {
-    setLoading(true);
-    setError(null);
-    try {
-      const [dashRes, custRes, suppRes] = await Promise.all([
-        fetch('/api/dashboard', { credentials: 'include' }),
-        fetch('/api/customers', { credentials: 'include' }),
-        fetch('/api/suppliers', { credentials: 'include' }),
-      ]);
+  const loading = results.some(r => r.isLoading);
+  const error = dashQ.error ? (dashQ.error as Error).message : null;
 
-      const [dashJson, custJson, suppJson] = await Promise.all([
-        dashRes.json(), custRes.json(), suppRes.json(),
-      ]);
+  const data: ReportData | null = useMemo(() => {
+    const d = dashQ.data;
+    if (!d) return null;
+    return {
+      totalSales: Number(d.totalSales ?? 0),
+      totalPurchases: Number(d.totalPurchases ?? 0),
+      totalExpenses: Number(d.totalExpenses ?? 0),
+      totalProducts: Number(d.totalProducts ?? 0),
+      totalCustomers: custQ.data?.length ?? 0,
+      totalSuppliers: suppQ.data?.length ?? 0,
+      lowStockCount: Number(d.lowStockProducts ?? 0),
+      salesGrowth: Number(d.salesTrend ?? 0),
+      purchaseGrowth: Number(d.purchasesTrend ?? 0),
+      grossProfit: Number(d.grossProfit ?? 0),
+      netProfit: Number(d.netProfit ?? 0),
+    };
+  }, [dashQ.data, custQ.data, suppQ.data]);
 
-      if (!dashJson.success) {
-        setError(dashJson.message || 'فشل تحميل البيانات');
-        return;
-      }
-
-      const d = dashJson.data || {};
-      setData({
-        totalSales: Number(d.totalSales ?? 0),
-        totalPurchases: Number(d.totalPurchases ?? 0),
-        totalExpenses: Number(d.totalExpenses ?? 0),
-        totalProducts: Number(d.totalProducts ?? 0),
-        totalCustomers: custJson.success ? (custJson.data?.length ?? 0) : 0,
-        totalSuppliers: suppJson.success ? (suppJson.data?.length ?? 0) : 0,
-        lowStockCount: Number(d.lowStockProducts ?? 0),
-        salesGrowth: Number(d.salesTrend ?? 0),
-        purchaseGrowth: Number(d.purchasesTrend ?? 0),
-        grossProfit: Number(d.grossProfit ?? 0),
-        netProfit: Number(d.netProfit ?? 0),
-      });
-    } catch (err) {
-      console.error('Failed to load reports:', err);
-      setError('تعذر الاتصال بالخادم');
-    } finally {
-      setLoading(false);
-    }
-  }
+  const loadData = () => {
+    qc.invalidateQueries({ queryKey: queryKeys.dashboard });
+    qc.invalidateQueries({ queryKey: queryKeys.customers });
+    qc.invalidateQueries({ queryKey: queryKeys.suppliers });
+  };
 
   if (loading) {
     return (
