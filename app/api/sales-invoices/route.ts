@@ -274,31 +274,74 @@ export async function POST(request: Request) {
 // PUT - Update sales invoice (requires update_sales_invoice permission)
 export async function PUT(request: Request) {
   try {
+    console.log("=== START SALES INVOICE UPDATE ===");
+    
     const user = await getAuthenticatedUser(request);
     if (!user) {
+      console.error("ERROR: User not authenticated");
       return apiError('لم يتم المصادقة', 401);
     }
 
     if (!checkPermission(user, 'update_sales_invoice')) {
+      console.error("ERROR: User lacks permission");
       return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
 
     const body = await request.json();
-      const { id, items, ...invoiceData } = body;
+    const { id, items, ...invoiceData } = body;
+    
+    console.log("REQUEST DATA:", {
+      invoiceId: id,
+      tenantId: user.tenantId,
+      itemCount: items?.length,
+      body: JSON.stringify(body).substring(0, 200)
+    });
 
-      if (!user.tenantId) return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    if (!id) {
+      console.error("ERROR: Invoice ID missing");
+      throw new Error("Invoice ID missing");
+    }
+
+    if (!items || items.length === 0) {
+      console.error("ERROR: Items array empty");
+      throw new Error("Items cannot be empty");
+    }
+
+    for (const item of items) {
+      if (!item.quantity || item.quantity <= 0) {
+        console.error("ERROR: Invalid quantity", item);
+        throw new Error("Quantity must be greater than 0");
+      }
+      if (item.price < 0) {
+        console.error("ERROR: Invalid price", item);
+        throw new Error("Price cannot be negative");
+      }
+    }
+
+    if (!user.tenantId) {
+      console.error("ERROR: Tenant ID missing");
+      return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    }
 
       // STEP 1: Fetch existing invoice (scoped to tenant)
+      console.log("STEP 1: Fetching existing invoice...");
       const existingInvoice = await prisma.salesInvoice.findFirst({
         where: { id, tenantId: user.tenantId },
         include: { items: true },
       });
 
       if (!existingInvoice) {
-        return apiError('الفاتورة غير موجودة', 404);
+        console.error("ERROR: Invoice not found or unauthorized");
+        throw new Error("Invoice not found or unauthorized");
       }
+      
+      console.log("STEP 1 SUCCESS: Invoice found", {
+        invoiceId: existingInvoice.id,
+        oldItemCount: existingInvoice.items.length
+      });
 
       // STEP 2: Calculate net stock effect by comparing old vs new items
+      console.log("STEP 2: Calculating stock deltas...");
       const oldItemMap = new Map(existingInvoice.items.map((i: any) => [i.productId, i.quantity]));
       const newItemMap = new Map(items.map((i: any) => [i.productId, i.quantity]));
 
@@ -313,8 +356,11 @@ export async function PUT(request: Request) {
           stockDeltas.push({ productId, delta });
         }
       }
+      
+      console.log("STEP 2 SUCCESS: Stock deltas calculated", { deltaCount: stockDeltas.length });
 
       // STEP 3: Validate stock for any increases in quantity
+      console.log("STEP 3: Validating stock availability...");
       const itemsNeedingValidation = stockDeltas
         .filter((d) => d.delta > 0)
         .map((d) => ({ productId: d.productId, quantity: d.delta }));
@@ -322,6 +368,7 @@ export async function PUT(request: Request) {
       if (itemsNeedingValidation.length > 0) {
         const updateValidation = await validateStockAvailability(itemsNeedingValidation);
         if (!updateValidation.valid) {
+          console.error("ERROR: Stock validation failed", updateValidation.errors);
           return apiError(
             'رصيد المخزون غير كافٍ للكميات المحدّثة',
             400,
@@ -329,28 +376,36 @@ export async function PUT(request: Request) {
           );
         }
       }
+      
+      console.log("STEP 3 SUCCESS: Stock validation passed");
 
       // STEP 3b: Reverse existing journal entry (prevents stale accounting records)
+      console.log("STEP 3b: Reversing journal entry...");
       const existingJournalEntry = await prisma.journalEntry.findFirst({
         where: { referenceType: 'SalesInvoice', referenceId: id },
       });
       if (existingJournalEntry) {
         await reverseJournalEntry(existingJournalEntry.id);
+        console.log("STEP 3b SUCCESS: Journal entry reversed");
+      } else {
+        console.log("STEP 3b SKIP: No journal entry to reverse");
       }
 
       // STEP 4: Execute update atomically with stock delta adjustments
+      console.log("STEP 4: Starting transaction...");
       const invoice = await (prisma as any).$transaction(async (tx: any) => {
-        console.log('[SALES UPDATE - DELETE ITEMS]', { invoiceId: id });
+        console.log('STEP 4a: Deleting old items...');
         try {
           await tx.salesInvoiceItem.deleteMany({
             where: { salesInvoiceId: id },
           });
-          console.log('[SALES UPDATE - DELETE ITEMS SUCCESS]');
+          console.log('STEP 4a SUCCESS: Old items deleted');
         } catch (e: any) {
-          console.error('[SALES UPDATE - DELETE ITEMS ERROR]', e.message);
+          console.error('STEP 4a ERROR: Failed to delete items', e.message);
           throw e;
         }
 
+        console.log('STEP 4b: Updating invoice with new items...');
         const updatedInvoice = await tx.salesInvoice.update({
           where: { id },
           data: {
@@ -363,8 +418,10 @@ export async function PUT(request: Request) {
             items: true,
           },
         });
+        console.log('STEP 4b SUCCESS: Invoice updated with new items');
 
         // Apply net stock delta adjustments for changed quantities
+        console.log('STEP 4c: Applying stock adjustments...', { deltaCount: stockDeltas.length });
         for (const delta of stockDeltas) {
           await tx.product.update({
             where: { id: delta.productId },
@@ -378,16 +435,29 @@ export async function PUT(request: Request) {
             id,
             'Sales invoice updated — stock quantity adjusted'
           );
+          
+          const product = await tx.product.findUnique({ where: { id: delta.productId } });
+          if (product && product.stock < 0) {
+            console.error('CRITICAL: NEGATIVE STOCK DETECTED', { productId: delta.productId, stock: product.stock });
+            throw new Error(`NEGATIVE STOCK DETECTED for product ${delta.productId}`);
+          }
         }
+        console.log('STEP 4c SUCCESS: Stock adjustments applied');
 
         return updatedInvoice;
       });
+      
+      console.log('STEP 4 SUCCESS: Transaction completed');
 
       // STEP 5: Create and post new journal entry with updated total
+      console.log('STEP 5: Creating journal entry...');
       const newTotal = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
       const newJournalEntry = await createSalesInvoiceEntry(invoice.id, newTotal, user.tenantId);
       if (newJournalEntry) {
         await postJournalEntry(newJournalEntry.id);
+        console.log('STEP 5 SUCCESS: Journal entry created and posted');
+      } else {
+        console.log('STEP 5 SKIP: Journal entry creation skipped');
       }
 
       // Log audit action
@@ -402,6 +472,8 @@ export async function PUT(request: Request) {
         request.headers.get('user-agent') || undefined
       );
 
+      console.log("=== END SUCCESS: Sales invoice updated ===", { invoiceId: invoice.id });
+      
       // Log activity for audit trail
       await logActivity({
         entity: 'SalesInvoice',
@@ -421,42 +493,59 @@ export async function PUT(request: Request) {
 // DELETE - Delete sales invoice (requires delete_sales_invoice permission)
 export async function DELETE(request: Request) {
   try {
+    console.log("=== START SALES INVOICE DELETE ===");
+    
     const user = await getAuthenticatedUser(request);
     if (!user) {
+      console.error("ERROR: User not authenticated");
       return apiError('لم يتم المصادقة', 401);
     }
 
     if (!checkPermission(user, 'delete_sales_invoice')) {
+      console.error("ERROR: User lacks permission");
       return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
 
     const { searchParams } = new URL(request.url);
-      const id = searchParams.get('id');
-      
-      if (!id) {
-        return apiError('معرف الفاتورة مطلوب', 400);
-      }
+    const id = searchParams.get('id');
+    
+    console.log("REQUEST DATA:", { invoiceId: id, tenantId: user.tenantId });
+    
+    if (!id) {
+      console.error("ERROR: Invoice ID missing");
+      throw new Error("Invoice ID missing");
+    }
 
-      // STEP 1: Reverse journal entry to restore account balances
+    // STEP 1: Reverse journal entry to restore account balances
+    console.log("STEP 1: Reversing journal entry...");
       const existingJournalEntry = await prisma.journalEntry.findFirst({
         where: { referenceType: 'SalesInvoice', referenceId: id, tenantId: user.tenantId },
       });
       if (existingJournalEntry) {
         await reverseJournalEntry(existingJournalEntry.id);
+        console.log("STEP 1 SUCCESS: Journal entry reversed");
+      } else {
+        console.log("STEP 1 SKIP: No journal entry to reverse");
       }
 
       // STEP 2: Delete invoice and reverse stock in transaction
+      console.log("STEP 2: Starting transaction...");
       const deletedInvoice = await prisma.$transaction(async (tx) => {
+        console.log("STEP 2a: Fetching invoice...");
         const invoice = await tx.salesInvoice.findFirst({
           where: { id, tenantId: user.tenantId },
           include: { items: true },
         });
 
         if (!invoice) {
-          throw new Error('الفاتورة غير موجودة');
+          console.error("ERROR: Invoice not found or unauthorized");
+          throw new Error('Invoice not found or unauthorized');
         }
+        
+        console.log("STEP 2a SUCCESS: Invoice found", { itemCount: invoice.items.length });
 
         // Reverse stock: return the quantities that were deducted by this invoice
+        console.log("STEP 2b: Restoring stock...");
         for (const item of invoice.items) {
           await tx.product.update({
             where: { id: item.productId },
@@ -471,25 +560,30 @@ export async function DELETE(request: Request) {
             'Deleted sales invoice — stock restored'
           );
         }
+        console.log("STEP 2b SUCCESS: Stock restored");
 
         // Delete items first to avoid foreign key constraints
-        console.log('[SALES DELETE - DELETE ITEMS]', { invoiceId: id });
+        console.log('STEP 2c: Deleting items...');
         try {
           await tx.salesInvoiceItem.deleteMany({
             where: { salesInvoiceId: id },
           });
-          console.log('[SALES DELETE - DELETE ITEMS SUCCESS]');
+          console.log('STEP 2c SUCCESS: Items deleted');
         } catch (e: any) {
-          console.error('[SALES DELETE - DELETE ITEMS ERROR]', e.message);
+          console.error('STEP 2c ERROR: Failed to delete items', e.message);
           throw e;
         }
 
+        console.log('STEP 2d: Deleting invoice...');
         await tx.salesInvoice.delete({
           where: { id, tenantId: user.tenantId },
         });
+        console.log('STEP 2d SUCCESS: Invoice deleted');
 
         return invoice;
       });
+      
+      console.log("STEP 2 SUCCESS: Transaction completed");
 
       // Log audit action
       await logAuditAction(
@@ -502,6 +596,8 @@ export async function DELETE(request: Request) {
         request.headers.get('x-forwarded-for') || undefined,
         request.headers.get('user-agent') || undefined
       );
+
+      console.log("=== END SUCCESS: Sales invoice deleted ===", { invoiceId: id });
 
       // Log activity for audit trail
       await logActivity({
