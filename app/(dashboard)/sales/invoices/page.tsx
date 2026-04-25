@@ -156,7 +156,7 @@ const ViewModal = memo(function ViewModal({ inv, onClose }: { inv: SalesInvoice;
                     {inv.items.map((item, i) => (
                       <tr key={item.id ?? i}>
                         <td className="px-3 py-2 text-slate-800">{item.product?.nameAr ?? '—'}</td>
-                        <td className="px-3 py-2 text-slate-600 tabular-nums">{item.quantity.toLocaleString('ar-EG')}</td>
+                        <td className="px-3 py-2 text-slate-600 tabular-nums">{(item.quantity ?? 0).toLocaleString('ar-EG')}</td>
                         <td className="px-3 py-2 text-slate-600 tabular-nums">{formatEGP(item.price)}</td>
                         <td className="px-3 py-2 font-medium text-slate-800 tabular-nums">{formatEGP(item.total)}</td>
                       </tr>

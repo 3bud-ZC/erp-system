@@ -464,7 +464,7 @@ export default function PurchaseInvoiceDetailPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-700 tabular-nums">
-                        {item.quantity.toLocaleString('ar-EG')}
+                        {(item.quantity ?? 0).toLocaleString('ar-EG')}
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-700 tabular-nums">
                         {formatEGP(item.price)}

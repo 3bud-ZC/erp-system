@@ -3,6 +3,40 @@
  * All text in Arabic with proper RTL support
  */
 
+/* ─── Safe Wrappers (data normalization layer) ───────────────────────
+ * Use these in UI when API field may be undefined/null/non-finite.
+ * They never throw and never fabricate values — fall back to neutral defaults.
+ */
+
+/** Coerce any input to a finite number; returns fallback (default 0) otherwise. */
+export function safeNumber(value: unknown, fallback: number = 0): number {
+  if (value === null || value === undefined || value === '') return fallback;
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+/** Coerce any input to a trimmed string; returns fallback (default '') otherwise. */
+export function safeString(value: unknown, fallback: string = ''): string {
+  if (value === null || value === undefined) return fallback;
+  return String(value).trim() || fallback;
+}
+
+/** Coerce any input to a valid Date; returns null if invalid. */
+export function safeDate(value: unknown): Date | null {
+  if (!value) return null;
+  const d = value instanceof Date ? value : new Date(value as any);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** Crash-safe locale number formatter. Use instead of v.toLocaleString() on possibly-undefined values. */
+export function safeNumberFormat(
+  value: unknown,
+  options?: Intl.NumberFormatOptions,
+  locale: string = 'ar-EG'
+): string {
+  return safeNumber(value).toLocaleString(locale, options);
+}
+
 /**
  * Format currency in Egyptian Pounds (ج.م)
  * @param amount The amount to format

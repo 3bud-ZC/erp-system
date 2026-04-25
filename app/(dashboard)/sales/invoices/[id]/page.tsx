@@ -275,7 +275,7 @@ function PaymentsPanel({
             <div key={p.id} className="flex items-center justify-between py-2.5 group">
               <div>
                 <p className="text-sm font-medium text-slate-800">
-                  {p.amount.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                  {(p.amount ?? 0).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
                 </p>
                 <p className="text-xs text-slate-400">
                   {new Date(p.date).toLocaleDateString('ar-EG')}
@@ -487,7 +487,7 @@ export default function SalesInvoiceDetailPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-700 tabular-nums">
-                        {item.quantity.toLocaleString('ar-EG')}
+                        {(item.quantity ?? 0).toLocaleString('ar-EG')}
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-700 tabular-nums">
                         {formatEGP(item.price)}

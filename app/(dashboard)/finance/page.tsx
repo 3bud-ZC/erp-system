@@ -15,6 +15,7 @@ interface Expense {
 export default function FinancePage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [activeTab, setActiveTab] = useState<'expenses' | 'categories' | 'settings'>('expenses');
 
@@ -24,14 +25,18 @@ export default function FinancePage() {
 
   async function loadExpenses() {
     setLoading(true);
+    setLoadError(null);
     try {
       const res = await fetch('/api/expenses', { credentials: 'include' });
       const json = await res.json();
       if (json.success) {
         setExpenses(json.data || []);
+      } else {
+        setLoadError(json.message || json.error || 'فشل تحميل المصروفات');
       }
     } catch (error) {
       console.error('Failed to load expenses:', error);
+      setLoadError('تعذر الاتصال بالخادم');
     } finally {
       setLoading(false);
     }
@@ -53,6 +58,14 @@ export default function FinancePage() {
           مصروف جديد
         </button>
       </div>
+
+      {loadError && (
+        <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span>{loadError}</span>
+          <button onClick={loadExpenses} className="mr-auto text-blue-600 hover:underline text-xs font-medium">إعادة المحاولة</button>
+        </div>
+      )}
 
       {/* Summary Cards — derived from real expenses */}
       <FinanceSummary expenses={expenses} />
