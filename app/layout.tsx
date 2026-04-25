@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { AppProviders } from "@/components/providers/AppProviders";
 
 export const metadata: Metadata = {
   title: "نظام ERP - مصنع البلاستيك",
@@ -14,7 +15,7 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl">
       <body className="font-cairo antialiased">
-        {children}
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );
