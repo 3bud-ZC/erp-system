@@ -8,6 +8,7 @@ const codeCounters: Record<string, number> = {};
 
 /**
  * Generate auto code based on entity type and prefix
+ * FORMAT: PREFIX-TIMESTAMP-RANDOM (guaranteed unique)
  */
 export function generateAutoCode(
   entityType: string,
@@ -20,26 +21,23 @@ export function generateAutoCode(
     'customer': 'CUST',
     'supplier': 'SUP',
     'sales_order': 'SO',
-    'sales_invoice': 'INV',
+    'sales_invoice': 'SI',
     'purchase_order': 'PO',
     'purchase_invoice': 'PI',
   };
 
   const prefix = prefixes[entityType] || 'CODE';
   
-  // Get current year for the code
-  const year = new Date().getFullYear().toString().slice(-2);
+  // Generate unique code: PREFIX-TIMESTAMP-RANDOM
+  const timestamp = Date.now().toString().slice(-6); // Last 6 digits of timestamp
+  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+  const code = `${prefix}-${timestamp}-${random}`;
   
-  // Find the next available number
-  let counter = 1;
-  let code = '';
-  
-  do {
-    // Generate code format: PREFIX-YY-XXXX (e.g., PROD-24-0001)
-    const paddedNumber = counter.toString().padStart(4, '0');
-    code = `${prefix}-${year}-${paddedNumber}`;
-    counter++;
-  } while (existingCodes.includes(code));
+  // Ensure uniqueness (very unlikely to collide, but check anyway)
+  if (existingCodes.includes(code)) {
+    // Recursively generate new code if collision (extremely rare)
+    return generateAutoCode(entityType, existingCodes);
+  }
   
   return code;
 }
