@@ -6,6 +6,7 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 import { validateStockAvailability } from '@/lib/inventory';
 import { createSalesInvoiceEntry, postJournalEntry, reverseJournalEntry } from '@/lib/accounting';
+import { dualRunCompare, dualRunCompareById } from '@/lib/domain/accounting/dual-run';
 import { createInventoryTransaction } from '@/lib/inventory-transactions';
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
@@ -198,6 +199,8 @@ export async function POST(request: Request) {
       });
       invoice = result.invoice;
       console.log(`${requestId} ✓ Invoice created: ${invoice.id}`);
+      // Phase 1 dual-run: validate atomic-service journal entry against new domain engine
+      await dualRunCompareById('SalesInvoice:POST', (result as any)?.journalEntry?.id);
     } catch (txnErr: any) {
       console.error(`${requestId} ✗ Invoice creation transaction failed:`, txnErr);
       const txnMsg = translateSalesError(txnErr);
@@ -438,6 +441,8 @@ export async function PUT(request: Request) {
       const newJournalEntry = await createSalesInvoiceEntry(invoice.id, newTotal, user.tenantId);
       if (newJournalEntry) {
         await postJournalEntry(newJournalEntry.id);
+        // Phase 1 dual-run: validate against new domain engine (no behavior change)
+        await dualRunCompare('SalesInvoice:PUT', newJournalEntry);
         console.log('STEP 5 SUCCESS: Journal entry created and posted');
       } else {
         console.log('STEP 5 SKIP: Journal entry creation skipped');

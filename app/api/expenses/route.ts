@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 import { createExpenseEntry, postJournalEntry, reverseJournalEntry } from '@/lib/accounting';
+import { dualRunCompare } from '@/lib/domain/accounting/dual-run';
 import { expenseRepo } from '@/lib/repositories/expense.repo';
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
@@ -68,6 +69,8 @@ export async function POST(request: Request) {
       const journalEntry = await createExpenseEntry(expense.id, expense.amount, expenseType || 'other');
       if (journalEntry) {
         await postJournalEntry(journalEntry.id);
+        // Phase 1 dual-run: validate against new domain engine (no behavior change)
+        await dualRunCompare('Expense:POST', journalEntry);
       }
 
       await logAuditAction(
@@ -148,6 +151,8 @@ export async function PUT(request: Request) {
       const journalEntry = await createExpenseEntry(expense.id, expense.amount, expenseType || 'other');
       if (journalEntry) {
         await postJournalEntry(journalEntry.id);
+        // Phase 1 dual-run: validate against new domain engine (no behavior change)
+        await dualRunCompare('Expense:PUT', journalEntry);
       }
 
       await logAuditAction(

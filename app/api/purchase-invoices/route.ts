@@ -6,6 +6,7 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 import { incrementStockWithTransaction, createInventoryTransaction } from '@/lib/inventory-transactions';
 import { createPurchaseInvoiceEntry, postJournalEntry, reverseJournalEntry } from '@/lib/accounting';
+import { dualRunCompare } from '@/lib/domain/accounting/dual-run';
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
 import { logActivity } from '@/lib/activity-log';
@@ -106,6 +107,8 @@ export async function POST(request: Request) {
         const journalEntry = await createPurchaseInvoiceEntry(newInvoice.id, total, user.tenantId);
         if (journalEntry) {
           await postJournalEntry(journalEntry.id);
+          // Phase 1 dual-run: validate against new domain engine (no behavior change)
+          await dualRunCompare('PurchaseInvoice:POST', journalEntry);
         }
 
         return newInvoice;
@@ -242,6 +245,8 @@ export async function PUT(request: Request) {
       const newJournalEntry = await createPurchaseInvoiceEntry(invoice.id, newTotal, user.tenantId);
       if (newJournalEntry) {
         await postJournalEntry(newJournalEntry.id);
+        // Phase 1 dual-run: validate against new domain engine (no behavior change)
+        await dualRunCompare('PurchaseInvoice:PUT', newJournalEntry);
       }
 
       // Log audit action

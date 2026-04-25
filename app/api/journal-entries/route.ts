@@ -8,6 +8,7 @@ export const revalidate = 0;
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { getAuthenticatedUser, checkPermission, logAuditAction } from '@/lib/auth';
 import { createJournalEntry, postJournalEntry, reverseJournalEntry } from '@/lib/accounting';
+import { dualRunCompare } from '@/lib/domain/accounting/dual-run';
 
 // GET - Read journal entries
 export async function GET(request: Request) {
@@ -105,6 +106,9 @@ export async function POST(request: Request) {
     if (autoPost) {
       await postJournalEntry(journalEntry.id, user.id);
     }
+
+    // Phase 1 dual-run: validate against new domain engine (no behavior change)
+    await dualRunCompare('JournalEntry:POST', journalEntry);
 
     const result = await prisma.journalEntry.findUnique({
       where: { id: journalEntry.id },
