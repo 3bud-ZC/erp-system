@@ -298,15 +298,32 @@ export default function PurchaseInvoiceDetailPage() {
   useEffect(() => { if (id) { setLoading(true); loadInv(); } }, [id]);
 
   if (loading) return (
-    <div className="flex items-center justify-center h-64" dir="rtl">
-      <div className="text-slate-500 text-sm">جاري تحميل الفاتورة…</div>
+    <div dir="rtl" className="animate-pulse space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 bg-slate-200 rounded-lg" />
+        <div className="space-y-2">
+          <div className="h-7 w-48 bg-slate-200 rounded" />
+          <div className="h-3 w-32 bg-slate-100 rounded" />
+        </div>
+      </div>
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="space-y-1.5"><div className="h-3 w-20 bg-slate-200 rounded" /><div className="h-4 w-32 bg-slate-100 rounded" /></div>
+          ))}
+        </div>
+      </div>
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 h-48" />
     </div>
   );
 
   if (error || !inv) return (
-    <div className="flex flex-col items-center justify-center h-64 gap-4" dir="rtl">
-      <p className="text-red-500 text-sm">{error || 'الفاتورة غير موجودة'}</p>
-      <Link href="/purchases/invoices" className="text-blue-600 text-sm hover:underline">
+    <div dir="rtl" className="bg-white rounded-xl shadow-sm border border-slate-100 p-16 text-center">
+      <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+        <AlertCircle className="w-6 h-6 text-red-500" />
+      </div>
+      <p className="text-red-600 font-medium">{error || 'الفاتورة غير موجودة'}</p>
+      <Link href="/purchases/invoices" className="inline-block mt-4 text-sm text-blue-600 hover:underline">
         العودة للفواتير
       </Link>
     </div>

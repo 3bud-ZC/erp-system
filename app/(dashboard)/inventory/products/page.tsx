@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { Plus, AlertTriangle, X, Pencil, Trash2, Search, Package, CheckCircle, AlertCircle } from 'lucide-react';
+import { Plus, AlertTriangle, X, Pencil, Trash2, Search, Package, CheckCircle } from 'lucide-react';
+import { TableSkeleton, EmptyState, ErrorBanner, Toast, useToast, PageHeader } from '@/components/ui/patterns';
 
 interface Product {
   id: string;
@@ -42,34 +43,7 @@ const typeTabs = [
 
 const emptyForm = { code: '', nameAr: '', nameEn: '', type: 'finished_product', unit: 'قطعة', price: '', cost: '', stock: '0', minStock: '' };
 
-/* ─── Skeleton ────────────────────────────────────────────── */
-function TableSkeleton() {
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden animate-pulse">
-      <div className="bg-slate-50 border-b border-slate-200 px-5 py-3 flex gap-6">
-        {['w-16', 'w-32', 'w-20', 'w-16', 'w-16', 'w-24', 'w-24', 'w-16', 'w-16'].map((w, i) => (
-          <div key={i} className={`${w} h-3.5 bg-slate-200 rounded`} />
-        ))}
-      </div>
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="px-5 py-3.5 border-b border-slate-100 flex gap-6 items-center last:border-0">
-          <div className="w-16 h-4 bg-slate-100 rounded" />
-          <div className="w-32 h-4 bg-slate-100 rounded" />
-          <div className="w-20 h-5 bg-slate-100 rounded-full" />
-          <div className="w-16 h-4 bg-slate-100 rounded" />
-          <div className="w-16 h-4 bg-slate-100 rounded" />
-          <div className="w-24 h-4 bg-slate-100 rounded" />
-          <div className="w-24 h-4 bg-slate-100 rounded" />
-          <div className="w-16 h-5 bg-slate-100 rounded-full" />
-          <div className="flex gap-1.5 mr-auto">
-            <div className="w-7 h-7 bg-slate-100 rounded-lg" />
-            <div className="w-7 h-7 bg-slate-100 rounded-lg" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
+const TABLE_COLS = ['w-16', 'w-32', 'w-20', 'w-16', 'w-16', 'w-24', 'w-24', 'w-16', 'w-20'];
 
 export default function ProductsPage() {
   const [products, setProducts]   = useState<Product[]>([]);
@@ -92,11 +66,7 @@ export default function ProductsPage() {
   const [deleting, setDeleting]   = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
-  const showToast = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
-  }, []);
+  const [toast, showToast] = useToast();
 
   const load = useCallback((type = activeType) => {
     setLoading(true); setError(null);
@@ -238,31 +208,27 @@ export default function ProductsPage() {
 
   return (
     <div dir="rtl">
-      {toast && (
-        <div className={`fixed top-5 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-2 px-5 py-3 rounded-xl shadow-xl text-white text-sm font-medium
-          ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
-          {toast.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-          {toast.msg}
-        </div>
-      )}
+      <Toast toast={toast} />
 
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">المنتجات والمخزون</h1>
-          <p className="text-sm text-slate-500 mt-0.5 flex items-center gap-2">
+      <PageHeader
+        title="المنتجات والمخزون"
+        subtitle={
+          <span className="flex items-center gap-2">
             {loading ? 'جاري التحميل…' : `${products.length} منتج`}
             {!loading && lowStockCount > 0 && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-600 rounded-full text-xs font-medium">
                 <AlertTriangle className="w-3 h-3" /> {lowStockCount} منخفض المخزون
               </span>
             )}
-          </p>
-        </div>
-        <button onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all text-sm font-medium">
-          <Plus className="w-4 h-4" /> إضافة منتج
-        </button>
-      </div>
+          </span>
+        }
+        actions={
+          <button onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all text-sm font-medium">
+            <Plus className="w-4 h-4" /> إضافة منتج
+          </button>
+        }
+      />
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 mb-5">
@@ -287,26 +253,16 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {error && (
-        <div className="flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-5 text-sm">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span className="flex-1">{error}</span>
-          <button onClick={() => load()} className="font-medium hover:underline">إعادة المحاولة</button>
-        </div>
-      )}
+      {error && <div className="mb-5"><ErrorBanner message={error} onRetry={() => load()} /></div>}
 
       {loading ? (
-        <TableSkeleton />
+        <TableSkeleton cols={TABLE_COLS} rows={6} />
       ) : filtered.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-16 text-center">
-          <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <Package className="w-6 h-6 text-slate-400" />
-          </div>
-          <p className="text-slate-600 font-medium">
-            {search ? 'لا توجد نتائج مطابقة للبحث' : 'لا توجد منتجات في هذا التصنيف'}
-          </p>
-          {!search && <p className="text-slate-400 text-sm mt-1">أضف منتجات لبدء إدارة المخزون</p>}
-        </div>
+        <EmptyState
+          icon={Package}
+          title={search ? 'لا توجد نتائج مطابقة للبحث' : 'لا توجد منتجات في هذا التصنيف'}
+          description={!search ? 'أضف منتجات لبدء إدارة المخزون' : undefined}
+        />
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
           <table className="w-full">

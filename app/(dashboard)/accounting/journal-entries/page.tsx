@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { Plus, X, CheckCircle, Clock, Trash2, BookOpen, RefreshCw } from 'lucide-react';
+import { TableSkeleton, EmptyState, ErrorBanner, PageHeader } from '@/components/ui/patterns';
 
 interface JournalEntry {
   id: string;
@@ -33,28 +34,7 @@ function fmtDate(d?: string) {
 
 const emptyLine = (): JournalLine => ({ accountCode: '', description: '', debit: '', credit: '' });
 
-/* ─── Skeleton ────────────────────────────────────────────── */
-function TableSkeleton() {
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden animate-pulse">
-      <div className="bg-slate-50 border-b border-slate-200 px-5 py-3 flex gap-8">
-        {['w-24', 'w-24', 'w-48', 'w-28', 'w-28', 'w-16'].map((w, i) => (
-          <div key={i} className={`${w} h-3.5 bg-slate-200 rounded`} />
-        ))}
-      </div>
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="px-5 py-3.5 border-b border-slate-100 flex gap-8 items-center last:border-0">
-          <div className="w-24 h-4 bg-slate-100 rounded" />
-          <div className="w-24 h-4 bg-slate-100 rounded" />
-          <div className="w-48 h-4 bg-slate-100 rounded" />
-          <div className="w-28 h-4 bg-slate-100 rounded" />
-          <div className="w-28 h-4 bg-slate-100 rounded" />
-          <div className="w-16 h-5 bg-slate-100 rounded-full" />
-        </div>
-      ))}
-    </div>
-  );
-}
+const TABLE_COLS = ['w-24', 'w-24', 'w-48', 'w-28', 'w-28', 'w-16'];
 
 export default function JournalEntriesPage() {
   const [entries, setEntries]     = useState<JournalEntry[]>([]);
@@ -124,32 +104,25 @@ export default function JournalEntriesPage() {
 
   return (
     <div dir="rtl">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">القيود المحاسبية</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            {loading ? 'جاري التحميل…' : `${entries.length} قيد`}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={load} disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 text-sm text-slate-700">
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            تحديث
-          </button>
-          <button onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all text-sm font-medium">
-            <Plus className="w-4 h-4" /> قيد جديد
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="القيود المحاسبية"
+        subtitle={loading ? 'جاري التحميل…' : `${entries.length} قيد`}
+        actions={
+          <>
+            <button onClick={load} disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 text-sm text-slate-700">
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              تحديث
+            </button>
+            <button onClick={() => setShowModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all text-sm font-medium">
+              <Plus className="w-4 h-4" /> قيد جديد
+            </button>
+          </>
+        }
+      />
 
-      {error && (
-        <div className="flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-5 text-sm">
-          <span className="flex-1">{error}</span>
-          <button onClick={load} className="font-medium hover:underline">إعادة المحاولة</button>
-        </div>
-      )}
+      {error && <div className="mb-5"><ErrorBanner message={error} onRetry={load} /></div>}
 
       {/* New entry modal */}
       {showModal && (
@@ -257,15 +230,13 @@ export default function JournalEntriesPage() {
       )}
 
       {loading ? (
-        <TableSkeleton />
+        <TableSkeleton cols={TABLE_COLS} rows={6} />
       ) : entries.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-16 text-center">
-          <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <BookOpen className="w-6 h-6 text-slate-400" />
-          </div>
-          <p className="text-slate-600 font-medium">لا توجد قيود محاسبية حتى الآن</p>
-          <p className="text-slate-400 text-sm mt-1">تُنشأ القيود تلقائياً من الفواتير، أو يمكنك إنشاء قيد يدوي</p>
-        </div>
+        <EmptyState
+          icon={BookOpen}
+          title="لا توجد قيود محاسبية حتى الآن"
+          description="تُنشأ القيود تلقائياً من الفواتير، أو يمكنك إنشاء قيد يدوي"
+        />
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
           <table className="w-full">

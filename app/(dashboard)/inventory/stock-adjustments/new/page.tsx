@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
+import { FormSkeleton, ErrorBanner } from '@/components/ui/patterns';
 
 interface Product { id: string; nameAr: string; code: string; stock?: number; }
 
@@ -87,18 +88,6 @@ export default function NewStockAdjustmentPage() {
   }
 
   /* ── Render ───────────────────────────────────────────────────────── */
-  if (loadingData) return (
-    <div className="flex items-center justify-center h-64" dir="rtl">
-      <div className="text-slate-500">جاري تحميل البيانات…</div>
-    </div>
-  );
-
-  if (dataError) return (
-    <div className="flex items-center justify-center h-64" dir="rtl">
-      <div className="text-red-500">{dataError}</div>
-    </div>
-  );
-
   const selectedProduct = products.find(p => p.id === productId);
 
   return (
@@ -108,9 +97,21 @@ export default function NewStockAdjustmentPage() {
         <Link href="/inventory/products" className="text-slate-400 hover:text-slate-600 transition-colors">
           <ArrowRight className="w-5 h-5" />
         </Link>
-        <h1 className="text-2xl font-bold text-slate-900">تسوية مخزون جديدة</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">تسوية مخزون جديدة</h1>
+          <p className="text-sm text-slate-500 mt-0.5">سجل زيادة أو نقص في كميات المخزون</p>
+        </div>
       </div>
 
+      {dataError && (
+        <div className="max-w-xl mb-4">
+          <ErrorBanner message={dataError} onRetry={() => window.location.reload()} />
+        </div>
+      )}
+
+      {loadingData ? (
+        <div className="max-w-xl"><FormSkeleton rows={6} /></div>
+      ) : (
       <form onSubmit={handleSubmit} className="max-w-xl">
         {formError && (
           <div className="text-red-600 text-sm bg-red-50 border border-red-200 p-3 rounded-lg mb-4">
@@ -239,7 +240,7 @@ export default function NewStockAdjustmentPage() {
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 bg-blue-600 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              className="flex-1 bg-blue-600 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-blue-700 active:scale-95 disabled:opacity-50 transition-all"
             >
               {saving ? 'جاري الحفظ…' : 'حفظ التسوية'}
             </button>
@@ -252,6 +253,7 @@ export default function NewStockAdjustmentPage() {
           </div>
         </div>
       </form>
+      )}
     </div>
   );
 }

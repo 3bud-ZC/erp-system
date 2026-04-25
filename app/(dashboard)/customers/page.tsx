@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { Plus, X, Pencil, Trash2, FileText, AlertCircle, CheckCircle, Search, Users } from 'lucide-react';
+import { Plus, X, Pencil, Trash2, FileText, AlertCircle, Search, Users } from 'lucide-react';
 import Link from 'next/link';
+import { TableSkeleton, EmptyState, ErrorBanner, Toast, useToast, PageHeader } from '@/components/ui/patterns';
 
 interface Customer {
   id: string;
@@ -22,35 +23,8 @@ function fmtEGP(v?: number | null) {
 
 const emptyForm = { code: '', nameAr: '', nameEn: '', email: '', phone: '', creditLimit: '' };
 
-/* ─── Skeleton ────────────────────────────────────────────── */
-function TableSkeleton() {
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden animate-pulse">
-      <div className="bg-slate-50 border-b border-slate-200 px-5 py-3 flex gap-8">
-        {['w-16', 'w-36', 'w-24', 'w-32', 'w-24', 'w-24', 'w-20'].map((w, i) => (
-          <div key={i} className={`${w} h-3.5 bg-slate-200 rounded`} />
-        ))}
-      </div>
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="px-5 py-3.5 border-b border-slate-100 flex gap-8 items-center last:border-0">
-          <div className="w-16 h-4 bg-slate-100 rounded" />
-          <div className="w-36 h-4 bg-slate-100 rounded" />
-          <div className="w-24 h-4 bg-slate-100 rounded" />
-          <div className="w-32 h-4 bg-slate-100 rounded" />
-          <div className="w-24 h-4 bg-slate-100 rounded" />
-          <div className="w-24 h-4 bg-slate-100 rounded" />
-          <div className="flex gap-1.5 mr-auto">
-            <div className="w-7 h-7 bg-slate-100 rounded-lg" />
-            <div className="w-7 h-7 bg-slate-100 rounded-lg" />
-            <div className="w-7 h-7 bg-slate-100 rounded-lg" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
+const TABLE_COLS = ['w-16', 'w-36', 'w-24', 'w-32', 'w-24', 'w-24', 'w-20'];
 
-/* ─── Modal helpers ───────────────────────────────────────── */
 function InputField({ label, required, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string; required?: boolean }) {
   return (
     <div>
@@ -85,12 +59,7 @@ export default function CustomersPage() {
   const [deleting, setDeleting]   = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // Toast
-  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
-  const showToast = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
-  }, []);
+  const [toast, showToast] = useToast();
 
   const load = useCallback(() => {
     setLoading(true); setError(null);
@@ -175,28 +144,18 @@ export default function CustomersPage() {
 
   return (
     <div dir="rtl">
-      {/* Toast */}
-      {toast && (
-        <div className={`fixed top-5 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-2 px-5 py-3 rounded-xl shadow-xl text-white text-sm font-medium transition-all
-          ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
-          {toast.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-          {toast.msg}
-        </div>
-      )}
+      <Toast toast={toast} />
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">العملاء</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            {loading ? 'جاري التحميل…' : `${customers.length} عميل`}
-          </p>
-        </div>
-        <button onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all text-sm font-medium">
-          <Plus className="w-4 h-4" /> إضافة عميل
-        </button>
-      </div>
+      <PageHeader
+        title="العملاء"
+        subtitle={loading ? 'جاري التحميل…' : `${customers.length} عميل`}
+        actions={
+          <button onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all text-sm font-medium">
+            <Plus className="w-4 h-4" /> إضافة عميل
+          </button>
+        }
+      />
 
       {/* Search bar */}
       <div className="flex flex-wrap gap-3 mb-5">
@@ -218,30 +177,16 @@ export default function CustomersPage() {
         )}
       </div>
 
-      {/* Error */}
-      {error && (
-        <div className="flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-5 text-sm">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span className="flex-1">{error}</span>
-          <button onClick={load} className="text-red-700 font-medium hover:underline">إعادة المحاولة</button>
-        </div>
-      )}
+      {error && <div className="mb-5"><ErrorBanner message={error} onRetry={load} /></div>}
 
-      {/* Content */}
       {loading ? (
-        <TableSkeleton />
+        <TableSkeleton cols={TABLE_COLS} rows={6} />
       ) : filtered.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-16 text-center">
-          <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <Users className="w-6 h-6 text-slate-400" />
-          </div>
-          <p className="text-slate-600 font-medium">
-            {search ? 'لا توجد نتائج مطابقة' : 'لا يوجد عملاء حتى الآن'}
-          </p>
-          {!search && (
-            <p className="text-slate-400 text-sm mt-1">ابدأ بإضافة أول عميل لمتابعة المعاملات</p>
-          )}
-        </div>
+        <EmptyState
+          icon={Users}
+          title={search ? 'لا توجد نتائج مطابقة' : 'لا يوجد عملاء حتى الآن'}
+          description={!search ? 'ابدأ بإضافة أول عميل لمتابعة المعاملات' : undefined}
+        />
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
           <table className="w-full">
