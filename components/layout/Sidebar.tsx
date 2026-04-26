@@ -47,14 +47,14 @@ const navItems: NavItem[] = [
     icon: <LayoutDashboard className="w-5 h-5" />,
   },
   {
-    title: 'فواتير المبيعات',
-    href: '/sales/invoices',
-    icon: <TrendingUp className="w-5 h-5" />,
-  },
-  {
-    title: 'فواتير المشتريات',
-    href: '/purchases/invoices',
-    icon: <ShoppingCart className="w-5 h-5" />,
+    title: 'الفواتير',
+    href: '/invoices',
+    icon: <FileText className="w-5 h-5" />,
+    children: [
+      { title: 'نظرة عامة',         href: '/invoices' },
+      { title: 'فواتير المبيعات',  href: '/invoices/sales' },
+      { title: 'فواتير المشتريات', href: '/invoices/purchases' },
+    ],
   },
   {
     title: 'العملاء',
@@ -112,9 +112,10 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const { user } = useAuthStore();
-  // افتح مجموعة التقارير تلقائياً لو المستخدم داخل أي صفحة تقارير.
+  // افتح المجموعات ذات الصلة تلقائياً حسب المسار الحالي.
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => ({
-    '/reports': pathname?.startsWith('/reports') ?? false,
+    '/invoices': pathname?.startsWith('/invoices') ?? false,
+    '/reports':  pathname?.startsWith('/reports')  ?? false,
   }));
   const toggleGroup = (href: string) =>
     setOpenGroups(prev => ({ ...prev, [href]: !prev[href] }));

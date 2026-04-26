@@ -50,7 +50,7 @@ function filterResults(q: string, data: { invoices: any[]; purchases: any[]; cus
       type: 'invoice', id: i.id,
       title: `فاتورة مبيعات #${i.invoiceNumber}`,
       subtitle: i.customer?.nameAr ?? 'بدون عميل',
-      href: `/sales/invoices/${i.id}`,
+      href: `/invoices/sales/${i.id}`,
     }));
 
   data.purchases
@@ -60,7 +60,7 @@ function filterResults(q: string, data: { invoices: any[]; purchases: any[]; cus
       type: 'purchase', id: i.id,
       title: `فاتورة مشتريات #${i.invoiceNumber}`,
       subtitle: i.supplier?.nameAr ?? 'بدون مورد',
-      href: `/purchases/invoices/${i.id}`,
+      href: `/invoices/purchases/${i.id}`,
     }));
 
   data.customers
@@ -189,7 +189,7 @@ export function Topbar() {
             id: `inv-${i.id}`, type: 'overdue',
             title: `فاتورة متأخرة #${i.invoiceNumber}`,
             subtitle: i.customer?.nameAr ?? 'بدون عميل',
-            href: `/sales/invoices/${i.id}`, severity: 'high',
+            href: `/invoices/sales/${i.id}`, severity: 'high',
           }));
       }
 
@@ -348,7 +348,7 @@ export function Topbar() {
               )}
 
               <div className="px-4 py-2.5 border-t border-slate-100 flex gap-3 text-xs">
-                <Link href="/sales/invoices" onClick={() => setShowNotif(false)}
+                <Link href="/invoices/sales" onClick={() => setShowNotif(false)}
                   className="text-blue-600 hover:underline font-medium">
                   الفواتير المعلقة
                 </Link>

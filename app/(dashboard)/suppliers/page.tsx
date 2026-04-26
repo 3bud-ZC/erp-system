@@ -206,7 +206,7 @@ export default function SuppliersPage() {
                   <td className="px-5 py-3 text-sm text-slate-600 text-left tabular-nums">{fmtEGP(s.creditLimit)}</td>
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-center gap-1">
-                      <Link href={`/purchases/invoices?supplier=${encodeURIComponent(s.nameAr)}`}
+                      <Link href={`/invoices/purchases?supplier=${encodeURIComponent(s.nameAr)}`}
                         className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="فواتير المورد">
                         <FileText className="w-4 h-4" />
                       </Link>

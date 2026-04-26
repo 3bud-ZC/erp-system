@@ -221,7 +221,7 @@ export default function CustomersPage() {
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-center gap-1">
-                      <Link href={`/sales/invoices?customer=${encodeURIComponent(c.nameAr)}`}
+                      <Link href={`/invoices/sales?customer=${encodeURIComponent(c.nameAr)}`}
                         className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="فواتير العميل">
                         <FileText className="w-4 h-4" />
                       </Link>

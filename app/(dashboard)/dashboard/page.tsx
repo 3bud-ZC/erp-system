@@ -321,7 +321,7 @@ export default function DashboardPage() {
           value={invoices?.length ?? '…'}
           Icon={FileText}
           iconCls="bg-blue-50 text-blue-600"
-          href="/sales/invoices"
+          href="/invoices/sales"
         />
         <StatPill
           label="العملاء"
@@ -365,7 +365,7 @@ export default function DashboardPage() {
 
             {/* Unpaid invoices alert */}
             {unpaid.length > 0 ? (
-              <Link href="/sales/invoices"
+              <Link href="/invoices/sales"
                 className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl hover:bg-amber-100 transition-colors group block">
                 <div className="flex-shrink-0 w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center mt-0.5">
                   <Clock className="w-4 h-4 text-amber-600" />
@@ -438,7 +438,7 @@ export default function DashboardPage() {
               <FileText className="w-4 h-4 text-blue-500" />
               آخر فواتير المبيعات
             </h2>
-            <Link href="/sales/invoices"
+            <Link href="/invoices/sales"
               className="text-xs text-blue-600 hover:underline flex items-center gap-1 font-medium">
               عرض الكل <ArrowLeft className="w-3 h-3" />
             </Link>
@@ -451,7 +451,7 @@ export default function DashboardPage() {
               </div>
               <p className="text-slate-400 text-sm font-medium">لا توجد فواتير حتى الآن</p>
               <p className="text-slate-400 text-xs mt-1">أنشئ أول فاتورة مبيعات لعرضها هنا</p>
-              <Link href="/sales/invoices/new"
+              <Link href="/invoices/sales/new"
                 className="mt-4 flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors">
                 <Plus className="w-3 h-3" /> إنشاء فاتورة
               </Link>
@@ -478,7 +478,7 @@ export default function DashboardPage() {
                     return (
                       <tr key={inv.id} className="hover:bg-slate-50 transition-colors group">
                         <td className="py-2.5 pr-1">
-                          <Link href={`/sales/invoices/${inv.id}`}
+                          <Link href={`/invoices/sales/${inv.id}`}
                             className="font-semibold text-blue-600 hover:underline tabular-nums">
                             #{inv.invoiceNumber}
                           </Link>
@@ -572,11 +572,11 @@ export default function DashboardPage() {
           إجراءات سريعة
         </h2>
         <div className="flex flex-wrap gap-3">
-          <Link href="/sales/invoices/new"
+          <Link href="/invoices/sales/new"
             className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm">
             <FileText className="w-4 h-4" /> إنشاء فاتورة مبيعات
           </Link>
-          <Link href="/purchases/invoices/new"
+          <Link href="/invoices/purchases/new"
             className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors shadow-sm">
             <ShoppingCart className="w-4 h-4" /> إنشاء فاتورة مشتريات
           </Link>

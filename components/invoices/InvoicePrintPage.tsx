@@ -1,15 +1,12 @@
 'use client';
 
 /**
- * Sales-invoice print preview.
+ * Generic print-preview client used by both
+ * /invoices/sales/[id]/print and /invoices/purchases/[id]/print.
  *
- * Loads the invoice (and its company / customer info), renders it through
- * the shared `InvoicePrintTemplate`, and shows two non-printing buttons:
- *   - "طباعة"   → window.print()
- *   - "رجوع"    → back to /sales/invoices
- *
- * The template's @media print rule hides every UI element except the
- * invoice document itself, so the printed page comes out clean.
+ * Loads the invoice + the company branding, builds a normalized
+ * `InvoicePrintData`, and renders the shared template behind a
+ * non-printing toolbar (Back / Print).
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -18,7 +15,8 @@ import { ArrowRight, Printer } from 'lucide-react';
 import {
   InvoicePrintTemplate,
   type InvoicePrintData,
-} from '@/components/invoices/InvoicePrintTemplate';
+} from './InvoicePrintTemplate';
+import { InvoiceConfig } from './InvoiceConfig';
 
 interface ItemRaw {
   productId: string;
@@ -43,13 +41,8 @@ interface InvoiceRaw {
   tax?: number;
   grandTotal?: number;
   paidAmount?: number;
-  customer?: {
-    nameAr?: string;
-    name?: string;
-    phone?: string | null;
-    email?: string | null;
-    address?: string | null;
-  };
+  customer?: { nameAr?: string; name?: string; phone?: string | null; email?: string | null; address?: string | null };
+  supplier?: { nameAr?: string; name?: string; phone?: string | null; email?: string | null; address?: string | null };
   items?: ItemRaw[];
 }
 
@@ -61,7 +54,7 @@ interface CompanyRaw {
   taxId?: string | null;
 }
 
-export default function SalesInvoicePrintPage() {
+export function InvoicePrintPage({ config }: { config: InvoiceConfig }) {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const id = params?.id ?? '';
@@ -69,16 +62,15 @@ export default function SalesInvoicePrintPage() {
   const [invoice, setInvoice] = useState<InvoiceRaw | null>(null);
   const [company, setCompany] = useState<CompanyRaw | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState<string | null>(null);
+  const [error, setError]     = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
     (async () => {
       try {
-        // Load the invoice and the company-level branding in parallel.
         const [invJ, sysJ] = await Promise.all([
-          fetch(`/api/sales-invoices?id=${encodeURIComponent(id)}`, { credentials: 'include' }).then(r => r.json()),
+          fetch(config.detailApi(id), { credentials: 'include' }).then(r => r.json()),
           fetch('/api/system-settings', { credentials: 'include' }).then(r => r.json()).catch(() => ({ success: false })),
         ]);
         if (cancelled) return;
@@ -103,7 +95,7 @@ export default function SalesInvoicePrintPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, config]);
 
   const printData: InvoicePrintData | null = useMemo(() => {
     if (!invoice) return null;
@@ -112,8 +104,9 @@ export default function SalesInvoicePrintPage() {
     const tax      = Number(invoice.tax ?? 0);
     const grand    = Number(invoice.grandTotal ?? subtotal - discount + tax);
     const paid     = Number(invoice.paidAmount ?? 0);
+    const party    = invoice.customer ?? invoice.supplier;
     return {
-      kind: 'sales',
+      kind: config.kind,
       invoiceNumber: invoice.invoiceNumber,
       date: invoice.date,
       issueDate: invoice.issueDate ?? null,
@@ -121,10 +114,10 @@ export default function SalesInvoicePrintPage() {
       currency: invoice.currency ?? 'EGP',
       notes: invoice.notes ?? null,
       party: {
-        name:    invoice.customer?.nameAr ?? invoice.customer?.name ?? '—',
-        phone:   invoice.customer?.phone   ?? null,
-        email:   invoice.customer?.email   ?? null,
-        address: invoice.customer?.address ?? null,
+        name:    party?.nameAr ?? party?.name ?? '—',
+        phone:   party?.phone   ?? null,
+        email:   party?.email   ?? null,
+        address: party?.address ?? null,
       },
       lines: (invoice.items ?? []).map(it => ({
         description: (it.description?.trim() || it.product?.nameAr || it.product?.nameEn || it.productId),
@@ -143,7 +136,7 @@ export default function SalesInvoicePrintPage() {
       balance: grand - paid,
       company: company ?? undefined,
     };
-  }, [invoice, company]);
+  }, [invoice, company, config.kind]);
 
   if (loading) {
     return <div dir="rtl" className="flex items-center justify-center h-64 text-slate-500">جاري التحميل…</div>;
@@ -152,7 +145,7 @@ export default function SalesInvoicePrintPage() {
     return (
       <div dir="rtl" className="p-6 text-center">
         <p className="text-red-600 mb-3">{error ?? 'تعذر عرض الفاتورة'}</p>
-        <button onClick={() => router.push('/sales/invoices')}
+        <button onClick={() => router.push(`/invoices/${config.routeBase}`)}
           className="px-4 py-2 bg-slate-100 rounded-lg text-sm hover:bg-slate-200">
           رجوع
         </button>
@@ -162,18 +155,16 @@ export default function SalesInvoicePrintPage() {
 
   return (
     <div dir="rtl" className="bg-slate-100 min-h-screen py-6">
-      {/* Toolbar (hidden when printing) */}
       <div className="no-print max-w-[210mm] mx-auto mb-4 flex items-center justify-between bg-white rounded-xl shadow-sm border border-slate-200 px-4 py-2">
-        <button onClick={() => router.push('/sales/invoices')}
+        <button onClick={() => router.push(`/invoices/${config.routeBase}`)}
           className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
           <ArrowRight className="w-4 h-4" /> رجوع
         </button>
         <button onClick={() => window.print()}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
           <Printer className="w-4 h-4" /> طباعة
         </button>
       </div>
-
       <InvoicePrintTemplate data={printData} />
     </div>
   );
