@@ -141,3 +141,8 @@ build-*.tmp
 
 # Claude worktrees (auto-generated, not source)
 .claude/worktrees/
+
+# Playwright (E2E)
+/test-results/
+/playwright-report/
+/playwright/.cache/
