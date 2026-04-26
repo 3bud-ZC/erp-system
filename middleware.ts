@@ -60,6 +60,14 @@ const RATE_LIMITS = {
 };
 
 function checkRateLimit(identifier: string, tier: 'auth' | 'init' | 'general') {
+  // E2E bypass: when E2E_BYPASS_RATE_LIMIT=1 is set on the server process we
+  // short-circuit the check. Default behavior unchanged in production
+  // because the env var is not set in any deployment. See also the matching
+  // bypasses in lib/middleware/global-security.ts and lib/rate-limit.ts.
+  if (process.env.E2E_BYPASS_RATE_LIMIT === '1') {
+    return { allowed: true, remaining: 999 };
+  }
+
   const now = Date.now();
   const config = RATE_LIMITS[tier];
   const key = `${tier}:${identifier}`;

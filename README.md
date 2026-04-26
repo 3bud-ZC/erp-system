@@ -52,48 +52,138 @@ A fully integrated ERP system built with modern technologies to manage all enter
 ### 💻 التثبيت المحلي | Local Installation
 
 ```bash
-# استنساخ المشروع | Clone the repository
+# 1) Clone & install
 git clone https://github.com/3bud-ZC/erp-system.git
 cd erp-system
-
-# تثبيت المكتبات | Install dependencies
 npm install
 
-# إعداد قاعدة البيانات | Setup database
-npx prisma generate
-npx prisma migrate deploy
-npx prisma db seed
+# 2) Configure environment
+cp .env.example .env
+# Edit .env: set DATABASE_URL, JWT_SECRET, NEXTAUTH_SECRET (32+ chars each)
 
-# تشغيل السيرفر | Start development server
+# 3) Generate Prisma client
+npx prisma generate
+
+# 4) Apply schema to YOUR OWN database (dev only — never against production)
+npx prisma migrate deploy
+
+# 5) (Optional) Seed demo data on a fresh dev DB
+ALLOW_SEED=true npx tsx prisma/seed-auth.ts   # creates admin@erp.com / admin
+
+# 6) Start dev server
 npm run dev
 ```
+
+> 🛡️ **Production safety**: `prisma/seed.ts`, `prisma/seed-clean.ts`, and
+> `scripts/reset-database.ts` refuse to run unless `NODE_ENV=development` or
+> `ALLOW_SEED=true`. This protects the live DB from accidental wipes.
 
 افتح [http://localhost:3000](http://localhost:3000) في المتصفح
 
 Open [http://localhost:3000](http://localhost:3000) in your browser
 
-### 🌐 النشر على Render | Deploy to Render
+### 🔑 Demo Credentials | بيانات الدخول التجريبية
+
+After running the seed (`npm run seed` or via the onboarding flow), you can log in with the default admin user:
+
+| Field        | Value                |
+|--------------|----------------------|
+| 📧 Email     | `admin@erp.com`      |
+| 🔒 Password  | `admin`              |
+| 🌐 Login URL | `/login`             |
+| 🖥️ Demo View | `/demo` (view-only)  |
+| 📊 Dashboard | `/dashboard`         |
+
+> ⚠️ Change these credentials immediately for any production deployment.
+
+The demo seeder (triggered automatically on first onboarding) creates:
+- 7 customers, 4 suppliers, 12 products
+- 10 sales invoices, 3 purchase invoices
+- 18 chart-of-accounts entries
+- 10 sample journal entries (9 posted, 1 draft)
+
+---
+
+## 🖥️ Demo Page (`/demo`)
+
+A self-contained, **view-only** display board for client presentations.
+Authentication required (same login). No edit, create, or delete actions are
+exposed — the page can be safely shown to non-technical stakeholders.
+
+What it renders:
+- 📊 KPI cards: Total Revenue, Total Expenses, Net Profit, Inventory Value
+- 📈 Charts: 6-month sales / purchases trend (line), inventory mix (pie)
+- 🧾 Tables: latest activities + latest journal entries
+- 🔄 Manual refresh button (read-only requery; no write actions)
+
+Open at: `http://<your-host>/demo`
+
+```
+┌─────────────────────────────────────────────┐
+│  ERP System — Client Demo Dashboard         │
+│  View-only financial and operational view   │
+├─────────────────────────────────────────────┤
+│  [Revenue]  [Expenses]  [Net Profit]  ...   │
+│  ──────  Trend chart  ──────  Pie chart     │
+│  Latest activities │ Latest journal entries │
+└─────────────────────────────────────────────┘
+```
+
+---
+
+## 🚀 Deployment
+
+### Option A — Vercel (frontend) + Railway (PostgreSQL)
+
+This is the recommended pairing. Vercel hosts the Next.js app; Railway hosts
+the database. Both have free starter tiers.
+
+**1. Provision PostgreSQL on Railway**
+- Sign in at [railway.app](https://railway.app) → New Project → Add PostgreSQL
+- Copy the connection string from the database service's *Connect* tab
+  (format: `postgresql://user:pass@host:port/dbname`)
+
+**2. Apply the schema once (from your local machine)**
+```bash
+# From this repo, with the Railway URL in .env
+DATABASE_URL=<railway-url> npx prisma migrate deploy
+```
+
+**3. Deploy the app to Vercel**
+```bash
+# Push to GitHub, then on https://vercel.com:
+#   - Import the GitHub repo
+#   - Framework preset: Next.js (auto-detected)
+#   - Build command: npm run build (uses package.json)
+#   - Output: .next (default)
+```
+
+**4. Configure Vercel environment variables** (Settings → Environment Variables)
+| Variable           | Value                                        |
+|--------------------|----------------------------------------------|
+| `DATABASE_URL`     | Railway connection string                    |
+| `JWT_SECRET`       | 32+ char random string                       |
+| `NEXTAUTH_SECRET`  | 32+ char random string                       |
+| `NEXTAUTH_URL`     | `https://<your-app>.vercel.app`              |
+| `NODE_ENV`         | `production`                                 |
+| `ALLOW_SEED`       | `false` (must stay false on production!)     |
+| `E2E_BYPASS_RATE_LIMIT` | `0` (must stay 0 on production!)        |
+
+Vercel will redeploy on every push to the connected branch. The seed/reset
+scripts are blocked at runtime by the production safety guards.
+
+### Option B — Railway (full-stack: app + DB on same provider)
 
 ```bash
-# 1. Push to GitHub
-git push origin master
-
-# 2. Connect to Render
-# - Go to https://dashboard.render.com
-# - Create new Web Service
-# - Connect GitHub repository
-
-# 3. Environment Variables
-DATABASE_URL=postgresql://...
-JWT_SECRET=your-secret-key
-NEXTAUTH_SECRET=your-nextauth-secret
-NEXTAUTH_URL=https://your-app.onrender.com
-NODE_ENV=production
-
-# 4. Build & Start Commands
-Build: npm ci && npx prisma generate && npx prisma migrate deploy && npx prisma db seed && npm run build
-Start: npm start
+# 1. Push to GitHub, then on https://railway.app:
+#    New Project → Deploy from GitHub repo
+# 2. Add a PostgreSQL service to the same project
+# 3. Set environment variables (same list as Option A)
+# 4. Build/start commands are read from railway.json (committed)
 ```
+
+`railway.json` and `nixpacks.toml` already exist in the repo — no extra
+configuration needed.
 
 ---
 
@@ -207,9 +297,114 @@ Start: npm start
 ├── sales-invoices/            # Sales with auto GL posting
 ├── purchase-invoices/         # Purchases with auto GL posting
 ├── expenses/                  # Expenses with auto GL posting
-├── accounting/                # Journal entries
+├── accounting/                # Journal entries + financial statements
 ├── reports/                   # Financial reports
 └── dashboard/                 # Dashboard KPIs
+```
+
+---
+
+## 📡 API Overview | نظرة عامة على الـ APIs
+
+All APIs return a standardized envelope:
+```json
+{ "success": true, "data": <payload>, "message": "..." }
+```
+Errors:
+```json
+{ "success": false, "code": 400, "message": "...", "details": { ... } }
+```
+
+### 🔐 Authentication
+| Method | Endpoint                   | Description                     |
+|--------|----------------------------|---------------------------------|
+| POST   | `/api/auth/login`          | Email/password login → cookie   |
+| POST   | `/api/auth/register`       | New user signup                 |
+| POST   | `/api/auth/logout`         | Invalidate session              |
+| POST   | `/api/onboarding/init`     | Create tenant + seed demo data  |
+
+### 📊 Dashboard
+| Method | Endpoint          | Description                                   |
+|--------|-------------------|-----------------------------------------------|
+| GET    | `/api/dashboard`  | KPIs, trends, recent activities + JE entries  |
+
+### 🛒 Sales / Purchases / Inventory
+| Method | Endpoint                       | Description           |
+|--------|--------------------------------|-----------------------|
+| CRUD   | `/api/sales-invoices`          | Sales invoices + GL   |
+| CRUD   | `/api/purchase-invoices`       | Purchase invoices + GL|
+| CRUD   | `/api/customers`               | Customers             |
+| CRUD   | `/api/suppliers`               | Suppliers             |
+| CRUD   | `/api/products`                | Products              |
+| CRUD   | `/api/warehouses`              | Warehouses            |
+| GET    | `/api/inventory/...`           | Stock movements/value |
+
+### 💰 Accounting
+| Method | Endpoint                                       | Description                                |
+|--------|------------------------------------------------|--------------------------------------------|
+| GET    | `/api/accounting/trial-balance`                | Aggregated debit/credit per account        |
+| GET    | `/api/accounting/income-statement`             | Revenue, expenses, net profit              |
+| GET    | `/api/accounting/balance-sheet`                | Assets, liabilities, equity                |
+| GET    | `/api/accounting/journal-entries`              | List journal entries                       |
+| POST   | `/api/accounting/journal-entries`              | Create draft entry (validated)             |
+| POST   | `/api/accounting/journal-entries/:id/post`     | Post a draft entry                         |
+| GET    | `/api/accounting/balances`                     | Account balances                           |
+| GET    | `/api/accounting/cash-flow`                    | Cash flow statement                        |
+| GET    | `/api/accounting/aging-report`                 | A/R + A/P aging                            |
+| CRUD   | `/api/accounting/periods`                      | Manage accounting periods                  |
+| CRUD   | `/api/accounting-periods`                      | Manage accounting periods (legacy alias)   |
+
+### 📈 Reports
+| Method | Endpoint                              | Description                  |
+|--------|---------------------------------------|------------------------------|
+| GET    | `/api/reports/profit-loss`            | Detailed P&L report          |
+| GET    | `/api/reports/balance-sheet`          | Detailed balance sheet       |
+| GET    | `/api/reports/aging`                  | Aging report                 |
+| GET    | `/api/reports/customer-statement`     | Per-customer statement       |
+| GET    | `/api/reports/supplier-statement`     | Per-supplier statement       |
+
+### 🩺 Health
+| Method | Endpoint               | Description           |
+|--------|------------------------|-----------------------|
+| GET    | `/api/health`          | Liveness probe        |
+| GET    | `/api/health/detailed` | Full readiness probe  |
+
+#### Example — Trial Balance
+```bash
+curl -b cookie.txt "http://localhost:3000/api/accounting/trial-balance?asOfDate=2026-04-30"
+```
+```json
+{
+  "success": true,
+  "data": [
+    { "account": "النقدية", "accountCode": "1100", "debit": 8050, "credit": 0 },
+    { "account": "البنك",   "accountCode": "1110", "debit": 100000, "credit": 48500 },
+    { "account": "إيرادات المبيعات", "accountCode": "4100", "debit": 0, "credit": 22652 }
+  ],
+  "message": "Trial balance fetched (3 accounts, balanced=true)"
+}
+```
+
+---
+
+## 🖼️ Screenshots | لقطات الشاشة
+
+> Place screenshots inside `docs/screenshots/` and reference them here.
+
+| View             | Path                                  | Description                      |
+|------------------|---------------------------------------|----------------------------------|
+| 🔐 Login         | `docs/screenshots/login.png`          | Login screen                     |
+| 📊 Dashboard     | `docs/screenshots/dashboard.png`      | Main KPI dashboard               |
+| 🖥️ Demo Board    | `docs/screenshots/demo.png`           | `/demo` view-only client board   |
+| 💰 Accounting    | `docs/screenshots/accounting.png`     | Journal entries module           |
+| 🛒 Sales         | `docs/screenshots/sales.png`          | Sales invoices                   |
+| 📦 Inventory     | `docs/screenshots/inventory.png`      | Products & stock                 |
+| 📈 Reports       | `docs/screenshots/reports.png`        | Financial reports                |
+
+To regenerate screenshots:
+```bash
+npm run dev
+# then visit each route in a browser at 1440×900 and capture
 ```
 
 **Business Logic Layer**

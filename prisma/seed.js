@@ -3,7 +3,20 @@ const { execSync } = require('child_process');
 
 const prisma = new PrismaClient();
 
+// 🛡️  PRODUCTION SAFETY GUARD — only allow seed in dev or with explicit opt-in
+function assertSeedAllowed() {
+  const isDev = process.env.NODE_ENV === 'development';
+  const explicit = process.env.ALLOW_SEED === 'true';
+  if (isDev || explicit) return;
+  throw new Error(
+    '❌ Seeding is disabled in this environment. ' +
+      'Set NODE_ENV=development or ALLOW_SEED=true to allow it.'
+  );
+}
+
 async function main() {
+  assertSeedAllowed();
+
   console.log('🌱 Starting database seeding...\n');
 
   try {

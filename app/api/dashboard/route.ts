@@ -238,6 +238,46 @@ export async function GET(request: Request) {
     // Get recent activities
     const recentActivities = await getRecentActivities(tenantId);
 
+    // Get recent journal entries (last 5) — gracefully degrade if model unavailable
+    let recentJournalEntries: Array<{
+      id: string;
+      entryNumber: string;
+      entryDate: string;
+      description: string | null;
+      totalDebit: number;
+      totalCredit: number;
+      isPosted: boolean;
+    }> = [];
+    try {
+      const entries = await prisma.journalEntry.findMany({
+        where: { tenantId },
+        orderBy: { entryDate: 'desc' },
+        take: 5,
+        select: {
+          id: true,
+          entryNumber: true,
+          entryDate: true,
+          description: true,
+          totalDebit: true,
+          totalCredit: true,
+          isPosted: true,
+        },
+      });
+      recentJournalEntries = entries.map((e) => ({
+        id: e.id,
+        entryNumber: e.entryNumber,
+        entryDate: e.entryDate.toISOString(),
+        description: e.description,
+        totalDebit: Number(e.totalDebit),
+        totalCredit: Number(e.totalCredit),
+        isPosted: e.isPosted,
+      }));
+    } catch (e: any) {
+      if (e.code !== 'P2021') {
+        console.error('Error fetching journal entries:', e.message);
+      }
+    }
+
     // Build alerts
     const alerts: any[] = [];
     
@@ -281,6 +321,7 @@ export async function GET(request: Request) {
 
       // Activities and alerts
       recentActivities,
+      recentJournalEntries,
       alerts,
     }, 'Dashboard data fetched successfully');
   } catch (error) {

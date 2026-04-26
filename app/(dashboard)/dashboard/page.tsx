@@ -29,6 +29,15 @@ interface DashboardData {
     id: string; type: string; title: string;
     description: string; amount: number; date: string; status: string;
   }[];
+  recentJournalEntries?: {
+    id: string;
+    entryNumber: string;
+    entryDate: string;
+    description: string | null;
+    totalDebit: number;
+    totalCredit: number;
+    isPosted: boolean;
+  }[];
   alerts: { id: string; type: string; title: string; description: string; severity: string }[];
 }
 
@@ -498,6 +507,63 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* ══ Recent Journal Entries ═════════════════════════════════════ */}
+      {dash?.recentJournalEntries && dash.recentJournalEntries.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-indigo-500" />
+              آخر قيود اليومية
+            </h2>
+            <Link href="/accounting"
+              className="text-xs text-indigo-600 hover:underline flex items-center gap-1 font-medium">
+              عرض الكل <ArrowLeft className="w-3 h-3" />
+            </Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="pb-2.5 text-right text-xs font-semibold text-slate-400 pr-1">رقم القيد</th>
+                  <th className="pb-2.5 text-right text-xs font-semibold text-slate-400">التاريخ</th>
+                  <th className="pb-2.5 text-right text-xs font-semibold text-slate-400">الوصف</th>
+                  <th className="pb-2.5 text-right text-xs font-semibold text-slate-400">المبلغ</th>
+                  <th className="pb-2.5 text-right text-xs font-semibold text-slate-400">الحالة</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {dash.recentJournalEntries.map(je => (
+                  <tr key={je.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="py-2.5 pr-1 font-semibold text-indigo-600 tabular-nums">
+                      #{je.entryNumber}
+                    </td>
+                    <td className="py-2.5 text-slate-500 text-xs tabular-nums">
+                      {fmtDate(je.entryDate)}
+                    </td>
+                    <td className="py-2.5 text-slate-700 max-w-[260px] truncate">
+                      {je.description ?? '—'}
+                    </td>
+                    <td className="py-2.5 font-semibold text-slate-900 tabular-nums">
+                      {fmt(je.totalDebit)} ج.م
+                    </td>
+                    <td className="py-2.5">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                        je.isPosted ? 'text-green-700 bg-green-50' : 'text-amber-700 bg-amber-50'
+                      }`}>
+                        {je.isPosted
+                          ? <CheckCircle className="w-3 h-3 flex-shrink-0" />
+                          : <Clock className="w-3 h-3 flex-shrink-0" />}
+                        {je.isPosted ? 'مرحَّل' : 'مسودة'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* ══ Step 5 — Quick Actions ════════════════════════════════════ */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-5">

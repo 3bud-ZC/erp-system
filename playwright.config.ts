@@ -1,0 +1,116 @@
+/**
+ * Playwright configuration for ERP system E2E tests.
+ *
+ * Run modes:
+ *   - Manual: start `npm run dev` separately, then `npm run e2e`
+ *   - Auto:   set E2E_AUTO_SERVER=1 to let Playwright spawn `next dev`
+ *
+ * Required environment (use `.env.e2e.local` or shell):
+ *   E2E_BASE_URL    default: http://localhost:3000
+ *   E2E_EMAIL       default: admin@erp.com
+ *   E2E_PASSWORD    default: admin
+ *
+ * Seed prerequisite: the admin user must exist. Run `npx tsx prisma/seed-auth.ts`
+ * once before the first test run.
+ */
+
+import { defineConfig } from '@playwright/test';
+
+const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:3000';
+const AUTO_SERVER = process.env.E2E_AUTO_SERVER === '1';
+
+export default defineConfig({
+  testDir: './e2e',
+  testMatch: /.*\.spec\.ts$/,
+  fullyParallel: false, // shared DB — keep tests sequential to avoid race conditions
+  forbidOnly: !!process.env.CI,
+  // CI: 2 retries to absorb transient network/DB blips on shared runners.
+  // Local: 1 retry (faster feedback).
+  retries: process.env.CI ? 2 : 1,
+  // CI: pin to 1 worker for deterministic ordering against the shared DB.
+  // Local: also 1 worker (fullyParallel: false enforces sequential anyway).
+  workers: process.env.CI ? 1 : 1,
+  timeout: 30_000,
+  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
+
+  use: {
+    baseURL: BASE_URL,
+    // Always headless — applies in both local and CI runs. CI runners have
+    // no display server; local runs use --headed via the e2e:debug script
+    // when the engineer wants to watch.
+    headless: true,
+    trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
+    actionTimeout: 10_000,
+    navigationTimeout: 20_000,
+    locale: 'ar-EG',
+  },
+
+  projects: [
+    {
+      name: 'setup',
+      testMatch: /global\.setup\.ts/,
+      // Setup hits the auth-tier rate-limit (5 req / 15 min). A retry would
+      // burn another auth slot AND re-trigger the cold-compile, doubling the
+      // failure budget. Single-shot only — fail fast with a clear message.
+      retries: 0,
+    },
+    {
+      name: 'chromium',
+      use: {
+        storageState: 'e2e/.auth/admin.json',
+      },
+      dependencies: ['setup'],
+      testIgnore: /global\.setup\.ts/,
+    },
+  ],
+
+  // webServer:
+  //
+  //   - In CI (process.env.CI is set): boot a production build so the test
+  //     suite runs against the same artifact a deployment would. The build
+  //     happens here so a single `npm run e2e` reproduces the full pipeline
+  //     locally if needed. reuseExistingServer is FALSE in CI: every job
+  //     starts on a fresh port to avoid leaks across retries.
+  //
+  //   - Locally with E2E_AUTO_SERVER=1: spawn `next dev` (faster startup,
+  //     hot reload). reuseExistingServer is TRUE so re-runs against an
+  //     already-running dev server skip the cold-compile.
+  //
+  //   - Locally without E2E_AUTO_SERVER: webServer is undefined; the
+  //     engineer is expected to start the server manually.
+  //
+  // E2E_BYPASS_RATE_LIMIT=1 short-circuits the auth-tier rate limit (5 req /
+  // 15 min) which would otherwise block runs that perform multiple
+  // form-logins. The bypass is gated behind this env var; the rate limit is
+  // fully active in any deployment that doesn't set it (see
+  // lib/middleware/global-security.ts and lib/rate-limit.ts).
+  webServer: process.env.CI
+    ? {
+        command: 'npm run build && npm run start:production',
+        port: 3000,
+        reuseExistingServer: false,
+        timeout: 120_000,
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env: {
+          ...process.env,
+          E2E_BYPASS_RATE_LIMIT: '1',
+        } as Record<string, string>,
+      }
+    : AUTO_SERVER
+      ? {
+          command: 'npm run dev',
+          url: BASE_URL,
+          reuseExistingServer: true,
+          timeout: 120_000,
+          stdout: 'pipe',
+          stderr: 'pipe',
+          env: {
+            ...process.env,
+            E2E_BYPASS_RATE_LIMIT: '1',
+          } as Record<string, string>,
+        }
+      : undefined,
+});
