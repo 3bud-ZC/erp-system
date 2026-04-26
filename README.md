@@ -251,6 +251,39 @@ scripts are blocked at runtime by the production safety guards.
 `railway.json` and `nixpacks.toml` already exist in the repo — no extra
 configuration needed.
 
+### Option C — Render
+
+`render.yaml` is committed. Render will pick it up automatically.
+Secrets are marked `sync: false` — you'll be prompted in the Render
+dashboard for each.
+
+---
+
+### 🛠️ First-Time Deploy Checklist
+
+The build pipeline does **NOT** apply schema migrations or seed any data —
+this is intentional safety. Run these once, manually, after the first
+successful deploy:
+
+```bash
+# Option 1: from your local machine, with the production DATABASE_URL
+DATABASE_URL=<prod-url> npx prisma migrate deploy
+
+# Option 2: one-off opt-in on Railway — set RAILWAY_RUN_MIGRATE=true for
+# a single deploy, let it apply migrations, then unset the variable
+```
+
+**Steady-state behavior:** every deploy / restart performs **zero** DB
+mutations. Only the Next.js app runs.
+
+| Op                    | When does it run?                                  |
+|-----------------------|----------------------------------------------------|
+| `prisma generate`     | Build phase only (writes to `node_modules`)        |
+| `prisma migrate deploy` | Operator-managed (manual, one-off)               |
+| `npm run seed`        | Blocked unless `ALLOW_SEED=true` is set            |
+| `npm run db:reset`    | Blocked unless `ALLOW_SEED=true` is set            |
+| Demo user injection   | Blocked unless `RAILWAY_RUN_INIT=true` is set      |
+
 ---
 
 ## 📋 Core Features

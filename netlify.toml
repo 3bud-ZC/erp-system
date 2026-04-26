@@ -1,10 +1,16 @@
+# Production-safe build: NO `prisma db push`, NO seed, NO demo-user injection.
+# Schema migrations are operator-managed via `npx prisma migrate deploy`.
 [build]
-  command = "npm ci && npx prisma generate && npx prisma db push && node scripts/deploy-demo.js && npm run build"
+  command = "npm ci && npx prisma generate && npm run build"
   publish = ".next"
 
 [build.environment]
   NODE_VERSION = "18"
   NPM_VERSION = "9"
+  ALLOW_SEED = "false"
+  E2E_BYPASS_RATE_LIMIT = "0"
+  E2E_ALLOW_AUTH_RESET = "0"
+  E2E_ALLOW_PRODUCTION_DB = "0"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"

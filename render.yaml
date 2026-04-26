@@ -1,21 +1,45 @@
+# =============================================================================
+# Render deployment manifest — production-safe.
+# =============================================================================
+# Build runs ONLY: install deps, generate Prisma client, build Next.js.
+# It NEVER runs `prisma db push`, `prisma db seed`, `deploy-demo.js`, or any
+# script that mutates the database.
+#
+# Schema migrations are operator-managed: run `npx prisma migrate deploy`
+# manually once, from a trusted shell, after the first deploy.
+#
+# All secrets are marked `sync: false` so Render prompts the operator to
+# provide them in the dashboard. NEVER commit real values to this file.
+# =============================================================================
+
 services:
   - type: web
     name: erp-system
     runtime: node
     plan: free
-    buildCommand: echo "=== Starting Build ===" && npm ci && echo "=== Generating Prisma Client ===" && npx prisma generate && echo "=== Pushing Schema to Database ===" && npx prisma db push --accept-data-loss && echo "=== Seeding Database ===" && npx prisma db seed && echo "=== Creating Demo User ===" && node scripts/deploy-demo.js && echo "=== Building Next.js ===" && npm run build
+    buildCommand: npm ci && npx prisma generate && npm run build
     startCommand: npm start
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"
+      # Secrets — set in Render dashboard, never in repo.
       - key: DATABASE_URL
-        value: postgresql://neondb_owner:npg_1hwYMH4QaAmz@ep-soft-credit-anm9kca3.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require
+        sync: false
       - key: JWT_SECRET
-        value: erp-system-production-secret-key-2026-change-in-production
+        sync: false
       - key: NEXTAUTH_SECRET
-        value: 91e69c722acb1ddf08a50b766a4cd0ff688a083e3d8c2ec671e87d83dc5f93f76acfdc316a31c87926b1d8c9f88571bd8bdfb466860c6e3f476b480b2cbef14e
+        sync: false
       - key: NEXTAUTH_URL
-        value: https://erp-system-btoq.onrender.com
-      - key: NEXT_PUBLIC_API_URL
-        value: https://erp-system-btoq.onrender.com/api
-
+        sync: false
+      # Production safety flags — keep all OFF.
+      - key: ALLOW_SEED
+        value: "false"
+      - key: E2E_BYPASS_RATE_LIMIT
+        value: "0"
+      - key: E2E_ALLOW_AUTH_RESET
+        value: "0"
+      - key: E2E_ALLOW_PRODUCTION_DB
+        value: "0"
