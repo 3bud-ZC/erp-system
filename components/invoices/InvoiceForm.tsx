@@ -158,18 +158,9 @@ export function InvoiceForm({
     if (lines.some(l => l.productId && !(parseFloat(l.quantity) > 0))) {
       return 'الكمية يجب أن تكون أكبر من صفر';
     }
-    if (grandTotal <= 0) return 'إجمالي الفاتورة يجب أن يكون أكبر من صفر';
-    // Stock validation only meaningful for sales
-    if (config.kind === 'sales') {
-      for (const line of lines) {
-        if (!line.productId) continue;
-        const p = products.find(x => x.id === line.productId);
-        const qty = parseFloat(line.quantity) || 0;
-        if (p && p.stock != null && qty > p.stock) {
-          return `المخزون غير كافٍ لـ "${p.nameAr}" (متاح: ${p.stock})`;
-        }
-      }
-    }
+    // Force-save policy: a zero-total invoice is allowed (e.g. promo / sample),
+    // and stock-availability is now a warning surfaced inline in the table
+    // rather than a blocker — see the lowStock highlight on each line.
     return null;
   }
 
@@ -208,6 +199,10 @@ export function InvoiceForm({
       notes: notes.trim() || undefined,
       total: subtotal,
       grandTotal,
+      // Include id in body for edit mode — the API also reads it from the URL
+      // query string, but sending it both ways makes the request resilient to
+      // any URL-rewriting middleware between the client and the server.
+      ...(mode === 'edit' && existing ? { id: existing.id } : {}),
       items: validLines.map(l => ({
         productId:   l.productId,
         description: (l.description || '').trim() || undefined,

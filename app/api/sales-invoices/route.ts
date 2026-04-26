@@ -291,9 +291,13 @@ export async function PUT(request: Request) {
       return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
     if (!user.tenantId) return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    const tenantId = user.tenantId; // narrow the type for the closures below
 
     const body = await request.json();
-    const { id, items: rawItems, ...invoiceData } = body;
+    const { id: bodyId, items: rawItems, ...invoiceData } = body;
+    // Accept id from either query string (?id=...) or body for resilience.
+    const queryId = new URL(request.url).searchParams.get('id');
+    const id = bodyId || queryId;
     if (!id) return apiError('Invoice ID missing', 400);
 
     /* ── Sanitize items: drop empty / invalid rows instead of failing ── */
@@ -376,7 +380,8 @@ export async function PUT(request: Request) {
             data: { stock: { decrement: d.delta } },
           });
           await createInventoryTransaction(
-            tx, d.productId, 'adjustment', -d.delta, id,
+            tx, d.productId, 'adjustment', -d.delta,
+            tenantId, id,
             'Sales invoice updated — stock quantity adjusted',
           );
         } catch (e) {
@@ -457,8 +462,9 @@ export async function DELETE(request: Request) {
     const id = searchParams.get('id');
     if (!id) return apiError('Invoice ID missing', 400);
     if (!user.tenantId) return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    const tenantId = user.tenantId; // narrow
 
-    console.log('REQUEST:', { invoiceId: id, tenantId: user.tenantId });
+    console.log('REQUEST:', { invoiceId: id, tenantId });
 
     /* ── 1. Cascade-delete related Payments (with their JE + allocations) ── */
     const relatedPayments = await prisma.payment.findMany({
@@ -508,31 +514,44 @@ export async function DELETE(request: Request) {
       console.warn('STEP 3 WARN: invoice JE reversal failed:', (e as Error).message);
     }
 
-    /* ── 4 + 5. Restore stock and delete items + invoice in one transaction ─ */
-    const deletedInvoice = await prisma.$transaction(async tx => {
-      const invoice = await tx.salesInvoice.findFirst({
-        where: { id, tenantId: user.tenantId },
-        include: { items: true },
-      });
-      if (!invoice) throw new Error('Invoice not found or unauthorized');
+    /* ── 4. Fetch invoice + items BEFORE the deletion transaction ──
+     *
+     * IMPORTANT: stock-restore and inventory-transaction logging must run
+     * OUTSIDE the deletion transaction.  Wrapping a failing DB call in
+     * try/catch *inside* `$transaction` does NOT recover — Postgres aborts
+     * the whole transaction and every subsequent query fails with 25P02
+     * ("current transaction is aborted").  So we do the optional bits
+     * separately, then run a tiny atomic transaction for the actual
+     * delete which has no FK risk left.                                  */
+    const invoice = await prisma.salesInvoice.findFirst({
+      where: { id, tenantId: user.tenantId },
+      include: { items: true },
+    });
+    if (!invoice) return apiError('Invoice not found or unauthorized', 404);
 
-      // Restore stock + log inventory transactions (best-effort)
-      for (const item of invoice.items) {
-        try {
-          await tx.product.update({
-            where: { id: item.productId },
-            data: { stock: { increment: item.quantity } },
-          });
-          await createInventoryTransaction(
-            tx, item.productId, 'adjustment', item.quantity, id,
-            'Deleted sales invoice — stock restored',
-          );
-        } catch (e) {
-          console.warn(`STEP 4 WARN: stock restore failed for ${item.productId}:`, (e as Error).message);
-        }
+    /* ── 4a. Restore stock per item (each in its own try/catch) ── */
+    for (const item of invoice.items) {
+      try {
+        await prisma.product.update({
+          where: { id: item.productId },
+          data: { stock: { increment: item.quantity } },
+        });
+      } catch (e) {
+        console.warn(`STEP 4a WARN: stock restore failed for ${item.productId}:`, (e as Error).message);
       }
+      try {
+        await createInventoryTransaction(
+          prisma, item.productId, 'adjustment', item.quantity,
+          tenantId, id,
+          'Deleted sales invoice — stock restored',
+        );
+      } catch (e) {
+        console.warn(`STEP 4a WARN: inventory tx log failed for ${item.productId}:`, (e as Error).message);
+      }
+    }
 
-      // Delete items then the invoice itself
+    /* ── 5. Delete items + invoice (small atomic transaction) ── */
+    const deletedInvoice = await prisma.$transaction(async tx => {
       await tx.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: id } });
       await tx.salesInvoice.delete({ where: { id } });
       return invoice;

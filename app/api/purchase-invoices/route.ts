@@ -166,9 +166,12 @@ export async function PUT(request: Request) {
       return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
     if (!user.tenantId) return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    const tenantId = user.tenantId; // narrow
 
     const body = await request.json();
-    const { id, items: rawItems, ...invoiceData } = body;
+    const { id: bodyId, items: rawItems, ...invoiceData } = body;
+    const queryId = new URL(request.url).searchParams.get('id');
+    const id = bodyId || queryId;
     if (!id) return apiError('Invoice ID missing', 400);
 
     /* ── Sanitize items ── */
@@ -233,7 +236,8 @@ export async function PUT(request: Request) {
             data: { stock: { increment: d.delta } },
           });
           await createInventoryTransaction(
-            tx, d.productId, 'adjustment', d.delta, id,
+            tx, d.productId, 'adjustment', d.delta,
+            tenantId, id,
             'Purchase invoice updated — stock quantity adjusted',
           );
         } catch (e) {
@@ -305,6 +309,7 @@ export async function DELETE(request: Request) {
     const id = searchParams.get('id');
     if (!id) return apiError('معرف الفاتورة مطلوب', 400);
     if (!user.tenantId) return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    const tenantId = user.tenantId; // narrow
 
     /* ── 1. Cascade-delete related Payments ── */
     const relatedPayments = await prisma.payment.findMany({
@@ -344,29 +349,42 @@ export async function DELETE(request: Request) {
       console.warn('STEP 3 WARN: invoice JE reversal failed:', (e as Error).message);
     }
 
-    /* ── 4 + 5. Reverse stock and delete items + invoice ── */
-    const deletedInvoice = await prisma.$transaction(async tx => {
-      const invoice = await (tx as any).purchaseInvoice.findFirst({
-        where: { id, tenantId: user.tenantId },
-        include: { items: true },
-      });
-      if (!invoice) throw new Error('الفاتورة غير موجودة');
+    /* ── 4. Fetch invoice + items BEFORE the deletion transaction ──
+     *
+     * Same reasoning as the sales-invoice handler: try/catch around DB
+     * calls inside `$transaction` does NOT recover from a failed query
+     * (Postgres aborts the whole transaction → 25P02 on every subsequent
+     * call).  So stock-reverse and inventory-transaction logging happen
+     * outside, each in its own try/catch.                               */
+    const invoice = await (prisma as any).purchaseInvoice.findFirst({
+      where: { id, tenantId: user.tenantId },
+      include: { items: true },
+    });
+    if (!invoice) return apiError('الفاتورة غير موجودة', 404);
 
-      for (const item of invoice.items) {
-        try {
-          await (tx as any).product.update({
-            where: { id: item.productId },
-            data: { stock: { decrement: item.quantity } },
-          });
-          await createInventoryTransaction(
-            tx, item.productId, 'adjustment', -item.quantity, id,
-            'Deleted purchase invoice — stock reversed',
-          );
-        } catch (e) {
-          console.warn(`STEP 4 WARN: stock reverse failed for ${item.productId}:`, (e as Error).message);
-        }
+    /* ── 4a. Reverse stock per item (outside the tx) ── */
+    for (const item of invoice.items) {
+      try {
+        await (prisma as any).product.update({
+          where: { id: item.productId },
+          data: { stock: { decrement: item.quantity } },
+        });
+      } catch (e) {
+        console.warn(`STEP 4a WARN: stock reverse failed for ${item.productId}:`, (e as Error).message);
       }
+      try {
+        await createInventoryTransaction(
+          prisma, item.productId, 'adjustment', -item.quantity,
+          tenantId, id,
+          'Deleted purchase invoice — stock reversed',
+        );
+      } catch (e) {
+        console.warn(`STEP 4a WARN: inventory tx log failed for ${item.productId}:`, (e as Error).message);
+      }
+    }
 
+    /* ── 5. Delete items + invoice (small atomic transaction) ── */
+    const deletedInvoice = await prisma.$transaction(async tx => {
       await (tx as any).purchaseInvoiceItem.deleteMany({ where: { purchaseInvoiceId: id } });
       await (tx as any).purchaseInvoice.delete({ where: { id } });
       return invoice;
