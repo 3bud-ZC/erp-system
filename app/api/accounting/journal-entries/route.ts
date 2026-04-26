@@ -3,12 +3,12 @@
  * REST endpoints for journal entry management
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { journalEntryService, CreateJournalEntryInput } from '@/lib/accounting/journal-entry.service';
 import { journalEntryValidator } from '@/lib/accounting/validation.service';
 import { validationEngine, ValidationContext } from '@/lib/validation/validation-engine';
 import { getAuthenticatedUser, checkPermission } from '@/lib/auth';
-import { apiError } from '@/lib/api-response';
+import { apiError, apiSuccess, handleApiError } from '@/lib/api-response';
 
 // ============================================================================
 // POST /api/accounting/journal-entries
@@ -48,26 +48,18 @@ export async function POST(req: NextRequest) {
     const validationResult = await journalEntryValidator.validate(input, validationContext);
 
     if (!validationResult.isValid) {
-      return NextResponse.json(
-        {
-          error: 'Validation failed',
-          errors: validationResult.errors,
-          warnings: validationResult.warnings,
-        },
-        { status: 400 }
-      );
+      return apiError('Validation failed', 400, {
+        errors: validationResult.errors,
+        warnings: validationResult.warnings,
+      });
     }
 
     // Create journal entry
     const entry = await journalEntryService.createDraftEntry(input);
 
-    return NextResponse.json(entry, { status: 201 });
+    return apiSuccess(entry, 'Journal entry created');
   } catch (error: any) {
-    // Secure logging only
-    return NextResponse.json(
-      { error: error.message || 'Failed to create journal entry' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'Create journal entry');
   }
 }
 
@@ -101,12 +93,8 @@ export async function GET(req: NextRequest) {
       offset,
     });
 
-    return NextResponse.json(result);
+    return apiSuccess(result);
   } catch (error: any) {
-    // Secure logging only
-    return NextResponse.json(
-      { error: error.message || 'Failed to list journal entries' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'List journal entries');
   }
 }
