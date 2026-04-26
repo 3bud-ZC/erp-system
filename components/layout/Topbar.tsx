@@ -215,7 +215,7 @@ export function Topbar() {
   }
 
   return (
-    <div className="h-16 bg-white border-b border-slate-100 flex items-center justify-between px-6 z-40 relative shadow-sm" dir="rtl">
+    <div className="sticky top-0 h-16 bg-white/80 backdrop-blur-md border-b border-slate-200/70 flex items-center justify-between px-6 z-40 shadow-[0_1px_2px_0_rgba(15,23,42,0.04)]" dir="rtl">
 
       {/* ── Search ─────────────────────────────────────────── */}
       <div className="flex-1 max-w-md" ref={searchRef}>

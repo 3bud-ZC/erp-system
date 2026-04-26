@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { calculateProfitAndLoss } from '@/lib/accounting';
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { getAuthenticatedUser } from '@/lib/auth';
 
@@ -215,14 +214,18 @@ export async function GET(request: Request) {
         minStock: p.minStock,
       }));
 
-    // Calculate P&L (wrapped in try-catch since accounting models are new)
-    let pnl = { grossProfit: 0, netProfit: 0 };
-    try {
-      pnl = await calculateProfitAndLoss(currentMonthStart, currentMonthEnd);
-    } catch (e) {
-      // Accounting system not yet initialized, use defaults
-      // Silently continue with zero values
-    }
+    // Profitability — derived from the same sales/purchases/expenses we
+    // already aggregated above, so the dashboard KPIs are internally
+    // consistent (the previous implementation called calculateProfitAndLoss,
+    // which queries journal-entry lines and was producing a non-zero net
+    // profit even when sales were 0 because of broken tenant scoping).
+    //
+    // Gross profit ≈ sales − purchases (purchases stand in for COGS until
+    // we have a proper inventory-costing pipeline running).
+    // Net profit   = gross profit − operating expenses.
+    const grossProfit = currentData.sales - currentData.purchases;
+    const netProfit   = grossProfit - currentData.expenses;
+    const pnl = { grossProfit, netProfit };
 
     // Get total inventory value and count
     const inventory = await safeFindMany('product', tenantId);

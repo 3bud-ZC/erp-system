@@ -138,17 +138,20 @@ export async function DELETE(request: Request) {
       return apiError('العميل غير موجود', 404);
     }
 
-    // SECURITY: Check linked records with tenant scope
+    // Smart delete (hard if no refs, soft if there are).
     const linked = await customerRepo.countLinkedDocuments(id, user.tenantId!);
+    let mode: 'hard' | 'soft';
     if (linked.total > 0) {
-      return apiError('Cannot delete customer with existing orders or invoices', 400);
+      await customerRepo.softDelete(id);
+      mode = 'soft';
+    } else {
+      await customerRepo.delete(id);
+      mode = 'hard';
     }
-
-    await customerRepo.delete(id);
 
     await logAuditAction(
       user.id,
-      'DELETE',
+      mode === 'hard' ? 'DELETE' : 'SOFT_DELETE',
       'sales',
       'Customer',
       id,
@@ -157,7 +160,11 @@ export async function DELETE(request: Request) {
       request.headers.get('user-agent') || undefined
     );
 
-    return apiSuccess({ id }, 'Customer deleted successfully');
+    const msg =
+      mode === 'hard'
+        ? 'تم حذف العميل نهائياً'
+        : `تم إلغاء تفعيل العميل (مرتبط بـ ${linked.total} سجل: ${linked.orders} أمر بيع، ${linked.invoices} فاتورة)`;
+    return apiSuccess({ id, mode, linked }, msg);
   } catch (error) {
     return handleApiError(error, 'Delete customer');
   }

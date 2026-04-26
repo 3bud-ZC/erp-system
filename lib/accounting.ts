@@ -784,11 +784,18 @@ export async function recordManufacturingOverhead(
 }
 
 /**
- * Calculate P&L (Profit & Loss) statement
+ * Calculate P&L (Profit & Loss) statement from posted journal-entry lines.
+ *
+ * `tenantId` is REQUIRED — without it the previous version was aggregating
+ * across the entire database (cross-tenant leak). Account `type` is matched
+ * case-insensitively because the seed data uses lowercase
+ * (`asset` / `revenue` / `expense`) while the accounting service used to
+ * write capitalised values.
  */
 export async function calculateProfitAndLoss(
   fromDate: Date,
-  toDate: Date
+  toDate: Date,
+  tenantId: string,
 ): Promise<{
   revenue: number;
   cogs: number;
@@ -797,46 +804,56 @@ export async function calculateProfitAndLoss(
   netProfit: number;
 }> {
   try {
-    // Get all revenue and expense accounts
+    if (!tenantId) {
+      throw new Error('calculateProfitAndLoss requires tenantId');
+    }
+
+    const baseJE = {
+      entryDate: { gte: fromDate, lte: toDate },
+      isPosted: true,
+      tenantId,
+    } as const;
+
+    // Revenue accounts: net = credit − debit
     const revenueAccount = await prisma.journalEntryLine.aggregate({
       where: {
-        account: { type: 'Revenue' },
-        journalEntry: {
-          entryDate: { gte: fromDate, lte: toDate },
-          isPosted: true,
-        },
+        tenantId,
+        account: { type: { equals: 'revenue', mode: 'insensitive' }, tenantId },
+        journalEntry: baseJE,
       },
-      _sum: { credit: true },
+      _sum: { credit: true, debit: true },
     });
 
     const cogsAccount = await prisma.journalEntryLine.aggregate({
       where: {
-        account: { subType: 'COGS' },
-        journalEntry: {
-          entryDate: { gte: fromDate, lte: toDate },
-          isPosted: true,
-        },
+        tenantId,
+        account: { subType: { equals: 'COGS', mode: 'insensitive' }, tenantId },
+        journalEntry: baseJE,
       },
-      _sum: { debit: true },
+      _sum: { debit: true, credit: true },
     });
 
     const operatingExpensesAccount = await prisma.journalEntryLine.aggregate({
       where: {
-        account: { 
-          type: 'Expense',
-          subType: 'Operating',
+        tenantId,
+        account: {
+          type: { equals: 'expense', mode: 'insensitive' },
+          subType: { equals: 'operating', mode: 'insensitive' },
+          tenantId,
         },
-        journalEntry: {
-          entryDate: { gte: fromDate, lte: toDate },
-          isPosted: true,
-        },
+        journalEntry: baseJE,
       },
-      _sum: { debit: true },
+      _sum: { debit: true, credit: true },
     });
 
-    const revenue = Number(revenueAccount._sum.credit) || 0;
-    const cogs = Number(cogsAccount._sum.debit) || 0;
-    const operatingExpenses = Number(operatingExpensesAccount._sum.debit) || 0;
+    // Revenue is a credit-balance account; net = credit − debit (in case of reversals).
+    const revenue =
+      (Number(revenueAccount._sum.credit) || 0) - (Number(revenueAccount._sum.debit) || 0);
+    const cogs =
+      (Number(cogsAccount._sum.debit) || 0) - (Number(cogsAccount._sum.credit) || 0);
+    const operatingExpenses =
+      (Number(operatingExpensesAccount._sum.debit) || 0) -
+      (Number(operatingExpensesAccount._sum.credit) || 0);
     const grossProfit = revenue - cogs;
     const netProfit = grossProfit - operatingExpenses;
 

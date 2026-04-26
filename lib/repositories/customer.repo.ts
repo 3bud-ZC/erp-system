@@ -7,9 +7,9 @@ import { prisma } from '@/lib/db';
 import type { Prisma } from '@prisma/client';
 
 export const customerRepo = {
-  listByTenant(tenantId: string) {
+  listByTenant(tenantId: string, opts: { includeInactive?: boolean } = {}) {
     return prisma.customer.findMany({
-      where: { tenantId },
+      where: opts.includeInactive ? { tenantId } : { tenantId, isActive: true },
       orderBy: { createdAt: 'desc' },
     });
   },
@@ -28,6 +28,11 @@ export const customerRepo = {
 
   delete(id: string) {
     return prisma.customer.delete({ where: { id } });
+  },
+
+  /** Soft delete — keeps the row for FK integrity, hides it from lists. */
+  softDelete(id: string) {
+    return prisma.customer.update({ where: { id }, data: { isActive: false } });
   },
 
   countLinkedDocuments(id: string, tenantId: string) {

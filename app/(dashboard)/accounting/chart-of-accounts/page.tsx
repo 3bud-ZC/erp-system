@@ -109,7 +109,11 @@ export default function ChartOfAccountsPage() {
   return (
     <AccountingLayout
       title="دليل الحسابات"
-      subtitle={loading ? 'جاري التحميل…' : `${accounts.length} حساب`}
+      subtitle={
+        loading
+          ? 'جاري التحميل…'
+          : `${accounts.length} حساب · الأرصدة محسوبة من القيود المرحّلة`
+      }
       toolbar={
         <>
           <button
@@ -136,6 +140,17 @@ export default function ChartOfAccountsPage() {
           <span>{errMsg}</span>
         </div>
       )}
+
+      {/* Purpose / how-to-use banner */}
+      <div className="bg-blue-50/60 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-900 leading-relaxed">
+        <p className="font-semibold mb-1">ما هو دليل الحسابات؟</p>
+        <p>
+          هو الهيكل الذي تُصنَّف عليه كل حركة محاسبية في النظام. يُستخدم في القيود
+          اليومية، ميزان المراجعة، وقائمتَي الدخل والمركز المالي. الأرصدة الظاهرة
+          هنا محسوبة <strong>تلقائياً</strong> من <strong>القيود المرحّلة فقط</strong>،
+          ولا تتأثر بالمسودات.
+        </p>
+      </div>
 
       {/* KPIs by type */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -175,7 +190,9 @@ export default function ChartOfAccountsPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {grouped.map(([type, list]) => (
+          {grouped.map(([type, list]) => {
+            const groupTotal = list.reduce((s, a) => s + Number(a.balance ?? 0), 0);
+            return (
             <div key={type} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
               <div className="flex items-center justify-between px-5 py-3 bg-slate-50 border-b border-slate-200">
                 <div className="flex items-center gap-2">
@@ -183,6 +200,10 @@ export default function ChartOfAccountsPage() {
                     {TYPE_LABELS[type] ?? type}
                   </span>
                   <span className="text-xs text-slate-500">{list.length} حساب</span>
+                </div>
+                <div className="text-xs">
+                  <span className="text-slate-500 ml-2">الإجمالي:</span>
+                  <span className="font-semibold text-slate-900 tabular-nums">{fmtMoney(groupTotal)}</span>
                 </div>
               </div>
               <table className="w-full text-sm">
@@ -219,7 +240,8 @@ export default function ChartOfAccountsPage() {
                 </tbody>
               </table>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

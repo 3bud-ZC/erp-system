@@ -6,8 +6,9 @@ import { prisma } from '@/lib/db';
 import type { Prisma } from '@prisma/client';
 
 export const productRepo = {
-  listByTenant(tenantId: string, opts?: { type?: string }) {
+  listByTenant(tenantId: string, opts?: { type?: string; includeInactive?: boolean }) {
     const where: Prisma.ProductWhereInput = { tenantId };
+    if (!opts?.includeInactive) where.isActive = true;
     if (opts?.type && opts.type !== 'all') (where as any).type = opts.type;
     return prisma.product.findMany({
       where,
@@ -35,6 +36,11 @@ export const productRepo = {
 
   delete(id: string) {
     return prisma.product.delete({ where: { id } });
+  },
+
+  /** Soft delete — keeps the row for FK integrity, hides it from lists. */
+  softDelete(id: string) {
+    return prisma.product.update({ where: { id }, data: { isActive: false } });
   },
 
   deleteInventoryTransactions(productId: string) {

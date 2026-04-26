@@ -200,35 +200,29 @@ export async function DELETE(request: Request) {
     const { salesOrderItems, purchaseOrderItems, salesInvoiceItems, purchaseInvoiceItems, inventoryTransactions, productionOrders } = usage;
     const totalUsage = usage.total;
 
-    if (totalUsage > 0) {
-      const lines = [];
-      if (salesOrderItems > 0) lines.push(`- أوامر بيع: ${salesOrderItems}`);
-      if (purchaseOrderItems > 0) lines.push(`- أوامر شراء: ${purchaseOrderItems}`);
-      if (salesInvoiceItems > 0) lines.push(`- فواتير بيع: ${salesInvoiceItems}`);
-      if (purchaseInvoiceItems > 0) lines.push(`- فواتير شراء: ${purchaseInvoiceItems}`);
-      if (inventoryTransactions > 0) lines.push(`- حركات المخزون: ${inventoryTransactions}`);
-      if (productionOrders > 0) lines.push(`- أوامر إنتاج: ${productionOrders}`);
-      
-      return apiError(
-        `لا يمكن حذف المنتج لأنه مستخدم في ${totalUsage} سجل:\n${lines.join('\n')}\n\nيرجى حذف السجلات المرتبطة أولاً أو إلغاء تفعيل المنتج بدلاً من الحذف.`,
-        409
-      );
-    }
-
     // Fetch existing product for activity logging
     const existingProduct = await productRepo.findById(id);
 
-    // Delete inventory transactions first (these are history records)
-    if (inventoryTransactions > 0) {
-      await productRepo.deleteInventoryTransactions(id);
+    // Smart delete: if the product is referenced anywhere we keep the row
+    // (so historical invoices / orders stay intact) and just mark it inactive.
+    // Inventory transactions are pure history — they can be cleaned up only
+    // in the hard-delete path.
+    let mode: 'hard' | 'soft';
+    if (totalUsage > 0) {
+      await productRepo.softDelete(id);
+      mode = 'soft';
+    } else {
+      if (inventoryTransactions > 0) {
+        await productRepo.deleteInventoryTransactions(id);
+      }
+      await productRepo.delete(id);
+      mode = 'hard';
     }
-
-    await productRepo.delete(id);
 
     // Log audit action
     await logAuditAction(
       user.id,
-      'DELETE',
+      mode === 'hard' ? 'DELETE' : 'SOFT_DELETE',
       'inventory',
       'Product',
       id,
@@ -237,7 +231,7 @@ export async function DELETE(request: Request) {
       request.headers.get('user-agent') || undefined
     );
 
-    // Log activity for audit trail
+    // Log activity for audit trail (logActivity only knows CREATE/UPDATE/DELETE).
     await logActivity({
       entity: 'Product',
       entityId: id,
@@ -246,7 +240,20 @@ export async function DELETE(request: Request) {
       before: existingProduct,
     });
 
-    return apiSuccess({ id }, 'Product deleted successfully');
+    if (mode === 'hard') {
+      return apiSuccess({ id, mode }, 'تم حذف المنتج نهائياً');
+    }
+    const summary: string[] = [];
+    if (salesOrderItems     > 0) summary.push(`${salesOrderItems} أمر بيع`);
+    if (purchaseOrderItems  > 0) summary.push(`${purchaseOrderItems} أمر شراء`);
+    if (salesInvoiceItems   > 0) summary.push(`${salesInvoiceItems} فاتورة بيع`);
+    if (purchaseInvoiceItems > 0) summary.push(`${purchaseInvoiceItems} فاتورة شراء`);
+    if (inventoryTransactions > 0) summary.push(`${inventoryTransactions} حركة مخزون`);
+    if (productionOrders    > 0) summary.push(`${productionOrders} أمر إنتاج`);
+    return apiSuccess(
+      { id, mode, usage },
+      `تم إلغاء تفعيل المنتج (مرتبط بـ ${totalUsage} سجل: ${summary.join('، ')})`,
+    );
   } catch (error) {
     return handleApiError(error, 'Delete product');
   }

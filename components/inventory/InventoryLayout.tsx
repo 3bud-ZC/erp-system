@@ -43,7 +43,7 @@ export function InventoryLayout({
         {toolbar && <div className="flex items-center gap-2">{toolbar}</div>}
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-1 flex gap-1 overflow-x-auto">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-1.5 flex gap-1 overflow-x-auto">
         {INVENTORY_TABS.map(t => {
           // Exact match for the hub. Stock-adjustments tab covers the whole
           // /inventory/stock-adjustments subtree so the tab stays highlighted
@@ -61,10 +61,10 @@ export function InventoryLayout({
               key={t.href}
               href={t.href}
               className={cn(
-                'flex-1 min-w-[140px] flex items-center gap-2 justify-center px-4 py-2.5 rounded-lg text-sm transition-colors',
+                'flex-1 min-w-[140px] flex items-center gap-2 justify-center px-4 py-2.5 rounded-xl text-sm transition-all',
                 active
-                  ? 'bg-blue-50 text-blue-700 font-medium'
-                  : 'text-slate-600 hover:bg-slate-50',
+                  ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white font-semibold shadow-md shadow-blue-500/20'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
               )}
             >
               <Icon className="w-4 h-4" />

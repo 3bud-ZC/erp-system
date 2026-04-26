@@ -165,16 +165,20 @@ export async function DELETE(request: Request) {
       return handleApiError(new Error('id مطلوب'), 'Delete warehouse');
     }
 
+    // Smart delete: hard if no products are assigned, otherwise soft.
     const productCount = await warehouseRepo.countAssignedProducts(id);
+    let mode: 'hard' | 'soft';
     if (productCount > 0) {
-      return apiError('Cannot delete warehouse with assigned products', 400);
+      await warehouseRepo.softDelete(id);
+      mode = 'soft';
+    } else {
+      await warehouseRepo.delete(id);
+      mode = 'hard';
     }
-
-    await warehouseRepo.delete(id);
 
     await logAuditAction(
       user.id,
-      'DELETE',
+      mode === 'hard' ? 'DELETE' : 'SOFT_DELETE',
       'inventory',
       'Warehouse',
       id,
@@ -183,7 +187,11 @@ export async function DELETE(request: Request) {
       request.headers.get('user-agent') || undefined
     );
 
-    return apiSuccess({ id }, 'Warehouse deleted successfully');
+    const msg =
+      mode === 'hard'
+        ? 'تم حذف المستودع نهائياً'
+        : `تم إلغاء تفعيل المستودع (مرتبط بـ ${productCount} منتج)`;
+    return apiSuccess({ id, mode, productCount }, msg);
   } catch (error: any) {
     if (error?.code === 'P2025') {
       return handleApiError(new Error('المخزن غير موجود'), 'Delete warehouse');

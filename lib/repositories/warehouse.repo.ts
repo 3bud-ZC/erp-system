@@ -8,7 +8,7 @@ import type { Prisma } from '@prisma/client';
 export const warehouseRepo = {
   listByTenant(
     tenantId: string,
-    opts?: { skip?: number; take?: number; search?: string }
+    opts?: { skip?: number; take?: number; search?: string; includeInactive?: boolean }
   ) {
     const where: Prisma.WarehouseWhereInput = opts?.search
       ? {
@@ -20,6 +20,7 @@ export const warehouseRepo = {
           ],
         }
       : { tenantId };
+    if (!opts?.includeInactive) where.isActive = true;
     return Promise.all([
       prisma.warehouse.findMany({
         where,
@@ -45,6 +46,11 @@ export const warehouseRepo = {
 
   delete(id: string) {
     return prisma.warehouse.delete({ where: { id } });
+  },
+
+  /** Soft delete — keeps the row for FK integrity, hides it from lists. */
+  softDelete(id: string) {
+    return prisma.warehouse.update({ where: { id }, data: { isActive: false } });
   },
 
   countAssignedProducts(id: string) {

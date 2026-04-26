@@ -136,17 +136,22 @@ export async function DELETE(request: Request) {
       return apiError('المورد غير موجود', 404);
     }
 
-    // SECURITY: Check linked records with tenant scope
+    // Smart delete: hard-delete when there are no related rows; otherwise
+    // soft-delete (mark inactive) so historical purchase orders / invoices
+    // keep their FK references intact.
     const linked = await supplierRepo.countLinkedDocuments(id, user.tenantId!);
+    let mode: 'hard' | 'soft';
     if (linked.total > 0) {
-      return apiError('Cannot delete supplier with existing orders or invoices', 400);
+      await supplierRepo.softDelete(id);
+      mode = 'soft';
+    } else {
+      await supplierRepo.delete(id);
+      mode = 'hard';
     }
-
-    await supplierRepo.delete(id);
 
     await logAuditAction(
       user.id,
-      'DELETE',
+      mode === 'hard' ? 'DELETE' : 'SOFT_DELETE',
       'purchases',
       'Supplier',
       id,
@@ -155,7 +160,11 @@ export async function DELETE(request: Request) {
       request.headers.get('user-agent') || undefined
     );
 
-    return apiSuccess({ id }, 'Supplier deleted successfully');
+    const msg =
+      mode === 'hard'
+        ? 'تم حذف المورد نهائياً'
+        : `تم إلغاء تفعيل المورد (مرتبط بـ ${linked.total} سجل: ${linked.orders} أمر شراء، ${linked.invoices} فاتورة)`;
+    return apiSuccess({ id, mode, linked }, msg);
   } catch (error) {
     return handleApiError(error, 'Delete supplier');
   }

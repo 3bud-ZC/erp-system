@@ -37,13 +37,43 @@ export async function GET(req: NextRequest) {
         nameEn: true,
         type: true,
         subType: true,
-        balance: true,
         isActive: true,
       },
       orderBy: { code: 'asc' },
     });
 
-    return apiSuccess(accounts, `Accounts fetched (${accounts.length})`);
+    // Real balance per account = Σ debit − Σ credit across all *posted*
+    // journal-entry lines for this tenant. The static `Account.balance`
+    // column is unmaintained (no service writes to it), so we derive the
+    // number on demand instead of showing the misleading 0 it always returns.
+    const lineTotals = await prisma.journalEntryLine.groupBy({
+      by: ['accountCode'],
+      where: {
+        tenantId: user.tenantId,
+        journalEntry: { tenantId: user.tenantId, isPosted: true },
+      },
+      _sum: { debit: true, credit: true },
+    });
+    const balanceMap = new Map<string, number>(
+      lineTotals.map(r => {
+        const debit  = Number(r._sum.debit  ?? 0);
+        const credit = Number(r._sum.credit ?? 0);
+        return [r.accountCode, debit - credit];
+      }),
+    );
+
+    // Sign the balance the way an accountant expects to read it:
+    //   asset / expense  → debit-positive  (debit − credit)
+    //   liability / equity / revenue → credit-positive  (credit − debit)
+    const data = accounts.map(a => {
+      const raw = balanceMap.get(a.code) ?? 0;
+      const t = (a.type || '').toLowerCase();
+      const creditPositive = t === 'liability' || t === 'equity' || t === 'revenue';
+      const balance = creditPositive ? -raw : raw;
+      return { ...a, balance };
+    });
+
+    return apiSuccess(data, `Accounts fetched (${data.length})`);
   } catch (error: any) {
     return handleApiError(error, 'List accounts');
   }
