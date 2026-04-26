@@ -10,9 +10,9 @@
  * - duration: seconds
  */
 
-import { NextResponse } from 'next/server';
 import { stressTestEngine, StressTestType } from '@/lib/resilience';
 import { logger } from '@/lib/logger';
+import { apiSuccess, apiError } from '@/lib/api-response';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,22 +25,14 @@ export async function POST(request: Request) {
     const validPresets = ['LIGHT', 'MEDIUM', 'HEAVY'];
     
     if (!validPresets.includes(preset)) {
-      return NextResponse.json(
-        { success: false, error: `Invalid preset: ${preset}. Use LIGHT, MEDIUM, or HEAVY.` },
-        { status: 400 }
-      );
+      return apiError(`Invalid preset: ${preset}. Use LIGHT, MEDIUM, or HEAVY.`, 400);
     }
 
     // Check if test already running
     if (stressTestEngine.isRunning()) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Test already running',
-          currentTest: stressTestEngine.getCurrentTest(),
-        },
-        { status: 409 }
-      );
+      return apiError('Test already running', 409, {
+        currentTest: stressTestEngine.getCurrentTest(),
+      });
     }
 
     logger.warn({ preset }, '🚨 Stress test starting');
@@ -48,24 +40,17 @@ export async function POST(request: Request) {
     // Run the test
     const result = await stressTestEngine.runQuickTest(preset);
 
-    return NextResponse.json({
-      success: true,
-      ...result,
-    });
+    return apiSuccess(result);
 
   } catch (error: any) {
     logger.error({ error: error.message }, 'Stress test failed');
-    
-    return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 }
-    );
+    return apiError(error.message || 'Stress test failed', 500);
   }
 }
 
 export async function GET() {
   // Return current test status
-  return NextResponse.json({
+  return apiSuccess({
     running: stressTestEngine.isRunning(),
     currentTest: stressTestEngine.getCurrentTest(),
   });
