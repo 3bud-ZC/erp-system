@@ -563,8 +563,12 @@ export async function DELETE(request: Request) {
         }
 
         console.log('STEP 2d: Deleting invoice...');
+        // Tenant ownership already verified by findFirst above (line ~523).
+        // Prisma .delete() requires a single unique field — adding tenantId
+        // here makes Prisma demand a compound unique [id,tenantId] which the
+        // schema does not declare, throwing "Unknown argument tenantId".
         await tx.salesInvoice.delete({
-          where: { id, tenantId: user.tenantId },
+          where: { id },
         });
         console.log('STEP 2d SUCCESS: Invoice deleted');
 
