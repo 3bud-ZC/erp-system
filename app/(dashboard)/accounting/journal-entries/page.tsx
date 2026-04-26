@@ -1,6 +1,9 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiGet } from '@/lib/api/fetcher';
+import { queryKeys } from '@/lib/api/query-keys';
 import { Plus, X, CheckCircle, Clock, Trash2, BookOpen, RefreshCw } from 'lucide-react';
 import { TableSkeleton, EmptyState, ErrorBanner, PageHeader } from '@/components/ui/patterns';
 
@@ -37,31 +40,33 @@ const emptyLine = (): JournalLine => ({ accountCode: '', description: '', debit:
 const TABLE_COLS = ['w-24', 'w-24', 'w-48', 'w-28', 'w-28', 'w-16'];
 
 export default function JournalEntriesPage() {
-  const [entries, setEntries]     = useState<JournalEntry[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState<string | null>(null);
+  const qc = useQueryClient();
+
+  const entriesQ = useQuery({
+    queryKey: queryKeys.journalEntries,
+    // The endpoint may return either an array or { entries: [...] };
+    // apiGet unwraps the envelope's .data field, leaving us either shape.
+    queryFn: () => apiGet<JournalEntry[] | { entries: JournalEntry[] }>('/api/journal-entries'),
+    staleTime: 1000 * 30,
+  });
+  const entries = useMemo<JournalEntry[]>(() => {
+    const raw = entriesQ.data;
+    if (Array.isArray(raw)) return raw;
+    return raw?.entries ?? [];
+  }, [entriesQ.data]);
+  const loading = entriesQ.isLoading;
+  const error   = entriesQ.error ? (entriesQ.error as Error).message : null;
+
+  const reload = useCallback(() => {
+    qc.invalidateQueries({ queryKey: queryKeys.journalEntries });
+  }, [qc]);
+
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving]       = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [entryDate, setEntryDate] = useState(new Date().toISOString().split('T')[0]);
   const [description, setDescription] = useState('');
   const [lines, setLines]         = useState<JournalLine[]>([emptyLine(), emptyLine()]);
-
-  const load = useCallback(() => {
-    setLoading(true); setError(null);
-    fetch('/api/journal-entries', { credentials: 'include' })
-      .then(r => r.json())
-      .then(j => {
-        if (j.success) {
-          const raw = j.data;
-          setEntries(Array.isArray(raw) ? raw : (raw?.entries ?? []));
-        } else setError(j.message || 'فشل تحميل القيود');
-      })
-      .catch(() => setError('تعذر الاتصال بالخادم'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
 
   const totalDebit  = lines.reduce((s, l) => s + (parseFloat(l.debit) || 0), 0);
   const totalCredit = lines.reduce((s, l) => s + (parseFloat(l.credit) || 0), 0);
@@ -96,7 +101,7 @@ export default function JournalEntriesPage() {
         setShowModal(false); setDescription('');
         setLines([emptyLine(), emptyLine()]);
         setEntryDate(new Date().toISOString().split('T')[0]);
-        load();
+        reload();
       } else setFormError(j.message || j.error || 'فشل الحفظ');
     } catch { setFormError('تعذر الاتصال بالخادم'); }
     finally { setSaving(false); }
@@ -109,9 +114,9 @@ export default function JournalEntriesPage() {
         subtitle={loading ? 'جاري التحميل…' : `${entries.length} قيد`}
         actions={
           <>
-            <button onClick={load} disabled={loading}
+            <button onClick={() => entriesQ.refetch()} disabled={loading || entriesQ.isFetching}
               className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 text-sm text-slate-700">
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-4 h-4 ${entriesQ.isFetching ? 'animate-spin' : ''}`} />
               تحديث
             </button>
             <button onClick={() => setShowModal(true)}
@@ -122,7 +127,7 @@ export default function JournalEntriesPage() {
         }
       />
 
-      {error && <div className="mb-5"><ErrorBanner message={error} onRetry={load} /></div>}
+      {error && <div className="mb-5"><ErrorBanner message={error} onRetry={() => entriesQ.refetch()} /></div>}
 
       {/* New entry modal */}
       {showModal && (

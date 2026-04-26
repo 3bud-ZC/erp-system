@@ -1,6 +1,9 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiGet } from '@/lib/api/fetcher';
+import { queryKeys } from '@/lib/api/query-keys';
 import { Plus, AlertTriangle, X, Pencil, Trash2, Search, Package, CheckCircle } from 'lucide-react';
 import { TableSkeleton, EmptyState, ErrorBanner, Toast, useToast, PageHeader } from '@/components/ui/patterns';
 
@@ -46,11 +49,20 @@ const emptyForm = { code: '', nameAr: '', nameEn: '', type: 'finished_product', 
 const TABLE_COLS = ['w-16', 'w-32', 'w-20', 'w-16', 'w-16', 'w-24', 'w-24', 'w-16', 'w-20'];
 
 export default function ProductsPage() {
-  const [products, setProducts]   = useState<Product[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState<string | null>(null);
+  const qc = useQueryClient();
   const [activeType, setActiveType] = useState<string>('all');
   const [search, setSearch]       = useState('');
+
+  const productsQ = useQuery({
+    queryKey: queryKeys.products(activeType),
+    queryFn: () => apiGet<Product[]>(
+      activeType === 'all' ? '/api/products' : `/api/products?type=${activeType}`
+    ),
+    staleTime: 0,
+  });
+  const products = useMemo(() => productsQ.data ?? [], [productsQ.data]);
+  const loading  = productsQ.isLoading;
+  const error    = productsQ.error ? (productsQ.error as Error).message : null;
 
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving]       = useState(false);
@@ -68,17 +80,10 @@ export default function ProductsPage() {
 
   const [toast, showToast] = useToast();
 
-  const load = useCallback((type = activeType) => {
-    setLoading(true); setError(null);
-    const url = type === 'all' ? '/api/products' : `/api/products?type=${type}`;
-    fetch(url, { credentials: 'include' })
-      .then(r => r.json())
-      .then(j => { if (j.success) setProducts(j.data ?? []); else setError(j.message || 'فشل التحميل'); })
-      .catch(() => setError('تعذر الاتصال بالخادم'))
-      .finally(() => setLoading(false));
-  }, [activeType]);
-
-  useEffect(() => { load(activeType); }, [activeType]);
+  // After mutations, invalidate ALL products variants (any activeType filter).
+  const reload = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ['products'] });
+  }, [qc]);
 
   const filtered = useMemo(() =>
     products.filter(p =>
@@ -107,7 +112,7 @@ export default function ProductsPage() {
         }),
       });
       const j = await res.json();
-      if (j.success) { setShowModal(false); setForm(emptyForm); load(); showToast('تم إضافة المنتج بنجاح'); }
+      if (j.success) { setShowModal(false); setForm(emptyForm); reload(); showToast('تم إضافة المنتج بنجاح'); }
       else setFormError(j.message || j.error || 'فشل الحفظ');
     } catch { setFormError('تعذر الاتصال بالخادم'); }
     finally { setSaving(false); }
@@ -135,7 +140,7 @@ export default function ProductsPage() {
           minStock: editForm.minStock ? Number(editForm.minStock) : null }),
       });
       const j = await res.json();
-      if (j.success) { setEditItem(null); load(); showToast('تم تحديث بيانات المنتج'); }
+      if (j.success) { setEditItem(null); reload(); showToast('تم تحديث بيانات المنتج'); }
       else setEditError(j.message || j.error || 'فشل الحفظ');
     } catch { setEditError('تعذر الاتصال بالخادم'); }
     finally { setEditSaving(false); }
@@ -147,7 +152,7 @@ export default function ProductsPage() {
     try {
       const res = await fetch(`/api/products?id=${deleteId}`, { method: 'DELETE', credentials: 'include' });
       const j = await res.json();
-      if (j.success) { setDeleteId(null); load(); showToast('تم حذف المنتج'); }
+      if (j.success) { setDeleteId(null); reload(); showToast('تم حذف المنتج'); }
       else setDeleteError(j.message || j.error || 'فشل الحذف');
     } catch { setDeleteError('تعذر الاتصال بالخادم'); }
     finally { setDeleting(false); }
@@ -253,7 +258,7 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {error && <div className="mb-5"><ErrorBanner message={error} onRetry={() => load()} /></div>}
+      {error && <div className="mb-5"><ErrorBanner message={error} onRetry={() => productsQ.refetch()} /></div>}
 
       {loading ? (
         <TableSkeleton cols={TABLE_COLS} rows={6} />
