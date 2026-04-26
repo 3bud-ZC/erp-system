@@ -24,13 +24,20 @@ export default defineConfig({
   testMatch: /.*\.spec\.ts$/,
   fullyParallel: false, // shared DB — keep tests sequential to avoid race conditions
   forbidOnly: !!process.env.CI,
+  // CI: 2 retries to absorb transient network/DB blips on shared runners.
+  // Local: 1 retry (faster feedback).
   retries: process.env.CI ? 2 : 1,
-  workers: 1,
+  // CI: pin to 1 worker for deterministic ordering against the shared DB.
+  // Local: also 1 worker (fullyParallel: false enforces sequential anyway).
+  workers: process.env.CI ? 1 : 1,
   timeout: 30_000,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
 
   use: {
     baseURL: BASE_URL,
+    // Always headless — applies in both local and CI runs. CI runners have
+    // no display server; local runs use --headed via the e2e:debug script
+    // when the engineer wants to watch.
     headless: true,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
