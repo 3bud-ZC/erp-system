@@ -52,6 +52,12 @@ export function checkRateLimit(
   identifier: string,
   config: RateLimitConfig = defaultRateLimitConfig
 ): { allowed: boolean; remaining: number; resetTime: number } {
+  // E2E bypass — see lib/middleware/global-security.ts for the same gate.
+  // Production behavior unchanged: env var is unset outside the test runner.
+  if (process.env.E2E_BYPASS_RATE_LIMIT === '1') {
+    return { allowed: true, remaining: 999, resetTime: Date.now() + 60_000 };
+  }
+
   const now = Date.now();
   const record = rateLimitStore.get(identifier);
 

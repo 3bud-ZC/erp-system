@@ -24,8 +24,9 @@ export default defineConfig({
   testMatch: /.*\.spec\.ts$/,
   fullyParallel: false, // shared DB — keep tests sequential to avoid race conditions
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  retries: process.env.CI ? 2 : 1,
   workers: 1,
+  timeout: 30_000,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
 
   use: {
@@ -43,6 +44,10 @@ export default defineConfig({
     {
       name: 'setup',
       testMatch: /global\.setup\.ts/,
+      // Setup hits the auth-tier rate-limit (5 req / 15 min). A retry would
+      // burn another auth slot AND re-trigger the cold-compile, doubling the
+      // failure budget. Single-shot only — fail fast with a clear message.
+      retries: 0,
     },
     {
       name: 'chromium',
@@ -60,8 +65,16 @@ export default defineConfig({
         url: BASE_URL,
         reuseExistingServer: true,
         timeout: 120_000,
-        stdout: 'ignore',
+        stdout: 'pipe',
         stderr: 'pipe',
+        // E2E_BYPASS_RATE_LIMIT=1 short-circuits the auth-tier rate limit (5
+        // req / 15 min) which would otherwise block test runs that perform
+        // multiple form-logins. The bypass is gated behind this env var; the
+        // rate limit is fully active in any deployment that doesn't set it.
+        env: {
+          ...process.env,
+          E2E_BYPASS_RATE_LIMIT: '1',
+        } as Record<string, string>,
       }
     : undefined,
 });

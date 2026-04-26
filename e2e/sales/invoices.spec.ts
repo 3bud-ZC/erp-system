@@ -11,12 +11,24 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { gotoAuthenticated, installAuthMeIntercept } from '../fixtures/auth-helpers';
+
+test.beforeEach(async ({ context }) => {
+  await installAuthMeIntercept(context);
+});
 
 test('create a sales invoice (Save & New) and see success toast', async ({ page }) => {
-  await page.goto('/sales/invoices/new');
+  // Form-login + sidebar -> /sales/invoices -> "+ فاتورة جديدة" SPA hops +
+  // cold-compile of /sales/invoices/new + reference-data fetch easily exceeds
+  // the default 30s test timeout. Bump to 120s.
+  test.setTimeout(120_000);
 
-  // Wait for the page's initial data load (customers + products) to finish.
-  await expect(page.locator('text=جاري تحميل البيانات')).toHaveCount(0, { timeout: 15_000 });
+  await gotoAuthenticated(page, '/sales/invoices/new');
+
+  // Wait for the page header (proves React mounted), then for the loading
+  // sentinel to disappear (proves customers + products are fetched).
+  await expect(page.getByRole('heading', { name: /فاتورة مبيعات جديدة/ })).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('text=جاري تحميل البيانات')).toHaveCount(0, { timeout: 30_000 });
 
   // Customer select — pick the first real option (skip the placeholder "— اختر العميل —")
   const customerSelect = page.locator('select').first();
@@ -37,9 +49,21 @@ test('create a sales invoice (Save & New) and see success toast', async ({ page 
   const numberInputs = page.locator('input[type="number"]');
   await numberInputs.first().fill('1');
 
+  // Set up the response listener BEFORE clicking — the toast auto-hides after
+  // 3s which races with Playwright's locator polling on slow runs. Waiting on
+  // the actual API response is deterministic.
+  const respPromise = page.waitForResponse(
+    (r) => r.url().includes('/api/sales-invoices') && r.request().method() === 'POST',
+    { timeout: 30_000 }
+  );
+
   // Click 'حفظ وجديد' (stays on page) — preferred over 'حفظ وإغلاق' which navigates away.
   await page.getByRole('button', { name: /حفظ وجديد/ }).click();
 
-  // Toast appears
-  await expect(page.locator('text=تم حفظ الفاتورة بنجاح')).toBeVisible({ timeout: 15_000 });
+  const resp = await respPromise;
+  expect(resp.status(), 'sales invoice API should accept the request').toBeLessThan(400);
+
+  // Form reset to placeholder customer is the stable post-save signal — the
+  // success toast is auto-dismissed within 3s and is timing-sensitive.
+  await expect(customerSelect).toHaveValue('', { timeout: 10_000 });
 });

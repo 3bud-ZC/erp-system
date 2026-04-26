@@ -12,19 +12,34 @@
 
 import { test, expect } from '@playwright/test';
 import { runId } from '../fixtures/credentials';
+import { gotoAuthenticated, installAuthMeIntercept } from '../fixtures/auth-helpers';
+import { inputByLabelText } from '../fixtures/form-helpers';
+
+test.beforeEach(async ({ context }) => {
+  await installAuthMeIntercept(context);
+});
 
 test('create a journal entry and see it in the table', async ({ page }) => {
+  // Form-login + SPA nav + cold-compile of /accounting/journal-entries can
+  // exceed the default 30s test timeout — bump to 90s.
+  test.setTimeout(90_000);
+
   const description = `E2E قيد اختبار ${runId()}`;
 
-  await page.goto('/accounting/journal-entries');
-  await page.waitForLoadState('networkidle');
+  await gotoAuthenticated(page, '/accounting/journal-entries');
+
+  // Wait for page header instead of networkidle (TanStack Query never settles).
+  await expect(page.getByRole('heading', { name: /القيود المحاسبية/ }).first()).toBeVisible({ timeout: 30_000 });
 
   // Open the "New entry" modal
   await page.getByRole('button', { name: /قيد جديد/ }).click();
   await expect(page.getByRole('heading', { name: /قيد محاسبي جديد/ })).toBeVisible();
 
-  // Description (البيان)
-  await page.getByLabel(/البيان/).first().fill(description);
+  // Scope to the modal — the page table also has a "البيان" column header.
+  const modal = page.locator('div').filter({ hasText: /^قيد محاسبي جديد/ }).first();
+
+  // Description (البيان) — first label "البيان *" in the modal header row.
+  await inputByLabelText(modal, /^البيان/).fill(description);
 
   // Two account lines: debit cash (1001) 100, credit revenue (4001) 100 — balanced.
   // The modal renders inputs in table cells. We grab them positionally.
