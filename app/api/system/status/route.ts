@@ -3,9 +3,9 @@
  * Read-only status check for monitoring and diagnostics
  */
 
-import { NextResponse } from 'next/server';
 import { getSystemState } from '@/lib/system-state';
 import { logger } from '@/lib/logger';
+import { apiSuccess, apiError } from '@/lib/api-response';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,8 +18,7 @@ export async function GET() {
     
     logger.debug({ state, blocked }, 'System status requested');
     
-    return NextResponse.json({
-      success: true,
+    return apiSuccess({
       state,
       blocked,
       initialized: settings?.initialized || false,
@@ -31,13 +30,6 @@ export async function GET() {
     
   } catch (error: any) {
     logger.error({ error: error.message }, 'Status check failed');
-    
-    return NextResponse.json({
-      success: false,
-      error: {
-        code: 'STATUS_CHECK_FAILED',
-        message: 'Failed to retrieve system status',
-      },
-    }, { status: 500 });
+    return apiError('Failed to retrieve system status', 500, { code: 'STATUS_CHECK_FAILED' });
   }
 }
