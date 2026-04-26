@@ -4,9 +4,9 @@
  * TODO: Re-enable when chart-of-accounts.service is fixed for schema
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { getAuthenticatedUser, checkPermission } from '@/lib/auth';
-import { apiError } from '@/lib/api-response';
+import { apiError, handleApiError } from '@/lib/api-response';
 // import { chartOfAccountsService, CreateAccountInput } from '@/lib/accounting/chart-of-accounts.service';
 
 // ============================================================================
@@ -21,16 +21,9 @@ export async function POST(req: NextRequest) {
     if (!checkPermission(user, 'manage_accounting')) return apiError('ليس لديك صلاحية', 403);
 
     // TODO: Re-enable when chart-of-accounts.service is fixed for schema
-    return NextResponse.json(
-      { error: 'Account creation temporarily disabled due to schema migration' },
-      { status: 503 }
-    );
+    return apiError('Account creation temporarily disabled due to schema migration', 503);
   } catch (error: any) {
-    // Secure logging only
-    return NextResponse.json(
-      { error: error.message || 'Failed to create account' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'Create account');
   }
 }
 
@@ -46,15 +39,8 @@ export async function GET(req: NextRequest) {
     if (!checkPermission(user, 'view_accounting')) return apiError('ليس لديك صلاحية', 403);
 
     // TODO: Re-enable when chart-of-accounts.service is fixed for schema
-    return NextResponse.json(
-      { error: 'Account listing temporarily disabled due to schema migration' },
-      { status: 503 }
-    );
+    return apiError('Account listing temporarily disabled due to schema migration', 503);
   } catch (error: any) {
-    // Secure logging only
-    return NextResponse.json(
-      { error: error.message || 'Failed to list accounts' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'List accounts');
   }
 }
