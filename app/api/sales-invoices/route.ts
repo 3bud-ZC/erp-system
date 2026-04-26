@@ -16,6 +16,32 @@ import {
 } from '@/lib/erp-execution-engine/services/atomic-transaction-service';
 import { resolveInvoiceNumber } from '@/lib/invoice-numbering';
 
+/**
+ * Coerce a raw value into a full ISO-8601 datetime string suitable for
+ * Prisma's `DateTime` field. The browser's native <input type="date">
+ * sends `"YYYY-MM-DD"` which Prisma rejects with
+ *   "Invalid value for argument `date`: premature end of input.
+ *    Expected ISO-8601 DateTime."
+ * We accept date-only, full ISO strings, and Date objects.
+ */
+function toISODateTime(v: unknown): string | undefined {
+  if (v == null) return undefined;
+  if (v instanceof Date) return v.toISOString();
+  const s = String(v).trim();
+  if (!s) return undefined;
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return undefined;
+  return d.toISOString();
+}
+
+/** Mutate an invoice payload in-place to normalize all DateTime fields. */
+function normalizeInvoiceDates(data: Record<string, any>): Record<string, any> {
+  if ('date' in data)      data.date      = toISODateTime(data.date);
+  if ('issueDate' in data) data.issueDate = toISODateTime(data.issueDate);
+  if ('dueDate' in data)   data.dueDate   = toISODateTime(data.dueDate);
+  return data;
+}
+
 // Translate backend errors to user-friendly Arabic messages
 function translateSalesError(error: any): string {
   const msg: string = error?.message || String(error);
@@ -97,6 +123,8 @@ export async function POST(request: Request) {
 
     const { items, ...invoiceData } = body;
     const { tenantId: _clientTenantId, ...safeInvoiceData } = invoiceData;
+    // Normalize all DateTime fields (date, issueDate, dueDate) — see helper.
+    normalizeInvoiceDates(safeInvoiceData);
 
     // ========================================================================
     // STEP 3: Tenant Validation
@@ -299,6 +327,10 @@ export async function PUT(request: Request) {
     const queryId = new URL(request.url).searchParams.get('id');
     const id = bodyId || queryId;
     if (!id) return apiError('Invoice ID missing', 400);
+
+    // Normalize date fields — the form sends "YYYY-MM-DD" which Prisma's
+    // DateTime field rejects ("premature end of input").
+    normalizeInvoiceDates(invoiceData);
 
     /* ── Sanitize items: drop empty / invalid rows instead of failing ── */
     const items: any[] = Array.isArray(rawItems)

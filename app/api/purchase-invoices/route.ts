@@ -12,6 +12,31 @@ import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/aut
 import { logActivity } from '@/lib/activity-log';
 import { resolveInvoiceNumber } from '@/lib/invoice-numbering';
 
+/**
+ * Coerce a raw value into a full ISO-8601 datetime string suitable for
+ * Prisma's `DateTime` field. The browser's native <input type="date">
+ * sends `"YYYY-MM-DD"` which Prisma rejects with
+ *   "Invalid value for argument `date`: premature end of input.
+ *    Expected ISO-8601 DateTime."
+ */
+function toISODateTime(v: unknown): string | undefined {
+  if (v == null) return undefined;
+  if (v instanceof Date) return v.toISOString();
+  const s = String(v).trim();
+  if (!s) return undefined;
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return undefined;
+  return d.toISOString();
+}
+
+/** Mutate an invoice payload in-place to normalize all DateTime fields. */
+function normalizeInvoiceDates(data: Record<string, any>): Record<string, any> {
+  if ('date' in data)      data.date      = toISODateTime(data.date);
+  if ('issueDate' in data) data.issueDate = toISODateTime(data.issueDate);
+  if ('dueDate' in data)   data.dueDate   = toISODateTime(data.dueDate);
+  return data;
+}
+
 // Translate backend errors to user-friendly Arabic messages
 function translatePurchaseError(error: any): string {
   const msg: string = error?.message || String(error);
@@ -65,6 +90,8 @@ export async function POST(request: Request) {
 
     const body = await request.json();
       const { items, tenantId: _clientTenantId, ...invoiceData } = body;
+      // Normalize date fields (form sends "YYYY-MM-DD"; Prisma needs ISO-8601).
+      normalizeInvoiceDates(invoiceData);
 
       // Explicit input validation
       if (!invoiceData.supplierId) {
@@ -173,6 +200,9 @@ export async function PUT(request: Request) {
     const queryId = new URL(request.url).searchParams.get('id');
     const id = bodyId || queryId;
     if (!id) return apiError('Invoice ID missing', 400);
+
+    // Normalize date fields (form sends "YYYY-MM-DD"; Prisma needs ISO-8601).
+    normalizeInvoiceDates(invoiceData);
 
     /* ── Sanitize items ── */
     const items: any[] = Array.isArray(rawItems)
