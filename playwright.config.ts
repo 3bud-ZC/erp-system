@@ -66,22 +66,51 @@ export default defineConfig({
     },
   ],
 
-  webServer: AUTO_SERVER
+  // webServer:
+  //
+  //   - In CI (process.env.CI is set): boot a production build so the test
+  //     suite runs against the same artifact a deployment would. The build
+  //     happens here so a single `npm run e2e` reproduces the full pipeline
+  //     locally if needed. reuseExistingServer is FALSE in CI: every job
+  //     starts on a fresh port to avoid leaks across retries.
+  //
+  //   - Locally with E2E_AUTO_SERVER=1: spawn `next dev` (faster startup,
+  //     hot reload). reuseExistingServer is TRUE so re-runs against an
+  //     already-running dev server skip the cold-compile.
+  //
+  //   - Locally without E2E_AUTO_SERVER: webServer is undefined; the
+  //     engineer is expected to start the server manually.
+  //
+  // E2E_BYPASS_RATE_LIMIT=1 short-circuits the auth-tier rate limit (5 req /
+  // 15 min) which would otherwise block runs that perform multiple
+  // form-logins. The bypass is gated behind this env var; the rate limit is
+  // fully active in any deployment that doesn't set it (see
+  // lib/middleware/global-security.ts and lib/rate-limit.ts).
+  webServer: process.env.CI
     ? {
-        command: 'npm run dev',
-        url: BASE_URL,
-        reuseExistingServer: true,
+        command: 'npm run build && npm run start:production',
+        port: 3000,
+        reuseExistingServer: false,
         timeout: 120_000,
         stdout: 'pipe',
         stderr: 'pipe',
-        // E2E_BYPASS_RATE_LIMIT=1 short-circuits the auth-tier rate limit (5
-        // req / 15 min) which would otherwise block test runs that perform
-        // multiple form-logins. The bypass is gated behind this env var; the
-        // rate limit is fully active in any deployment that doesn't set it.
         env: {
           ...process.env,
           E2E_BYPASS_RATE_LIMIT: '1',
         } as Record<string, string>,
       }
-    : undefined,
+    : AUTO_SERVER
+      ? {
+          command: 'npm run dev',
+          url: BASE_URL,
+          reuseExistingServer: true,
+          timeout: 120_000,
+          stdout: 'pipe',
+          stderr: 'pipe',
+          env: {
+            ...process.env,
+            E2E_BYPASS_RATE_LIMIT: '1',
+          } as Record<string, string>,
+        }
+      : undefined,
 });
