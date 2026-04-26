@@ -1,6 +1,9 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiGet } from '@/lib/api/fetcher';
+import { queryKeys } from '@/lib/api/query-keys';
 import { Plus, X, Pencil, Trash2, CheckCircle, XCircle, Warehouse } from 'lucide-react';
 import { CardGridSkeleton, EmptyState, ErrorBanner, Toast, useToast, PageHeader } from '@/components/ui/patterns';
 
@@ -28,9 +31,15 @@ function InputField({ label, required, ...props }: React.InputHTMLAttributes<HTM
 }
 
 export default function WarehousesPage() {
-  const [warehouses, setWarehouses] = useState<WarehouseItem[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState<string | null>(null);
+  const qc = useQueryClient();
+
+  const warehousesQ = useQuery({
+    queryKey: queryKeys.warehouses,
+    queryFn: () => apiGet<WarehouseItem[]>('/api/warehouses'),
+  });
+  const warehouses = useMemo(() => warehousesQ.data ?? [], [warehousesQ.data]);
+  const loading    = warehousesQ.isLoading;
+  const error      = warehousesQ.error ? (warehousesQ.error as Error).message : null;
 
   const [showModal, setShowModal]   = useState(false);
   const [saving, setSaving]         = useState(false);
@@ -48,16 +57,9 @@ export default function WarehousesPage() {
 
   const [toast, showToast] = useToast();
 
-  const load = useCallback(() => {
-    setLoading(true); setError(null);
-    fetch('/api/warehouses', { credentials: 'include' })
-      .then(r => r.json())
-      .then(j => { if (j.success) setWarehouses(j.data ?? []); else setError(j.message || 'فشل التحميل'); })
-      .catch(() => setError('تعذر الاتصال بالخادم'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
+  const reload = useCallback(() => {
+    qc.invalidateQueries({ queryKey: queryKeys.warehouses });
+  }, [qc]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -75,7 +77,7 @@ export default function WarehousesPage() {
         }),
       });
       const j = await res.json();
-      if (j.success) { setShowModal(false); setForm(emptyForm); load(); showToast('تم إضافة المستودع بنجاح'); }
+      if (j.success) { setShowModal(false); setForm(emptyForm); reload(); showToast('تم إضافة المستودع بنجاح'); }
       else setFormError(j.message || j.error || 'فشل الحفظ');
     } catch { setFormError('تعذر الاتصال بالخادم'); }
     finally { setSaving(false); }
@@ -100,7 +102,7 @@ export default function WarehousesPage() {
           manager: editForm.manager || null }),
       });
       const j = await res.json();
-      if (j.success) { setEditItem(null); load(); showToast('تم تحديث بيانات المستودع'); }
+      if (j.success) { setEditItem(null); reload(); showToast('تم تحديث بيانات المستودع'); }
       else setEditError(j.message || j.error || 'فشل الحفظ');
     } catch { setEditError('تعذر الاتصال بالخادم'); }
     finally { setEditSaving(false); }
@@ -112,7 +114,7 @@ export default function WarehousesPage() {
     try {
       const res = await fetch(`/api/warehouses?id=${deleteId}`, { method: 'DELETE', credentials: 'include' });
       const j = await res.json();
-      if (j.success) { setDeleteId(null); load(); showToast('تم حذف المستودع'); }
+      if (j.success) { setDeleteId(null); reload(); showToast('تم حذف المستودع'); }
       else setDeleteError(j.message || j.error || 'فشل الحذف');
     } catch { setDeleteError('تعذر الاتصال بالخادم'); }
     finally { setDeleting(false); }
@@ -152,7 +154,7 @@ export default function WarehousesPage() {
         }
       />
 
-      {error && <div className="mb-5"><ErrorBanner message={error} onRetry={load} /></div>}
+      {error && <div className="mb-5"><ErrorBanner message={error} onRetry={() => warehousesQ.refetch()} /></div>}
 
       {loading ? (
         <CardGridSkeleton cols={2} count={4} />
