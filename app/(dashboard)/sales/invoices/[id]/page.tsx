@@ -386,12 +386,11 @@ export default function SalesInvoiceDetailPage() {
             العودة للفواتير
           </Link>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => window.print()}
+            <Link href={`/sales/invoices/${inv.id}/print`}
               className="flex items-center gap-2 px-3 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 active:scale-95 text-sm font-medium transition-all">
               <Printer className="w-4 h-4" />
               طباعة
-            </button>
+            </Link>
             <button
               onClick={handleDownloadPDF}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 text-sm font-medium shadow-sm transition-all">

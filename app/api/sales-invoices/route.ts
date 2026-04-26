@@ -14,6 +14,7 @@ import { logActivity } from '@/lib/activity-log';
 import { 
   createSalesInvoiceAtomic
 } from '@/lib/erp-execution-engine/services/atomic-transaction-service';
+import { resolveInvoiceNumber } from '@/lib/invoice-numbering';
 
 // Translate backend errors to user-friendly Arabic messages
 function translateSalesError(error: any): string {
@@ -187,10 +188,18 @@ export async function POST(request: Request) {
     console.log(`${requestId} → Creating invoice atomically...`);
     let invoice;
     try {
+      // Resolve a clean, sequential, per-tenant invoice number (INV-YYYY-NNNNNN).
+      // If the user typed a custom number, we keep it.
+      const invoiceNumber = await resolveInvoiceNumber(
+        safeInvoiceData.invoiceNumber,
+        'INV',
+        user.tenantId,
+      );
+
       const result = await createSalesInvoiceAtomic({
         invoiceData: {
           ...safeInvoiceData,
-          invoiceNumber: safeInvoiceData.invoiceNumber || `INV-${Date.now()}`,
+          invoiceNumber,
           date: safeInvoiceData.date ? new Date(safeInvoiceData.date) : new Date(),
         },
         items,

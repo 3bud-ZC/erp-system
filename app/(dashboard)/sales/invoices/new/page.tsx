@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 import { Plus, Trash2, ArrowRight, X, Check, Percent, DollarSign, AlertCircle, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 
-/* ─── Types ─────────────────────────────────────────────────────────── */
+/* ─── Types ────────────────────────────────────────────────────── */
 interface Customer { id: string; nameAr: string; phone?: string; }
 interface Product  { id: string; nameAr: string; code: string; price?: number; stock?: number; }
+interface UserOpt  { id: string; name?: string | null; email: string; }
 
 interface InvoiceLine {
   productId: string;
@@ -197,11 +198,18 @@ export default function NewSalesInvoicePage() {
   /* Form state */
   const [customerId, setCustomerId]     = useState('');
   const [invoiceDate, setInvoiceDate]   = useState(new Date().toISOString().split('T')[0]);
+  const [issueDate, setIssueDate]       = useState(new Date().toISOString().split('T')[0]);
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [status, setStatus]             = useState('pending');
   const [paymentStatus, setPaymentStatus] = useState('cash');
   const [lines, setLines]               = useState<InvoiceLine[]>([emptyLine()]);
   const [notes, setNotes]               = useState('');
+  /* New fields (Phase: invoice form upgrade) */
+  const [users, setUsers]               = useState<UserOpt[]>([]);
+  const [salesRepId, setSalesRepId]     = useState('');
+  const [paymentTermsDays, setPaymentTermsDays] = useState('0');
+  const [currency, setCurrency]         = useState('EGP');
+  const [template, setTemplate]         = useState('default');
 
   /* Discount */
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
@@ -216,7 +224,7 @@ export default function NewSalesInvoicePage() {
   const [showAddProduct, setShowAddProduct]   = useState(false);
   const [addProductLineIdx, setAddProductLineIdx] = useState<number | null>(null);
   const [saving, setSaving]     = useState(false);
-  const [saveMode, setSaveMode] = useState<'draft' | 'confirm' | 'new'>('confirm');
+  const [saveMode, setSaveMode] = useState<'draft' | 'confirm' | 'new' | 'print'>('confirm');
   const [toast, setToast]       = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [formError, setFormError] = useState('');
 
@@ -225,9 +233,13 @@ export default function NewSalesInvoicePage() {
     Promise.all([
       fetch('/api/customers', { credentials: 'include' }).then(r => r.json()),
       fetch('/api/products', { credentials: 'include' }).then(r => r.json()),
-    ]).then(([cj, pj]) => {
+      // /api/users is optional — if it fails, the salesRep dropdown stays empty
+      // (just an empty option) instead of breaking the whole page.
+      fetch('/api/users', { credentials: 'include' }).then(r => r.json()).catch(() => ({ success: false })),
+    ]).then(([cj, pj, uj]) => {
       if (cj.success) setCustomers(cj.data ?? []);
       if (pj.success) setProducts(pj.data ?? []);
+      if (uj && uj.success && Array.isArray(uj.data)) setUsers(uj.data);
       if (!cj.success || !pj.success) setDataError('تعذر تحميل بعض البيانات');
     }).catch(() => setDataError('تعذر الاتصال بالخادم'))
       .finally(() => setDataLoading(false));
@@ -358,7 +370,11 @@ export default function NewSalesInvoicePage() {
   }
 
   /* ── Submit ── */
-  const handleSubmit = useCallback(async (e: React.FormEvent, mode: 'draft' | 'confirm' | 'new' = saveMode) => {
+  // mode: 'draft' → حفظ كمسودة / 'confirm' → حفظ وإغلاق / 'new' → حفظ وجديد / 'print' → حفظ وطباعة
+  const handleSubmit = useCallback(async (
+    e: React.FormEvent,
+    mode: 'draft' | 'confirm' | 'new' | 'print' = saveMode,
+  ) => {
     e.preventDefault();
     // Skip customer validation for drafts
     if (mode !== 'draft') {
@@ -377,8 +393,13 @@ export default function NewSalesInvoicePage() {
     const payload = {
       customerId: customerId || undefined,
       date: invoiceDate,
+      issueDate: issueDate || undefined,
       status: finalStatus,
       paymentStatus,
+      salesRepId: salesRepId || undefined,
+      paymentTermsDays: parseInt(paymentTermsDays, 10) || 0,
+      currency: currency || 'EGP',
+      template: template || 'default',
       ...(invoiceNumber.trim() && { invoiceNumber: invoiceNumber.trim() }),
       notes: notes.trim() || undefined,
       total: subtotal,
@@ -386,10 +407,11 @@ export default function NewSalesInvoicePage() {
       tax: taxAmt,
       grandTotal,
       items: validLines.map(l => ({
-        productId: l.productId,
-        quantity:  parseFloat(l.quantity) || 1,
-        price:     parseFloat(l.price) || 0,
-        total:     (parseFloat(l.quantity) || 1) * (parseFloat(l.price) || 0),
+        productId:   l.productId,
+        description: (l.description || '').trim() || undefined,
+        quantity:    parseFloat(l.quantity) || 1,
+        price:       parseFloat(l.price) || 0,
+        total:       (parseFloat(l.quantity) || 1) * (parseFloat(l.price) || 0),
       })),
     };
 
@@ -415,6 +437,14 @@ export default function NewSalesInvoicePage() {
           setLines([emptyLine()]); setDiscountValue(''); setTaxEnabled(false);
           setStatus('pending'); setPaymentStatus('cash');
           setInvoiceDate(new Date().toISOString().split('T')[0]);
+          setIssueDate(new Date().toISOString().split('T')[0]);
+          setSalesRepId(''); setPaymentTermsDays('0');
+        } else if (mode === 'print') {
+          showToast('تم حفظ الفاتورة جاري فتح الطباعة…', 'success');
+          // Open print preview in a new tab so the form state is preserved.
+          const newId = j.data?.id ?? j.data?.invoice?.id;
+          if (newId) window.open(`/sales/invoices/${newId}/print`, '_blank');
+          setTimeout(() => router.push('/sales/invoices'), 800);
         } else {
           showToast('تم حفظ الفاتورة بنجاح ✓', 'success');
           setTimeout(() => router.push('/sales/invoices'), 1000);
@@ -429,7 +459,7 @@ export default function NewSalesInvoicePage() {
       setSaving(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [saveMode, customerId, invoiceDate, lines, grandTotal, subtotal, discountAmt, taxAmt, status, paymentStatus, invoiceNumber, notes, products, router]);
+  }, [saveMode, customerId, invoiceDate, issueDate, salesRepId, paymentTermsDays, currency, template, lines, grandTotal, subtotal, discountAmt, taxAmt, status, paymentStatus, invoiceNumber, notes, products, router]);
 
   /* ── Render ── */
   if (dataLoading) return (
@@ -531,6 +561,55 @@ export default function NewSalesInvoicePage() {
                 <option value="credit">آجل</option>
                 <option value="partial">جزئي</option>
                 <option value="bank_transfer">تحويل بنكي</option>
+              </select>
+            </div>
+
+            {/* Issue Date */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">تاريخ الإصدار</label>
+              <input type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+
+            {/* Sales Rep */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">مسؤول المبيعات</label>
+              <select value={salesRepId} onChange={e => setSalesRepId(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                <option value="">— بدون —</option>
+                {users.map(u => <option key={u.id} value={u.id}>{u.name || u.email}</option>)}
+              </select>
+            </div>
+
+            {/* Payment Terms */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">شروط الدفع (أيام)</label>
+              <input type="number" min="0" value={paymentTermsDays} onChange={e => setPaymentTermsDays(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="0 = نقداً" />
+            </div>
+
+            {/* Currency */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">العملة</label>
+              <select value={currency} onChange={e => setCurrency(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                <option value="EGP">جنيه مصري (EGP)</option>
+                <option value="USD">دولار (USD)</option>
+                <option value="EUR">يورو (EUR)</option>
+                <option value="SAR">ريال سعودي (SAR)</option>
+                <option value="AED">درهم إماراتي (AED)</option>
+              </select>
+            </div>
+
+            {/* Template */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">قالب الفاتورة</label>
+              <select value={template} onChange={e => setTemplate(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                <option value="default">التصميم الافتراضي</option>
+                <option value="minimal">مبسّط</option>
+                <option value="detailed">مُفصّل</option>
               </select>
             </div>
           </div>
@@ -745,6 +824,14 @@ export default function NewSalesInvoicePage() {
                 {saving && saveMode === 'new'
                   ? <><span className="inline-block w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> جاري الحفظ…</>
                   : '➕ حفظ وجديد'}
+              </button>
+              {/* Save & Print */}
+              <button type="button" disabled={saving}
+                onClick={e => handleSubmit(e as any, 'print')}
+                className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm">
+                {saving && saveMode === 'print'
+                  ? <><span className="inline-block w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> جاري الحفظ…</>
+                  : '🖨️ حفظ وطباعة'}
               </button>
               {/* Save & Close */}
               <button type="submit" disabled={saving}

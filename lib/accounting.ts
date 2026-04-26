@@ -122,6 +122,13 @@ export async function createJournalEntry(entry: JournalEntryInput, createdBy?: s
       );
     }
 
+    // Make sure the chart of accounts is seeded for this tenant. Without
+    // this, any line whose accountCode doesn't yet exist for the tenant
+    // (typical for fresh tenants doing their first stock-adjustment)
+    // would fail with `JournalEntryLine_tenantId_accountCode_fkey`.
+    const tid = entry.tenantId || 'default';
+    await ensureAccountsSeeded(tid);
+
     const entryNumber = await generateEntryNumber();
 
     // Create journal entry with lines in transaction

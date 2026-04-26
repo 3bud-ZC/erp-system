@@ -265,6 +265,111 @@ export class JournalEntryService {
   }
 
   /**
+   * Delete a draft journal entry. Posted entries can never be deleted —
+   * they must be reversed instead (use `reverseEntry`).
+   */
+  async deleteDraftEntry(entryId: string, tenantId: string) {
+    const entry = await (prisma as any).journalEntry.findUnique({
+      where: { id: entryId },
+      select: { id: true, tenantId: true, status: true },
+    });
+
+    if (!entry) {
+      throw new Error(`Journal entry ${entryId} not found`);
+    }
+    if (entry.tenantId !== tenantId) {
+      throw new Error(`Journal entry belongs to a different tenant`);
+    }
+    if (entry.status !== 'DRAFT') {
+      throw new Error(`Only draft entries can be deleted; use reverse for posted entries`);
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await (tx as any).journalEntryLine.deleteMany({ where: { journalEntryId: entryId } });
+      await (tx as any).journalEntry.delete({ where: { id: entryId } });
+    });
+
+    return { id: entryId, deleted: true };
+  }
+
+  /**
+   * Update a draft journal entry. Replaces description / entryDate / lines.
+   * Posted entries are immutable — callers must use `reverseEntry`.
+   */
+  async updateDraftEntry(
+    entryId: string,
+    tenantId: string,
+    patch: {
+      entryDate?: Date;
+      description?: string;
+      lines?: JournalEntryLineInput[];
+    },
+  ) {
+    const entry = await (prisma as any).journalEntry.findUnique({
+      where: { id: entryId },
+      select: { id: true, tenantId: true, status: true },
+    });
+
+    if (!entry) {
+      throw new Error(`Journal entry ${entryId} not found`);
+    }
+    if (entry.tenantId !== tenantId) {
+      throw new Error(`Journal entry belongs to a different tenant`);
+    }
+    if (entry.status !== 'DRAFT') {
+      throw new Error(`Only draft entries can be updated; use reverse for posted entries`);
+    }
+
+    if (patch.lines && patch.lines.length > 0) {
+      this.validateJournalEntryLines(patch.lines);
+    }
+
+    return await prisma.$transaction(async (tx) => {
+      // If lines were provided, replace them all.
+      if (patch.lines && patch.lines.length > 0) {
+        const totals = this.calculateTotals(patch.lines);
+        await (tx as any).journalEntryLine.deleteMany({ where: { journalEntryId: entryId } });
+        await (tx as any).journalEntry.update({
+          where: { id: entryId },
+          data: {
+            entryDate: patch.entryDate,
+            description: patch.description,
+            totalDebit: totals.totalDebit,
+            totalCredit: totals.totalCredit,
+            lines: {
+              create: patch.lines.map((line, index) => ({
+                tenantId,
+                accountCode: line.accountCode,
+                debit: line.debit,
+                credit: line.credit,
+                description: line.description,
+                lineNumber: line.lineNumber || index + 1,
+                amount: Math.abs(line.debit - line.credit),
+                currencyId: line.currencyId,
+                exchangeRate: line.exchangeRate,
+              })),
+            },
+          },
+        });
+      } else {
+        // Just update header fields.
+        await (tx as any).journalEntry.update({
+          where: { id: entryId },
+          data: {
+            entryDate: patch.entryDate,
+            description: patch.description,
+          },
+        });
+      }
+
+      return await (tx as any).journalEntry.findUnique({
+        where: { id: entryId },
+        include: { lines: true },
+      });
+    });
+  }
+
+  /**
    * Get journal entry by ID
    */
   async getEntry(entryId: string, tenantId: string) {

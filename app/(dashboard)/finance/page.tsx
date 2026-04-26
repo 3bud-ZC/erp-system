@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPost } from '@/lib/api/fetcher';
 import { queryKeys } from '@/lib/api/query-keys';
-import { Plus, X, DollarSign, TrendingDown, Wallet, AlertCircle } from 'lucide-react';
+import { Plus, X, DollarSign, TrendingDown, Wallet, AlertCircle, Pencil, Trash2 } from 'lucide-react';
 
 interface Expense {
   id: string;
@@ -16,7 +16,12 @@ interface Expense {
 }
 
 export default function FinancePage() {
+  const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Expense | null>(null);
+  const [deleteRunning, setDeleteRunning] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'expenses' | 'categories' | 'settings'>('expenses');
 
   const expensesQ = useQuery({
@@ -30,6 +35,36 @@ export default function FinancePage() {
   const loadError = expensesQ.error ? (expensesQ.error as Error).message : null;
   const loadExpenses = () => expensesQ.refetch();
 
+  function openCreate() {
+    setEditingExpense(null);
+    setShowForm(true);
+  }
+  function openEdit(expense: Expense) {
+    setEditingExpense(expense);
+    setShowForm(true);
+  }
+  async function runDelete() {
+    if (!confirmDelete) return;
+    setDeleteRunning(true); setDeleteError(null);
+    try {
+      const res = await fetch(`/api/expenses?id=${encodeURIComponent(confirmDelete.id)}`, {
+        method: 'DELETE', credentials: 'include',
+      });
+      const j = await res.json();
+      if (j.success) {
+        setConfirmDelete(null);
+        qc.invalidateQueries({ queryKey: queryKeys.expenses });
+        qc.invalidateQueries({ queryKey: queryKeys.dashboard });
+      } else {
+        setDeleteError(j.message || j.error || 'فشل الحذف');
+      }
+    } catch {
+      setDeleteError('تعذر الاتصال بالخادم');
+    } finally {
+      setDeleteRunning(false);
+    }
+  }
+
   return (
     <div className="p-6 space-y-6" dir="rtl">
       {/* Header */}
@@ -39,7 +74,7 @@ export default function FinancePage() {
           <p className="text-sm text-slate-500 mt-1">إدارة المصروفات والإيرادات</p>
         </div>
         <button
-          onClick={() => setShowForm(true)}
+          onClick={openCreate}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
@@ -81,14 +116,53 @@ export default function FinancePage() {
         </div>
 
         <div className="p-6">
-          {activeTab === 'expenses' && <ExpensesTab expenses={expenses} loading={loading} />}
+          {activeTab === 'expenses' && (
+            <ExpensesTab
+              expenses={expenses}
+              loading={loading}
+              onEdit={openEdit}
+              onDelete={(e) => { setConfirmDelete(e); setDeleteError(null); }}
+            />
+          )}
           {activeTab === 'categories' && <CategoriesTab expenses={expenses} />}
           {activeTab === 'settings' && <SettingsTab />}
         </div>
       </div>
 
-      {/* Add Expense Modal */}
-      {showForm && <ExpenseForm onClose={() => setShowForm(false)} onSaved={loadExpenses} />}
+      {/* Add / Edit Expense Modal */}
+      {showForm && (
+        <ExpenseForm
+          expense={editingExpense}
+          onClose={() => { setShowForm(false); setEditingExpense(null); }}
+          onSaved={loadExpenses}
+        />
+      )}
+
+      {/* Confirm delete modal */}
+      {confirmDelete && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" dir="rtl">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-5">
+            <h3 className="text-lg font-semibold text-slate-900 mb-2">حذف المصروف</h3>
+            <p className="text-sm text-slate-600 mb-4">
+              هل أنت متأكد من حذف المصروف &quot;<strong>{confirmDelete.description}</strong>&quot;؟
+              لا يمكن التراجع عن هذا الإجراء.
+            </p>
+            {deleteError && (
+              <div className="text-red-600 text-sm bg-red-50 border border-red-200 p-2 rounded mb-3">{deleteError}</div>
+            )}
+            <div className="flex gap-3">
+              <button onClick={runDelete} disabled={deleteRunning}
+                className="flex-1 bg-red-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-red-700 disabled:opacity-50">
+                {deleteRunning ? 'جاري الحذف…' : 'نعم، احذف'}
+              </button>
+              <button onClick={() => setConfirmDelete(null)} disabled={deleteRunning}
+                className="flex-1 bg-slate-100 text-slate-700 rounded-lg py-2 text-sm font-medium hover:bg-slate-200">
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -164,7 +238,12 @@ function TabButton({ active, onClick, label }: any) {
   );
 }
 
-function ExpensesTab({ expenses, loading }: { expenses: Expense[]; loading: boolean }) {
+function ExpensesTab({ expenses, loading, onEdit, onDelete }: {
+  expenses: Expense[];
+  loading: boolean;
+  onEdit: (e: Expense) => void;
+  onDelete: (e: Expense) => void;
+}) {
   if (loading) {
     return <div className="text-center py-8 text-slate-400">جاري التحميل...</div>;
   }
@@ -182,12 +261,24 @@ function ExpensesTab({ expenses, loading }: { expenses: Expense[]; loading: bool
   return (
     <div className="space-y-3">
       {expenses.map((expense) => (
-        <div key={expense.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
+        <div key={expense.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors group">
           <div className="flex-1">
             <p className="font-medium text-slate-900">{expense.description}</p>
             <p className="text-sm text-slate-500 mt-1">{expense.category} • {expense.date}</p>
           </div>
-          <p className="text-lg font-bold text-red-600">{(expense.amount ?? 0).toLocaleString('ar-EG')} ج.م</p>
+          <div className="flex items-center gap-3">
+            <p className="text-lg font-bold text-red-600">{(expense.amount ?? 0).toLocaleString('ar-EG')} ج.م</p>
+            <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+              <button onClick={() => onEdit(expense)} title="تعديل"
+                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors">
+                <Pencil className="w-4 h-4" />
+              </button>
+              <button onClick={() => onDelete(expense)} title="حذف"
+                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </div>
       ))}
     </div>
@@ -250,21 +341,38 @@ function SettingsTab() {
   );
 }
 
-function ExpenseForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+function ExpenseForm({ expense, onClose, onSaved }: {
+  expense?: Expense | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  const isEdit = !!expense;
   const [formData, setFormData] = useState({
-    date: new Date().toISOString().split('T')[0],
-    category: '',
-    amount: '',
-    description: '',
-    paymentMethod: 'نقدي',
+    date: (expense?.date ?? new Date().toISOString()).slice(0, 10),
+    category: expense?.category ?? '',
+    amount: expense ? String(expense.amount ?? '') : '',
+    description: expense?.description ?? '',
+    paymentMethod: expense?.paymentMethod ?? 'نقدي',
   });
 
   type ExpensePayload = Omit<typeof formData, 'amount'> & { amount: number; total: number };
-  const createExpense = useMutation({
-    mutationFn: (payload: ExpensePayload) =>
-      apiPost('/api/expenses', payload),
+  const saveExpense = useMutation({
+    mutationFn: async (payload: ExpensePayload) => {
+      if (isEdit && expense) {
+        const res = await fetch('/api/expenses', {
+          method: 'PUT',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: expense.id, ...payload }),
+        });
+        const j = await res.json();
+        if (!j.success) throw new Error(j.message || j.error || 'فشل التعديل');
+        return j.data;
+      }
+      return apiPost('/api/expenses', payload);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.expenses });
       qc.invalidateQueries({ queryKey: queryKeys.dashboard });
@@ -275,20 +383,20 @@ function ExpenseForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
       setError(err.message || 'تعذر الاتصال بالخادم');
     },
   });
-  const saving = createExpense.isPending;
+  const saving = saveExpense.isPending;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     const amt = Number(formData.amount) || 0;
-    createExpense.mutate({ ...formData, amount: amt, total: amt });
+    saveExpense.mutate({ ...formData, amount: amt, total: amt });
   }
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" dir="rtl">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-          <h2 className="font-semibold text-slate-900">مصروف جديد</h2>
+          <h2 className="font-semibold text-slate-900">{isEdit ? 'تعديل مصروف' : 'مصروف جديد'}</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
             <X className="w-5 h-5" />
           </button>

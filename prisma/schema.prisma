@@ -360,29 +360,47 @@ model PurchaseOrderItem {
 }
 
 model PurchaseInvoice {
-  id              String                @id @default(cuid())
-  invoiceNumber   String                @unique
-  supplierId      String
-  date            DateTime
-  status          String                @default("pending")
-  paymentStatus   String                @default("cash")
-  paidAmount      Float                 @default(0)
-  notes           String?
-  total           Float                 @default(0)
-  tenantId        String
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
-  payments        Payment[]
-  supplier        Supplier              @relation(fields: [supplierId], references: [id])
-  tenant          Tenant                @relation(fields: [tenantId], references: [id])
-  items           PurchaseInvoiceItem[]
-  purchaseReturns PurchaseReturn[]
+  id               String                @id @default(cuid())
+  invoiceNumber    String                @unique
+  supplierId       String
+  date             DateTime
+  // ── New fields (Phase: invoice form upgrade) ────────────────────────
+  /// Optional document issue date — separate from the business `date`.
+  issueDate        DateTime?
+  /// Optional buyer/sales rep on this invoice (free-form id, references User).
+  purchaseRepId    String?
+  /// Net payment terms in days (0 = due on receipt).
+  paymentTermsDays Int                   @default(0)
+  /// Invoice template id used when rendering / printing.
+  template         String                @default("default")
+  /// ISO-4217 currency code (default EGP).
+  currency         String                @default("EGP")
+  /// Header-level discount and tax (in addition to per-item amounts).
+  discount         Float                 @default(0)
+  tax              Float                 @default(0)
+  grandTotal       Float                 @default(0)
+  // ───────────────────────────────────────────────────────────────────
+  status           String                @default("pending")
+  paymentStatus    String                @default("cash")
+  paidAmount       Float                 @default(0)
+  notes            String?
+  total            Float                 @default(0)
+  tenantId         String
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  payments         Payment[]
+  supplier         Supplier              @relation(fields: [supplierId], references: [id])
+  tenant           Tenant                @relation(fields: [tenantId], references: [id])
+  purchaseRep      User?                 @relation("PurchaseRepInvoices", fields: [purchaseRepId], references: [id])
+  items            PurchaseInvoiceItem[]
+  purchaseReturns  PurchaseReturn[]
 
   @@index([supplierId])
   @@index([date])
   @@index([status])
   @@index([paymentStatus])
   @@index([tenantId])
+  @@index([purchaseRepId])
 }
 
 model PurchaseInvoiceItem {
@@ -392,6 +410,12 @@ model PurchaseInvoiceItem {
   quantity          Float
   price             Float
   total             Float
+  /// Free-form line description (overrides product name on print).
+  description       String?
+  /// Per-line discount as a percentage (0–100).
+  discountPercent   Float           @default(0)
+  /// Per-line VAT/tax rate as a percentage.
+  taxRate           Float           @default(0)
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
   product           Product         @relation(fields: [productId], references: [id])
@@ -517,47 +541,67 @@ model QuotationItem {
 }
 
 model SalesInvoice {
-  id            String             @id @default(cuid())
-  invoiceNumber String             @unique
-  customerId    String
-  date          DateTime
-  status        String             @default("pending")
-  paymentStatus String             @default("cash")
-  paidAmount    Float              @default(0)
-  notes         String?
-  total         Float              @default(0)
-  discount      Float              @default(0)
-  tax           Float              @default(0)
-  grandTotal    Float              @default(0)
-  salesOrderId  String?
-  tenantId      String
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-  payments      Payment[]
-  customer      Customer           @relation(fields: [customerId], references: [id])
-  salesOrder    SalesOrder?        @relation(fields: [salesOrderId], references: [id])
-  tenant        Tenant             @relation(fields: [tenantId], references: [id])
-  items         SalesInvoiceItem[]
-  salesReturns  SalesReturn[]
+  id               String             @id @default(cuid())
+  invoiceNumber    String             @unique
+  customerId       String
+  date             DateTime
+  // ── New fields (Phase: invoice form upgrade) ────────────────────────
+  /// Optional document issue date — separate from the business `date`.
+  issueDate        DateTime?
+  /// Optional sales rep on this invoice (references User).
+  salesRepId       String?
+  /// Net payment terms in days (0 = due on receipt).
+  paymentTermsDays Int                @default(0)
+  /// Invoice template id used when rendering / printing.
+  template         String             @default("default")
+  /// ISO-4217 currency code (default EGP).
+  currency         String             @default("EGP")
+  // ───────────────────────────────────────────────────────────────────
+  status           String             @default("pending")
+  paymentStatus    String             @default("cash")
+  paidAmount       Float              @default(0)
+  notes            String?
+  total            Float              @default(0)
+  discount         Float              @default(0)
+  tax              Float              @default(0)
+  grandTotal       Float              @default(0)
+  salesOrderId     String?
+  tenantId         String
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  payments         Payment[]
+  customer         Customer           @relation(fields: [customerId], references: [id])
+  salesOrder       SalesOrder?        @relation(fields: [salesOrderId], references: [id])
+  tenant           Tenant             @relation(fields: [tenantId], references: [id])
+  salesRep         User?              @relation("SalesRepInvoices", fields: [salesRepId], references: [id])
+  items            SalesInvoiceItem[]
+  salesReturns     SalesReturn[]
 
   @@index([customerId])
   @@index([date])
   @@index([status])
   @@index([paymentStatus])
   @@index([tenantId])
+  @@index([salesRepId])
 }
 
 model SalesInvoiceItem {
-  id             String       @id @default(cuid())
-  salesInvoiceId String
-  productId      String
-  quantity       Float
-  price          Float
-  total          Float
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  product        Product      @relation(fields: [productId], references: [id])
-  salesInvoice   SalesInvoice @relation(fields: [salesInvoiceId], references: [id], onDelete: Cascade)
+  id              String       @id @default(cuid())
+  salesInvoiceId  String
+  productId       String
+  quantity        Float
+  price           Float
+  total           Float
+  /// Free-form line description (overrides product name on print).
+  description     String?
+  /// Per-line discount as a percentage (0–100).
+  discountPercent Float        @default(0)
+  /// Per-line VAT/tax rate as a percentage.
+  taxRate         Float        @default(0)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  product         Product      @relation(fields: [productId], references: [id])
+  salesInvoice    SalesInvoice @relation(fields: [salesInvoiceId], references: [id], onDelete: Cascade)
 }
 
 model SalesReturn {
@@ -1210,18 +1254,21 @@ model BudgetEntry {
 }
 
 model User {
-  id              String           @id @default(cuid())
-  email           String           @unique
-  name            String?
-  password        String
-  isActive        Boolean          @default(true)
-  lastLogin       DateTime?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  auditLogs       AuditLog[]
-  sessions        Session[]
-  roles           UserRole[]
-  userTenantRoles UserTenantRole[]
+  id                       String            @id @default(cuid())
+  email                    String            @unique
+  name                     String?
+  password                 String
+  isActive                 Boolean           @default(true)
+  lastLogin                DateTime?
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+  auditLogs                AuditLog[]
+  sessions                 Session[]
+  roles                    UserRole[]
+  userTenantRoles          UserTenantRole[]
+  // Back-relations from invoice salesRep / purchaseRep fields
+  salesInvoicesAsRep       SalesInvoice[]    @relation("SalesRepInvoices")
+  purchaseInvoicesAsRep    PurchaseInvoice[] @relation("PurchaseRepInvoices")
 }
 
 model Role {
