@@ -3,10 +3,10 @@
  * Post a draft journal entry
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { journalEntryService } from '@/lib/accounting/journal-entry.service';
 import { getAuthenticatedUser, checkPermission } from '@/lib/auth';
-import { apiError } from '@/lib/api-response';
+import { apiError, apiSuccess, handleApiError } from '@/lib/api-response';
 
 export async function POST(
   req: NextRequest,
@@ -23,12 +23,8 @@ export async function POST(
       postedBy: user.id!,
     });
 
-    return NextResponse.json(postedEntry);
+    return apiSuccess(postedEntry, 'Journal entry posted');
   } catch (error: any) {
-    console.error('Error posting journal entry:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to post journal entry' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'Post journal entry');
   }
 }
