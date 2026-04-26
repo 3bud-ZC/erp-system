@@ -5,7 +5,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet } from '@/lib/api/fetcher';
 import { queryKeys } from '@/lib/api/query-keys';
 import { Plus, X, CheckCircle, Clock, Trash2, BookOpen, RefreshCw, Pencil, RotateCcw, Send } from 'lucide-react';
-import { TableSkeleton, EmptyState, ErrorBanner, PageHeader } from '@/components/ui/patterns';
+import { TableSkeleton, EmptyState, ErrorBanner } from '@/components/ui/patterns';
+import { AccountingLayout } from '@/components/accounting/AccountingLayout';
 
 interface JournalEntry {
   id: string;
@@ -234,26 +235,24 @@ export default function JournalEntriesPage() {
   }
 
   return (
-    <div dir="rtl">
-      <PageHeader
-        title="القيود المحاسبية"
-        subtitle={loading ? 'جاري التحميل…' : `${entries.length} قيد`}
-        actions={
-          <>
-            <button onClick={() => entriesQ.refetch()} disabled={loading || entriesQ.isFetching}
-              className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 text-sm text-slate-700">
-              <RefreshCw className={`w-4 h-4 ${entriesQ.isFetching ? 'animate-spin' : ''}`} />
-              تحديث
-            </button>
-            <button onClick={openCreate}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all text-sm font-medium">
-              <Plus className="w-4 h-4" /> قيد جديد
-            </button>
-          </>
-        }
-      />
-
-      {error && <div className="mb-5"><ErrorBanner message={error} onRetry={() => entriesQ.refetch()} /></div>}
+    <AccountingLayout
+      title="القيود المحاسبية"
+      subtitle={loading ? 'جاري التحميل…' : `${entries.length} قيد`}
+      toolbar={
+        <>
+          <button onClick={() => entriesQ.refetch()} disabled={loading || entriesQ.isFetching}
+            className="flex items-center gap-2 px-3 py-1.5 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 text-sm text-slate-700">
+            <RefreshCw className={`w-4 h-4 ${entriesQ.isFetching ? 'animate-spin' : ''}`} />
+            تحديث
+          </button>
+          <button onClick={openCreate}
+            className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all text-sm font-medium">
+            <Plus className="w-4 h-4" /> قيد جديد
+          </button>
+        </>
+      }
+    >
+      {error && <ErrorBanner message={error} onRetry={() => entriesQ.refetch()} />}
 
       {/* Create / Edit modal */}
       {showModal && (
@@ -497,6 +496,6 @@ export default function JournalEntriesPage() {
           </table>
         </div>
       )}
-    </div>
+    </AccountingLayout>
   );
 }

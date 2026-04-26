@@ -20,7 +20,6 @@ import {
   BarChart3,
   ArrowUpDown,
   TrendingUp,
-  Wallet,
   PieChart,
   BookOpen,
 } from 'lucide-react';
@@ -82,14 +81,16 @@ const navItems: NavItem[] = [
     icon: <Warehouse className="w-5 h-5" />,
   },
   {
-    title: 'القيود المحاسبية',
-    href: '/accounting/journal-entries',
+    title: 'المحاسبة',
+    href: '/accounting',
     icon: <BookOpen className="w-5 h-5" />,
-  },
-  {
-    title: 'المالية',
-    href: '/finance',
-    icon: <Wallet className="w-5 h-5" />,
+    children: [
+      { title: 'نظرة عامة',     href: '/accounting' },
+      { title: 'القيود المحاسبية', href: '/accounting/journal-entries' },
+      { title: 'المالية',          href: '/accounting/finance' },
+      { title: 'دليل الحسابات',    href: '/accounting/chart-of-accounts' },
+      { title: 'ميزان المراجعة',   href: '/accounting/trial-balance' },
+    ],
   },
   {
     title: 'التقارير',
@@ -114,8 +115,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { user } = useAuthStore();
   // افتح المجموعات ذات الصلة تلقائياً حسب المسار الحالي.
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => ({
-    '/invoices': pathname?.startsWith('/invoices') ?? false,
-    '/reports':  pathname?.startsWith('/reports')  ?? false,
+    '/invoices':   pathname?.startsWith('/invoices')   ?? false,
+    '/accounting': pathname?.startsWith('/accounting') ?? false,
+    '/reports':    pathname?.startsWith('/reports')    ?? false,
   }));
   const toggleGroup = (href: string) =>
     setOpenGroups(prev => ({ ...prev, [href]: !prev[href] }));
