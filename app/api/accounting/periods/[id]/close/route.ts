@@ -3,10 +3,10 @@
  * Close an accounting period
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { accountingPeriodService } from '@/lib/accounting/period.service';
 import { getAuthenticatedUser, checkPermission } from '@/lib/auth';
-import { apiError } from '@/lib/api-response';
+import { apiError, apiSuccess, handleApiError } from '@/lib/api-response';
 
 export async function POST(
   req: NextRequest,
@@ -23,12 +23,8 @@ export async function POST(
       closedBy: user.id!,
     });
 
-    return NextResponse.json(closedPeriod);
+    return apiSuccess(closedPeriod, 'Period closed');
   } catch (error: any) {
-    console.error('Error closing period:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to close period' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'Close period');
   }
 }

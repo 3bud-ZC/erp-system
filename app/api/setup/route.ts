@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { apiSuccess, apiError } from '@/lib/api-response';
 
 const prisma = new PrismaClient();
 
@@ -128,21 +128,18 @@ export async function GET() {
       });
     }
 
-    return NextResponse.json({
-      success: true,
-      message: 'Setup completed successfully',
-      demoUser: {
-        email: 'demo@erp-system.com'
-      }
-    });
+    return apiSuccess(
+      { demoUser: { email: 'demo@erp-system.com' } },
+      'Setup completed successfully'
+    );
 
   } catch (error: any) {
     console.error('Setup error:', error);
-    return NextResponse.json({
-      success: false,
-      message: 'فشل في إعداد النظام',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    }, { status: 500 });
+    return apiError(
+      'فشل في إعداد النظام',
+      500,
+      process.env.NODE_ENV === 'development' ? { error: error.message } : undefined
+    );
   } finally {
     await (prisma as any).$disconnect();
   }

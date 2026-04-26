@@ -3,10 +3,11 @@
  * Verifies the entire ERP execution pipeline integrity
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { ERPExecutionEngine } from '@/lib/erp-execution-engine';
 import { logger } from '@/lib/structured-logger';
+import { apiSuccess, apiError } from '@/lib/api-response';
 
 // Force dynamic to prevent static generation
 export const dynamic = 'force-dynamic';
@@ -55,8 +56,7 @@ export async function GET(request: NextRequest) {
   checks.push(eventBusCheck);
   if (!eventBusCheck.passed) allPassed = false;
 
-  return NextResponse.json({
-    success: allPassed,
+  const payload = {
     timestamp: new Date().toISOString(),
     status: allPassed ? 'OPERATIONAL' : 'DEGRADED',
     checks,
@@ -65,7 +65,11 @@ export async function GET(request: NextRequest) {
       passed: checks.filter(c => c.passed).length,
       failed: checks.filter(c => !c.passed).length,
     },
-  });
+  } as const;
+
+  return allPassed
+    ? apiSuccess(payload)
+    : apiError('System checks failed', 503, payload);
 }
 
 interface SystemCheckResult {

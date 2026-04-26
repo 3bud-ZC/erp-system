@@ -4,10 +4,11 @@
  * NO EXCEPTIONS
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { ERPExecutionEngine } from '@/lib/erp-execution-engine';
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/structured-logger';
+import { apiSuccess, apiError } from '@/lib/api-response';
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,24 +17,15 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     if (!type) {
-      return NextResponse.json(
-        { success: false, error: 'Transaction type is required' },
-        { status: 400 }
-      );
+      return apiError('Transaction type is required', 400);
     }
 
     if (!payload) {
-      return NextResponse.json(
-        { success: false, error: 'Payload is required' },
-        { status: 400 }
-      );
+      return apiError('Payload is required', 400);
     }
 
     if (!context?.userId) {
-      return NextResponse.json(
-        { success: false, error: 'User context is required' },
-        { status: 400 }
-      );
+      return apiError('User context is required', 400);
     }
 
     // Log incoming transaction
@@ -54,14 +46,10 @@ export async function POST(request: NextRequest) {
 
     if (!result.success) {
       logger.error('ERP Gateway: Transaction failed', new Error('Transaction failed'), { userId: context.userId, tenantId: context.tenantId }, { type, error: result.errors });
-
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: result.errors?.[0] || 'Transaction execution failed',
-          details: result.errors 
-        },
-        { status: 400 }
+      return apiError(
+        result.errors?.[0] || 'Transaction execution failed',
+        400,
+        { details: result.errors }
       );
     }
 
@@ -70,22 +58,17 @@ export async function POST(request: NextRequest) {
     
     if (!persistenceCheck.success) {
       logger.error('ERP Gateway: Persistence verification failed', new Error('Persistence verification failed'), { userId: context.userId, tenantId: context.tenantId }, { type, error: persistenceCheck.error });
-
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Transaction executed but persistence verification failed',
-          details: persistenceCheck.error 
-        },
-        { status: 500 }
+      return apiError(
+        'Transaction executed but persistence verification failed',
+        500,
+        { details: persistenceCheck.error }
       );
     }
 
     logger.info('ERP Gateway: Transaction completed successfully', { userId: context.userId, tenantId: context.tenantId }, { type, entityId: result.data?.id });
 
-    return NextResponse.json({
-      success: true,
-      data: result.data,
+    return apiSuccess({
+      result: result.data,
       state: result.state,
       journalEntries: result.journalEntries,
       persistence: persistenceCheck,
@@ -93,11 +76,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     logger.error('ERP Gateway: Unexpected error', error);
-
-    return NextResponse.json(
-      { success: false, error: error.message || 'Internal server error' },
-      { status: 500 }
-    );
+    return apiError(error.message || 'Internal server error', 500);
   }
 }
 
