@@ -6,7 +6,8 @@ import { apiGet } from '@/lib/api/fetcher';
 import { queryKeys } from '@/lib/api/query-keys';
 import { Plus, X, Pencil, Trash2, FileText, AlertCircle, Search, Truck } from 'lucide-react';
 import Link from 'next/link';
-import { TableSkeleton, EmptyState, ErrorBanner, Toast, useToast, PageHeader } from '@/components/ui/patterns';
+import { TableSkeleton, EmptyState, ErrorBanner, Toast, useToast } from '@/components/ui/patterns';
+import { ServicesLayout } from '@/components/services/ServicesLayout';
 
 interface Supplier {
   id: string;
@@ -141,19 +142,17 @@ export default function SuppliersPage() {
   }
 
   return (
-    <div dir="rtl">
+    <ServicesLayout
+      title="الموردون"
+      subtitle={loading ? 'جاري التحميل…' : `${suppliers.length} مورد`}
+      toolbar={
+        <button onClick={() => setShowModal(true)}
+          className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all text-sm font-medium">
+          <Plus className="w-4 h-4" /> إضافة مورد
+        </button>
+      }
+    >
       <Toast toast={toast} />
-
-      <PageHeader
-        title="الموردون"
-        subtitle={loading ? 'جاري التحميل…' : `${suppliers.length} مورد`}
-        actions={
-          <button onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all text-sm font-medium">
-            <Plus className="w-4 h-4" /> إضافة مورد
-          </button>
-        }
-      />
 
       <div className="flex flex-wrap gap-3 mb-5">
         <div className="relative flex-1 min-w-52">
@@ -336,6 +335,6 @@ export default function SuppliersPage() {
           </div>
         </div>
       )}
-    </div>
+    </ServicesLayout>
   );
 }

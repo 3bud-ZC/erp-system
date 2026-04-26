@@ -6,7 +6,8 @@ import { apiGet } from '@/lib/api/fetcher';
 import { queryKeys } from '@/lib/api/query-keys';
 import { Plus, X, Pencil, Trash2, FileText, AlertCircle, Search, Users } from 'lucide-react';
 import Link from 'next/link';
-import { TableSkeleton, EmptyState, ErrorBanner, Toast, useToast, PageHeader } from '@/components/ui/patterns';
+import { TableSkeleton, EmptyState, ErrorBanner, Toast, useToast } from '@/components/ui/patterns';
+import { ServicesLayout } from '@/components/services/ServicesLayout';
 
 interface Customer {
   id: string;
@@ -145,19 +146,17 @@ export default function CustomersPage() {
   }
 
   return (
-    <div dir="rtl">
+    <ServicesLayout
+      title="العملاء"
+      subtitle={loading ? 'جاري التحميل…' : `${customers.length} عميل`}
+      toolbar={
+        <button onClick={() => setShowModal(true)}
+          className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all text-sm font-medium">
+          <Plus className="w-4 h-4" /> إضافة عميل
+        </button>
+      }
+    >
       <Toast toast={toast} />
-
-      <PageHeader
-        title="العملاء"
-        subtitle={loading ? 'جاري التحميل…' : `${customers.length} عميل`}
-        actions={
-          <button onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all text-sm font-medium">
-            <Plus className="w-4 h-4" /> إضافة عميل
-          </button>
-        }
-      />
 
       {/* Search bar */}
       <div className="flex flex-wrap gap-3 mb-5">
@@ -351,6 +350,6 @@ export default function CustomersPage() {
           </div>
         </div>
       )}
-    </div>
+    </ServicesLayout>
   );
 }

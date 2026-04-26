@@ -1,0 +1,75 @@
+'use client';
+
+import React from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { LayoutGrid, Users, Building2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+/**
+ * Tabs for the unified `/services` section (customers + suppliers).
+ *
+ * Mirrors `components/accounting/AccountingLayout.tsx` so the two sections
+ * feel like a matched set. The actual customer/supplier pages still live
+ * at their original `/customers` and `/suppliers` URLs (a lot of internal
+ * links point there); this layout just wraps them under a shared chrome.
+ */
+const SERVICES_TABS = [
+  { href: '/services',  title: 'نظرة عامة', icon: LayoutGrid },
+  { href: '/customers', title: 'العملاء',    icon: Users },
+  { href: '/suppliers', title: 'الموردون',   icon: Building2 },
+] as const;
+
+export function ServicesLayout({
+  title,
+  subtitle,
+  toolbar,
+  children,
+}: {
+  title: string;
+  subtitle?: React.ReactNode;
+  toolbar?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const pathname = usePathname();
+
+  return (
+    <div className="p-6 space-y-5" dir="rtl">
+      <div className="flex items-end justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
+          {subtitle && <p className="text-sm text-slate-500 mt-1">{subtitle}</p>}
+        </div>
+        {toolbar && <div className="flex items-center gap-2">{toolbar}</div>}
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-1 flex gap-1 overflow-x-auto">
+        {SERVICES_TABS.map(t => {
+          // Exact match for the hub, prefix match for sub-routes.
+          const active =
+            t.href === '/services'
+              ? pathname === '/services'
+              : pathname === t.href || pathname?.startsWith(t.href + '/');
+          const Icon = t.icon;
+          return (
+            <Link
+              key={t.href}
+              href={t.href}
+              className={cn(
+                'flex-1 min-w-[140px] flex items-center gap-2 justify-center px-4 py-2.5 rounded-lg text-sm transition-colors',
+                active
+                  ? 'bg-blue-50 text-blue-700 font-medium'
+                  : 'text-slate-600 hover:bg-slate-50',
+              )}
+            >
+              <Icon className="w-4 h-4" />
+              {t.title}
+            </Link>
+          );
+        })}
+      </div>
+
+      {children}
+    </div>
+  );
+}

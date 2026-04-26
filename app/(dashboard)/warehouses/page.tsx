@@ -5,7 +5,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet } from '@/lib/api/fetcher';
 import { queryKeys } from '@/lib/api/query-keys';
 import { Plus, X, Pencil, Trash2, CheckCircle, XCircle, Warehouse } from 'lucide-react';
-import { CardGridSkeleton, EmptyState, ErrorBanner, Toast, useToast, PageHeader } from '@/components/ui/patterns';
+import { CardGridSkeleton, EmptyState, ErrorBanner, Toast, useToast } from '@/components/ui/patterns';
+import { InventoryLayout } from '@/components/inventory/InventoryLayout';
 
 interface WarehouseItem {
   id: string;
@@ -140,19 +141,17 @@ export default function WarehousesPage() {
   );
 
   return (
-    <div dir="rtl">
+    <InventoryLayout
+      title="المستودعات"
+      subtitle={loading ? 'جاري التحميل…' : `${warehouses.length} مستودع`}
+      toolbar={
+        <button onClick={() => setShowModal(true)}
+          className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all text-sm font-medium">
+          <Plus className="w-4 h-4" /> إضافة مستودع
+        </button>
+      }
+    >
       <Toast toast={toast} />
-
-      <PageHeader
-        title="المستودعات"
-        subtitle={loading ? 'جاري التحميل…' : `${warehouses.length} مستودع`}
-        actions={
-          <button onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all text-sm font-medium">
-            <Plus className="w-4 h-4" /> إضافة مستودع
-          </button>
-        }
-      />
 
       {error && <div className="mb-5"><ErrorBanner message={error} onRetry={() => warehousesQ.refetch()} /></div>}
 
@@ -279,6 +278,6 @@ export default function WarehousesPage() {
           </div>
         </div>
       )}
-    </div>
+    </InventoryLayout>
   );
 }

@@ -5,7 +5,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet } from '@/lib/api/fetcher';
 import { queryKeys } from '@/lib/api/query-keys';
 import { Plus, AlertTriangle, X, Pencil, Trash2, Search, Package, CheckCircle } from 'lucide-react';
-import { TableSkeleton, EmptyState, ErrorBanner, Toast, useToast, PageHeader } from '@/components/ui/patterns';
+import { TableSkeleton, EmptyState, ErrorBanner, Toast, useToast } from '@/components/ui/patterns';
+import { InventoryLayout } from '@/components/inventory/InventoryLayout';
 
 interface Product {
   id: string;
@@ -212,28 +213,26 @@ export default function ProductsPage() {
   );
 
   return (
-    <div dir="rtl">
+    <InventoryLayout
+      title="المنتجات والمخزون"
+      subtitle={
+        <span className="inline-flex items-center gap-2">
+          {loading ? 'جاري التحميل…' : `${products.length} منتج`}
+          {!loading && lowStockCount > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-600 rounded-full text-xs font-medium">
+              <AlertTriangle className="w-3 h-3" /> {lowStockCount} منخفض المخزون
+            </span>
+          )}
+        </span>
+      }
+      toolbar={
+        <button onClick={() => setShowModal(true)}
+          className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all text-sm font-medium">
+          <Plus className="w-4 h-4" /> إضافة منتج
+        </button>
+      }
+    >
       <Toast toast={toast} />
-
-      <PageHeader
-        title="المنتجات والمخزون"
-        subtitle={
-          <span className="flex items-center gap-2">
-            {loading ? 'جاري التحميل…' : `${products.length} منتج`}
-            {!loading && lowStockCount > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-600 rounded-full text-xs font-medium">
-                <AlertTriangle className="w-3 h-3" /> {lowStockCount} منخفض المخزون
-              </span>
-            )}
-          </span>
-        }
-        actions={
-          <button onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all text-sm font-medium">
-            <Plus className="w-4 h-4" /> إضافة منتج
-          </button>
-        }
-      />
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 mb-5">
@@ -420,6 +419,6 @@ export default function ProductsPage() {
           </div>
         </div>
       )}
-    </div>
+    </InventoryLayout>
   );
 }

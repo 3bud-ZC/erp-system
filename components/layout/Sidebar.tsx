@@ -15,10 +15,7 @@ import {
   ChevronRight,
   ChevronLeft,
   ChevronDown,
-  Warehouse,
-  Building2,
   BarChart3,
-  ArrowUpDown,
   TrendingUp,
   PieChart,
   BookOpen,
@@ -56,29 +53,25 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    title: 'العملاء',
-    href: '/customers',
+    title: 'الخدمات',
+    href: '/services',
     icon: <Users className="w-5 h-5" />,
+    children: [
+      { title: 'نظرة عامة', href: '/services' },
+      { title: 'العملاء',    href: '/customers' },
+      { title: 'الموردون',   href: '/suppliers' },
+    ],
   },
   {
-    title: 'الموردون',
-    href: '/suppliers',
-    icon: <Building2 className="w-5 h-5" />,
-  },
-  {
-    title: 'المنتجات',
-    href: '/inventory/products',
+    title: 'المخازن',
+    href: '/inventory',
     icon: <Package className="w-5 h-5" />,
-  },
-  {
-    title: 'تسوية المخزون',
-    href: '/inventory/stock-adjustments/new',
-    icon: <ArrowUpDown className="w-5 h-5" />,
-  },
-  {
-    title: 'المستودعات',
-    href: '/warehouses',
-    icon: <Warehouse className="w-5 h-5" />,
+    children: [
+      { title: 'نظرة عامة',     href: '/inventory' },
+      { title: 'المنتجات',       href: '/inventory/products' },
+      { title: 'تسوية المخزون',  href: '/inventory/stock-adjustments/new' },
+      { title: 'المستودعات',     href: '/warehouses' },
+    ],
   },
   {
     title: 'المحاسبة',
@@ -116,6 +109,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   // افتح المجموعات ذات الصلة تلقائياً حسب المسار الحالي.
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => ({
     '/invoices':   pathname?.startsWith('/invoices')   ?? false,
+    '/services':   pathname?.startsWith('/services')   || pathname?.startsWith('/customers') || pathname?.startsWith('/suppliers') || false,
+    '/inventory':  pathname?.startsWith('/inventory')  || pathname?.startsWith('/warehouses') || false,
     '/accounting': pathname?.startsWith('/accounting') ?? false,
     '/reports':    pathname?.startsWith('/reports')    ?? false,
   }));
