@@ -20,12 +20,37 @@
 
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { assertIsolatedDatabase } from './assert-isolated-db';
 
 const EMAIL = process.env.E2E_EMAIL ?? 'admin@erp.com';
 const PASSWORD = process.env.E2E_PASSWORD ?? 'admin';
 const TENANT_CODE = process.env.E2E_TENANT_CODE ?? 'E2E_DEFAULT';
 
+// 🛡️  PRODUCTION SAFETY GUARDS — defense in depth.
+//
+// Two independent gates must pass before this script touches the DB:
+//
+//   1. DATABASE_URL must be local or test-marked, OR the operator must set
+//      E2E_ALLOW_PRODUCTION_DB=1. (Enforced by assertIsolatedDatabase.)
+//
+//   2. The operator must explicitly opt in to admin-write operations via
+//      one of: E2E_ALLOW_AUTH_RESET=1, NODE_ENV=development, or
+//      ALLOW_SEED=true. Production environments must never set any of these.
+function assertResetAllowed(): void {
+  if (process.env.E2E_ALLOW_AUTH_RESET === '1') return;
+  if (process.env.NODE_ENV === 'development') return;
+  if (process.env.ALLOW_SEED === 'true') return;
+  throw new Error(
+    `❌ Admin auth-reset is disabled. ` +
+      `This script writes to the admin user and prunes tenant assignments. ` +
+      `Set E2E_ALLOW_AUTH_RESET=1 (CI) or NODE_ENV=development to allow.`
+  );
+}
+
 async function main() {
+  assertIsolatedDatabase(); // Gate 1 — host check
+  assertResetAllowed(); // Gate 2 — operator opt-in
+
   const prisma = new PrismaClient();
   try {
     const user = await prisma.user.findUnique({ where: { email: EMAIL } });

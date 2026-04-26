@@ -1,62 +1,58 @@
 #!/usr/bin/env node
 
 /**
- * Railway Startup Script
- * Runs database setup before starting the app
+ * Railway / production startup wrapper — PRODUCTION-SAFE BY DEFAULT.
+ *
+ * Behavior:
+ *   1. Verify DATABASE_URL is set (fail fast if not).
+ *   2. Start the Next.js app (`next start`).
+ *
+ * Behavior NOT included by default:
+ *   - `prisma db push` — destructive on schema drift; operator-managed.
+ *   - `prisma migrate deploy` — operator-managed (one-off, manual).
+ *   - `railway-init.js` — creates demo users; operator-managed (one-off).
+ *
+ * To run schema migrations once after first deploy, set
+ * `RAILWAY_RUN_MIGRATE=true` for that single deployment, then unset it.
+ * Likewise `RAILWAY_RUN_INIT=true` for the demo bootstrap.
+ *
+ * In normal steady-state operation, every restart performs ZERO database
+ * mutations — only the application runs.
  */
 
 const { execSync } = require('child_process');
 
-console.log('🚀 Railway Startup Script');
-console.log('==========================\n');
+console.log('🚀 Production startup — safe-by-default');
+console.log('═══════════════════════════════════════');
 
-try {
-  // Check DATABASE_URL
-  if (!process.env.DATABASE_URL) {
-    console.error('❌ DATABASE_URL not found!');
-    console.log('Available env vars:', Object.keys(process.env).filter(k => k.includes('DATABASE') || k.includes('POSTGRES')));
-    process.exit(1);
-  }
-
-  console.log('✅ DATABASE_URL found');
-  console.log('📦 Running prisma db push...\n');
-
-  // Push schema
-  try {
-    execSync('npx prisma db push --accept-data-loss', {
-      stdio: 'inherit',
-      cwd: process.cwd()
-    });
-    console.log('✅ Schema pushed successfully\n');
-  } catch (e) {
-    console.log('⚠️ Schema push may have warnings, continuing...\n');
-  }
-
-  // Skip initialization if SKIP_INIT is set (for faster restarts)
-  if (process.env.SKIP_INIT !== 'true') {
-    console.log('🌱 Running database initialization...\n');
-    try {
-      execSync('node scripts/railway-init.js', {
-        stdio: 'inherit',
-        cwd: process.cwd()
-      });
-      console.log('✅ Database initialized\n');
-    } catch (e) {
-      console.log('⚠️ Init may have warnings, continuing...\n');
-    }
-  } else {
-    console.log('⏭️ Skipping initialization (SKIP_INIT=true)\n');
-  }
-
-  // Start the app
-  console.log('🚀 Starting Next.js app...\n');
-  const port = process.env.PORT || 3000;
-  execSync(`npx next start -p ${port}`, {
-    stdio: 'inherit',
-    cwd: process.cwd()
-  });
-
-} catch (error) {
-  console.error('❌ Startup failed:', error.message);
+if (!process.env.DATABASE_URL) {
+  console.error('❌ DATABASE_URL is not set. Refusing to start.');
   process.exit(1);
 }
+
+// One-off opt-in: schema migrations.
+if (process.env.RAILWAY_RUN_MIGRATE === 'true') {
+  console.log('⚙️  RAILWAY_RUN_MIGRATE=true — running prisma migrate deploy...');
+  try {
+    execSync('npx prisma migrate deploy', { stdio: 'inherit', cwd: process.cwd() });
+    console.log('✅ Migrations applied.');
+  } catch (e) {
+    console.error('❌ Migration failed. Refusing to start.');
+    process.exit(1);
+  }
+}
+
+// One-off opt-in: demo data bootstrap.
+if (process.env.RAILWAY_RUN_INIT === 'true') {
+  console.log('⚙️  RAILWAY_RUN_INIT=true — running railway-init.js...');
+  try {
+    execSync('node scripts/railway-init.js', { stdio: 'inherit', cwd: process.cwd() });
+    console.log('✅ Init complete.');
+  } catch {
+    console.warn('⚠️  Init warnings — continuing.');
+  }
+}
+
+const port = process.env.PORT || 3000;
+console.log(`🚀 Starting Next.js on :${port}`);
+execSync(`npx next start -p ${port}`, { stdio: 'inherit', cwd: process.cwd() });

@@ -78,6 +78,70 @@ npm run dev
 > `scripts/reset-database.ts` refuse to run unless `NODE_ENV=development` or
 > `ALLOW_SEED=true`. This protects the live DB from accidental wipes.
 
+---
+
+## 🔐 Environment Separation Contract
+
+The repo enforces strict isolation between three environments. **No tooling
+ever touches production data by default**:
+
+| Environment | Database                          | What runs                                   | Destructive ops |
+|-------------|-----------------------------------|---------------------------------------------|-----------------|
+| **Production** | Railway (live)                  | The Next.js app only                        | ❌ Blocked by all script-level guards |
+| **CI**         | Ephemeral postgres in GH Actions | type-check · unit tests · build · Playwright | ✅ Allowed (in CI's own DB only); needs `ALLOW_SEED=true` to wipe |
+| **Local E2E**  | Local/test postgres (operator-provided) | Playwright against `npm run dev`        | ✅ Allowed in your isolated DB |
+
+### How isolation is enforced
+
+1. **Script-level guards** — `prisma/seed.ts`, `prisma/seed-clean.ts`,
+   `prisma/seed.js`, `scripts/reset-database.ts`, and
+   `e2e/scripts/reset-admin-password.ts` each call an `assert*Allowed()`
+   function that **throws before opening any DB connection** unless an
+   explicit env flag is set. (Verified by running each one with
+   `NODE_ENV=production` — all four refuse to start.)
+
+2. **E2E DB host guard** — `e2e/scripts/assert-isolated-db.ts` parses the
+   active `DATABASE_URL` and **refuses** to run if the host isn't `localhost`/
+   `127.0.0.1` and the dbname doesn't contain a `_test` / `_e2e` / `_ci`
+   marker. Bypass requires `E2E_ALLOW_PRODUCTION_DB=1` (loud, explicit, never
+   default-on). The guard runs at the top of `e2e/global.setup.ts` and at the
+   start of `reset-admin-password.ts` — defense in depth.
+
+3. **CI uses upsert-only seeding** — `.github/workflows/ci.yml` runs
+   `npx tsx prisma/seed-auth.ts` (idempotent upsert; no `deleteMany`) instead
+   of `npm run seed`. The destructive seed is never invoked in CI.
+
+### Running E2E locally (against an isolated DB)
+
+```bash
+# 1. Start a local postgres (Docker example)
+docker run -d --name erp-test-pg -p 5433:5432 \
+  -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=erp_test postgres:15
+
+# 2. Point this shell at it (DO NOT use the production .env)
+$env:DATABASE_URL = "postgresql://postgres:postgres@localhost:5433/erp_test"
+$env:E2E_ALLOW_AUTH_RESET = "1"
+
+# 3. Apply schema + bootstrap admin
+npx prisma migrate deploy
+npx tsx prisma/seed-auth.ts
+
+# 4. Run E2E
+npm run e2e
+```
+
+If you accidentally leave `DATABASE_URL` pointing at Railway, the guard will
+refuse to start with a clear error message — the production DB is safe.
+
+### Required production env flags
+
+| Variable                | Production value | Purpose                                  |
+|-------------------------|------------------|------------------------------------------|
+| `ALLOW_SEED`            | `false` (or unset) | Blocks destructive seed/reset scripts |
+| `E2E_BYPASS_RATE_LIMIT` | `0` (or unset)   | Keeps the auth rate-limiter active       |
+| `E2E_ALLOW_AUTH_RESET`  | `0` (or unset)   | Blocks the admin password-reset helper   |
+| `E2E_ALLOW_PRODUCTION_DB` | `0` (or unset) | Blocks E2E from connecting at all        |
+
 افتح [http://localhost:3000](http://localhost:3000) في المتصفح
 
 Open [http://localhost:3000](http://localhost:3000) in your browser
@@ -168,6 +232,8 @@ DATABASE_URL=<railway-url> npx prisma migrate deploy
 | `NODE_ENV`         | `production`                                 |
 | `ALLOW_SEED`       | `false` (must stay false on production!)     |
 | `E2E_BYPASS_RATE_LIMIT` | `0` (must stay 0 on production!)        |
+| `E2E_ALLOW_AUTH_RESET`  | `0` (must stay 0/unset on production!)   |
+| `E2E_ALLOW_PRODUCTION_DB` | `0` (must stay 0/unset on production!) |
 
 Vercel will redeploy on every push to the connected branch. The seed/reset
 scripts are blocked at runtime by the production safety guards.
@@ -184,6 +250,39 @@ scripts are blocked at runtime by the production safety guards.
 
 `railway.json` and `nixpacks.toml` already exist in the repo — no extra
 configuration needed.
+
+### Option C — Render
+
+`render.yaml` is committed. Render will pick it up automatically.
+Secrets are marked `sync: false` — you'll be prompted in the Render
+dashboard for each.
+
+---
+
+### 🛠️ First-Time Deploy Checklist
+
+The build pipeline does **NOT** apply schema migrations or seed any data —
+this is intentional safety. Run these once, manually, after the first
+successful deploy:
+
+```bash
+# Option 1: from your local machine, with the production DATABASE_URL
+DATABASE_URL=<prod-url> npx prisma migrate deploy
+
+# Option 2: one-off opt-in on Railway — set RAILWAY_RUN_MIGRATE=true for
+# a single deploy, let it apply migrations, then unset the variable
+```
+
+**Steady-state behavior:** every deploy / restart performs **zero** DB
+mutations. Only the Next.js app runs.
+
+| Op                    | When does it run?                                  |
+|-----------------------|----------------------------------------------------|
+| `prisma generate`     | Build phase only (writes to `node_modules`)        |
+| `prisma migrate deploy` | Operator-managed (manual, one-off)               |
+| `npm run seed`        | Blocked unless `ALLOW_SEED=true` is set            |
+| `npm run db:reset`    | Blocked unless `ALLOW_SEED=true` is set            |
+| Demo user injection   | Blocked unless `RAILWAY_RUN_INIT=true` is set      |
 
 ---
 

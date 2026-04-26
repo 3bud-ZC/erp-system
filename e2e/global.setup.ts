@@ -12,6 +12,12 @@ import { test as setup, expect } from '@playwright/test';
 import { execSync } from 'child_process';
 import * as path from 'path';
 import { TEST_EMAIL, TEST_PASSWORD } from './fixtures/credentials';
+import { assertIsolatedDatabase } from './scripts/assert-isolated-db';
+
+// 🛡️  ENVIRONMENT ISOLATION — runs before ANY DB or HTTP activity.
+// Refuses to start if DATABASE_URL points at a managed production host.
+// Override with E2E_ALLOW_PRODUCTION_DB=1 (loud, explicit, never default).
+assertIsolatedDatabase();
 
 const STORAGE_PATH = path.join(__dirname, '.auth', 'admin.json');
 
