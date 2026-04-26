@@ -25,7 +25,24 @@ const EMAIL = process.env.E2E_EMAIL ?? 'admin@erp.com';
 const PASSWORD = process.env.E2E_PASSWORD ?? 'admin';
 const TENANT_CODE = process.env.E2E_TENANT_CODE ?? 'E2E_DEFAULT';
 
+// 🛡️  PRODUCTION SAFETY GUARD
+// This script mutates the admin user's password and prunes UserTenantRole
+// rows. Refuse to run unless the operator explicitly opts in. CI sets
+// E2E_ALLOW_AUTH_RESET=1; production environments must never set it.
+function assertResetAllowed(): void {
+  if (process.env.E2E_ALLOW_AUTH_RESET === '1') return;
+  if (process.env.NODE_ENV === 'development') return;
+  if (process.env.ALLOW_SEED === 'true') return;
+  throw new Error(
+    `❌ Admin auth-reset is disabled. ` +
+      `This script writes to the admin user and prunes tenant assignments. ` +
+      `Set E2E_ALLOW_AUTH_RESET=1 (CI) or NODE_ENV=development to allow.`
+  );
+}
+
 async function main() {
+  assertResetAllowed();
+
   const prisma = new PrismaClient();
   try {
     const user = await prisma.user.findUnique({ where: { email: EMAIL } });

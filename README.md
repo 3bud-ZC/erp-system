@@ -168,6 +168,7 @@ DATABASE_URL=<railway-url> npx prisma migrate deploy
 | `NODE_ENV`         | `production`                                 |
 | `ALLOW_SEED`       | `false` (must stay false on production!)     |
 | `E2E_BYPASS_RATE_LIMIT` | `0` (must stay 0 on production!)        |
+| `E2E_ALLOW_AUTH_RESET`  | `0` (must stay 0/unset on production!)   |
 
 Vercel will redeploy on every push to the connected branch. The seed/reset
 scripts are blocked at runtime by the production safety guards.

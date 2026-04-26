@@ -28,7 +28,17 @@ jobs:
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/erp_test
       E2E_BYPASS_RATE_LIMIT: 1
+      # Allow the upsert-only auth-reset helper. Required for E2E setup to
+      # log in as admin against the ephemeral CI postgres container.
+      # MUST remain unset in any production environment — the script will
+      # refuse to run otherwise.
+      E2E_ALLOW_AUTH_RESET: 1
       NEXT_TELEMETRY_DISABLED: 1
+      # CI uses an ephemeral PostgreSQL service container (NOT production).
+      # Auth-only upsert seed is non-destructive; the destructive
+      # `npm run seed` is intentionally not executed here.
+      JWT_SECRET: ci-test-jwt-secret-32-characters-min-len-ok
+      NEXTAUTH_SECRET: ci-test-nextauth-secret-32-characters-len
 
     steps:
       - name: Checkout repo
@@ -46,11 +56,11 @@ jobs:
       - name: Prisma generate
         run: npx prisma generate
 
-      - name: Prisma migrate
+      - name: Prisma migrate (CI ephemeral DB only — never production)
         run: npx prisma migrate deploy
 
-      - name: Seed database
-        run: npm run seed
+      - name: Bootstrap auth (upsert-only, non-destructive)
+        run: npx tsx prisma/seed-auth.ts
 
       - name: Type check
         run: npm run type-check

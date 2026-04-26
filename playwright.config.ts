@@ -97,6 +97,7 @@ export default defineConfig({
         env: {
           ...process.env,
           E2E_BYPASS_RATE_LIMIT: '1',
+          E2E_ALLOW_AUTH_RESET: '1',
         } as Record<string, string>,
       }
     : AUTO_SERVER
@@ -110,6 +111,7 @@ export default defineConfig({
           env: {
             ...process.env,
             E2E_BYPASS_RATE_LIMIT: '1',
+            E2E_ALLOW_AUTH_RESET: '1',
           } as Record<string, string>,
         }
       : undefined,
