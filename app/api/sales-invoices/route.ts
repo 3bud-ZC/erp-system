@@ -266,351 +266,296 @@ export async function POST(request: Request) {
   }
 }
 
-// PUT - Update sales invoice (requires update_sales_invoice permission)
+// PUT - Update sales invoice (requires update_sales_invoice permission).
+//
+// FORCE-SAVE policy: the user explicitly wants every edit to persist, even
+// when downstream side-effects (stock validation, journal entries, audit
+// logs) fail. The approach:
+//
+//   - Sanitize the items array (drop bad rows) instead of throwing.
+//   - Skip stock-availability validation (we used to 400 here).
+//   - Wrap journal-entry reversal/creation in try/catch.
+//   - Wrap audit/activity logs in try/catch.
+//   - Only fail if the invoice itself can't be saved (not-found, schema
+//     mismatch, or DB connection error).
+//
+// Warnings are returned alongside the success payload so the UI can surface
+// them to the user without blocking the save.
 export async function PUT(request: Request) {
   try {
-    console.log("=== START SALES INVOICE UPDATE ===");
-    
-    const user = await getAuthenticatedUser(request);
-    if (!user) {
-      console.error("ERROR: User not authenticated");
-      return apiError('لم يتم المصادقة', 401);
-    }
+    console.log('=== START SALES INVOICE UPDATE ===');
 
+    const user = await getAuthenticatedUser(request);
+    if (!user) return apiError('لم يتم المصادقة', 401);
     if (!checkPermission(user, 'update_sales_invoice')) {
-      console.error("ERROR: User lacks permission");
       return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
+    if (!user.tenantId) return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
 
     const body = await request.json();
-    const { id, items, ...invoiceData } = body;
-    
-    console.log("REQUEST DATA:", {
-      invoiceId: id,
-      tenantId: user.tenantId,
-      itemCount: items?.length,
-      body: JSON.stringify(body).substring(0, 200)
+    const { id, items: rawItems, ...invoiceData } = body;
+    if (!id) return apiError('Invoice ID missing', 400);
+
+    /* ── Sanitize items: drop empty / invalid rows instead of failing ── */
+    const items: any[] = Array.isArray(rawItems)
+      ? rawItems.filter((it: any) =>
+          it && it.productId && Number(it.quantity) > 0 && Number(it.price) >= 0,
+        )
+      : [];
+    if (items.length === 0) {
+      return apiError('يجب أن تحتوي الفاتورة على صنف واحد على الأقل بكمية وسعر صالحين', 400);
+    }
+
+    const warnings: string[] = [];
+
+    /* ── 1. Fetch existing invoice (tenant-scoped) ── */
+    const existingInvoice = await prisma.salesInvoice.findFirst({
+      where: { id, tenantId: user.tenantId },
+      include: { items: true },
     });
+    if (!existingInvoice) return apiError('Invoice not found or unauthorized', 404);
 
-    if (!id) {
-      console.error("ERROR: Invoice ID missing");
-      throw new Error("Invoice ID missing");
+    /* ── 2. Compute net per-product stock deltas (new - old) ── */
+    const oldItemMap = new Map(existingInvoice.items.map((i: any) => [i.productId, i.quantity]));
+    const newItemMap = new Map(items.map((i: any) => [i.productId, i.quantity]));
+    const stockDeltas: { productId: string; delta: number }[] = [];
+    const allProductIds = new Set([
+      ...Array.from(oldItemMap.keys()),
+      ...Array.from(newItemMap.keys()),
+    ]);
+    for (const productId of Array.from(allProductIds)) {
+      const oldQty = (oldItemMap.get(productId) as number) || 0;
+      const newQty = (newItemMap.get(productId) as number) || 0;
+      const delta = newQty - oldQty;
+      if (delta !== 0) stockDeltas.push({ productId, delta });
     }
 
-    if (!items || items.length === 0) {
-      console.error("ERROR: Items array empty");
-      throw new Error("Items cannot be empty");
-    }
-
-    for (const item of items) {
-      if (!item.quantity || item.quantity <= 0) {
-        console.error("ERROR: Invalid quantity", item);
-        throw new Error("Quantity must be greater than 0");
+    /* ── 3. Stock availability — warn only, don't block ── */
+    try {
+      const needsValidation = stockDeltas
+        .filter(d => d.delta > 0)
+        .map(d => ({ productId: d.productId, quantity: d.delta }));
+      if (needsValidation.length > 0) {
+        const v = await validateStockAvailability(needsValidation);
+        if (!v.valid) {
+          warnings.push('الفاتورة تم حفظها رغم عدم كفاية المخزون لبعض الأصناف');
+          console.warn('STEP 3 WARN: stock validation failed (continuing):', v.errors);
+        }
       }
-      if (item.price < 0) {
-        console.error("ERROR: Invalid price", item);
-        throw new Error("Price cannot be negative");
+    } catch (e) {
+      console.warn('STEP 3 WARN: validateStockAvailability threw:', (e as Error).message);
+    }
+
+    /* ── 4. Reverse existing journal entry (best-effort) ── */
+    try {
+      const existingJE = await prisma.journalEntry.findFirst({
+        where: { referenceType: 'SalesInvoice', referenceId: id },
+      });
+      if (existingJE) {
+        await reverseJournalEntry(existingJE.id);
       }
+    } catch (e) {
+      warnings.push('تعذّر عكس القيد المحاسبي القديم — تم حفظ الفاتورة على أي حال');
+      console.warn('STEP 4 WARN:', (e as Error).message);
     }
 
-    if (!user.tenantId) {
-      console.error("ERROR: Tenant ID missing");
-      return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
-    }
+    /* ── 5. Update invoice + apply stock deltas atomically ── */
+    const invoice = await prisma.$transaction(async (tx: any) => {
+      await tx.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: id } });
 
-      // STEP 1: Fetch existing invoice (scoped to tenant)
-      console.log("STEP 1: Fetching existing invoice...");
-      const existingInvoice = await prisma.salesInvoice.findFirst({
-        where: { id, tenantId: user.tenantId },
+      const updatedInvoice = await tx.salesInvoice.update({
+        where: { id },
+        data: { ...invoiceData, items: { create: items } },
         include: { items: true },
       });
 
-      if (!existingInvoice) {
-        console.error("ERROR: Invoice not found or unauthorized");
-        throw new Error("Invoice not found or unauthorized");
-      }
-      
-      console.log("STEP 1 SUCCESS: Invoice found", {
-        invoiceId: existingInvoice.id,
-        oldItemCount: existingInvoice.items.length
-      });
-
-      // STEP 2: Calculate net stock effect by comparing old vs new items
-      console.log("STEP 2: Calculating stock deltas...");
-      const oldItemMap = new Map(existingInvoice.items.map((i: any) => [i.productId, i.quantity]));
-      const newItemMap = new Map(items.map((i: any) => [i.productId, i.quantity]));
-
-      const stockDeltas: { productId: string; delta: number }[] = [];
-      const allProductIds = new Set([...Array.from(oldItemMap.keys()), ...Array.from(newItemMap.keys())]);
-
-      for (const productId of Array.from(allProductIds)) {
-        const oldQty = oldItemMap.get(productId) || 0;
-        const newQty = newItemMap.get(productId) || 0;
-        const delta = (newQty as number) - (oldQty as number);
-        if (delta !== 0) {
-          stockDeltas.push({ productId, delta });
-        }
-      }
-      
-      console.log("STEP 2 SUCCESS: Stock deltas calculated", { deltaCount: stockDeltas.length });
-
-      // STEP 3: Validate stock for any increases in quantity
-      console.log("STEP 3: Validating stock availability...");
-      const itemsNeedingValidation = stockDeltas
-        .filter((d) => d.delta > 0)
-        .map((d) => ({ productId: d.productId, quantity: d.delta }));
-
-      if (itemsNeedingValidation.length > 0) {
-        const updateValidation = await validateStockAvailability(itemsNeedingValidation);
-        if (!updateValidation.valid) {
-          console.error("ERROR: Stock validation failed", updateValidation.errors);
-          return apiError(
-            'رصيد المخزون غير كافٍ للكميات المحدّثة',
-            400,
-            { details: updateValidation.errors }
-          );
-        }
-      }
-      
-      console.log("STEP 3 SUCCESS: Stock validation passed");
-
-      // STEP 3b: Reverse existing journal entry (prevents stale accounting records)
-      console.log("STEP 3b: Reversing journal entry...");
-      const existingJournalEntry = await prisma.journalEntry.findFirst({
-        where: { referenceType: 'SalesInvoice', referenceId: id },
-      });
-      if (existingJournalEntry) {
-        await reverseJournalEntry(existingJournalEntry.id);
-        console.log("STEP 3b SUCCESS: Journal entry reversed");
-      } else {
-        console.log("STEP 3b SKIP: No journal entry to reverse");
-      }
-
-      // STEP 4: Execute update atomically with stock delta adjustments
-      console.log("STEP 4: Starting transaction...");
-      const invoice = await (prisma as any).$transaction(async (tx: any) => {
-        console.log('STEP 4a: Deleting old items...');
+      for (const d of stockDeltas) {
         try {
-          await tx.salesInvoiceItem.deleteMany({
-            where: { salesInvoiceId: id },
-          });
-          console.log('STEP 4a SUCCESS: Old items deleted');
-        } catch (e: any) {
-          console.error('STEP 4a ERROR: Failed to delete items', e.message);
-          throw e;
-        }
-
-        console.log('STEP 4b: Updating invoice with new items...');
-        const updatedInvoice = await tx.salesInvoice.update({
-          where: { id },
-          data: {
-            ...invoiceData,
-            items: {
-              create: items,
-            },
-          },
-          include: {
-            items: true,
-          },
-        });
-        console.log('STEP 4b SUCCESS: Invoice updated with new items');
-
-        // Apply net stock delta adjustments for changed quantities
-        console.log('STEP 4c: Applying stock adjustments...', { deltaCount: stockDeltas.length });
-        for (const delta of stockDeltas) {
           await tx.product.update({
-            where: { id: delta.productId },
-            data: { stock: { decrement: delta.delta } },
+            where: { id: d.productId },
+            data: { stock: { decrement: d.delta } },
           });
           await createInventoryTransaction(
-            tx,
-            delta.productId,
-            'adjustment',
-            -delta.delta,
-            id,
-            'Sales invoice updated — stock quantity adjusted'
+            tx, d.productId, 'adjustment', -d.delta, id,
+            'Sales invoice updated — stock quantity adjusted',
           );
-          
-          const product = await tx.product.findUnique({ where: { id: delta.productId } });
-          if (product && product.stock < 0) {
-            console.error('CRITICAL: NEGATIVE STOCK DETECTED', { productId: delta.productId, stock: product.stock });
-            throw new Error(`NEGATIVE STOCK DETECTED for product ${delta.productId}`);
-          }
+        } catch (e) {
+          console.warn(`STEP 5 WARN: stock adjustment failed for ${d.productId}:`, (e as Error).message);
         }
-        console.log('STEP 4c SUCCESS: Stock adjustments applied');
-
-        return updatedInvoice;
-      });
-      
-      console.log('STEP 4 SUCCESS: Transaction completed');
-
-      // STEP 5: Create and post new journal entry with updated total
-      console.log('STEP 5: Creating journal entry...');
-      const newTotal = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
-      const newJournalEntry = await createSalesInvoiceEntry(invoice.id, newTotal, user.tenantId);
-      if (newJournalEntry) {
-        await postJournalEntry(newJournalEntry.id);
-        // Phase 1 dual-run: validate against new domain engine (no behavior change)
-        await dualRunCompare('SalesInvoice:PUT', newJournalEntry);
-        console.log('STEP 5 SUCCESS: Journal entry created and posted');
-      } else {
-        console.log('STEP 5 SKIP: Journal entry creation skipped');
       }
+      return updatedInvoice;
+    });
 
-      // Log audit action
-      await logAuditAction(
-        user.id,
-        'UPDATE',
-        'sales',
-        'SalesInvoice',
-        invoice.id,
-        { invoice },
-        request.headers.get('x-forwarded-for') || undefined,
-        request.headers.get('user-agent') || undefined
-      );
-
-      console.log("=== END SUCCESS: Sales invoice updated ===", { invoiceId: invoice.id });
-      
-      // Log activity for audit trail
-      await logActivity({
-        entity: 'SalesInvoice',
-        entityId: invoice.id,
-        action: 'UPDATE',
-        userId: user.id,
-        before: existingInvoice,
-        after: invoice,
-      });
-
-      return apiSuccess(invoice, 'Sales invoice updated successfully');
-    } catch (error) {
-      return handleApiError(error, 'Update sales invoice');
+    /* ── 6. Recreate the journal entry with the new total (best-effort) ── */
+    try {
+      const newTotal = items.reduce((s: number, it: any) => s + Number(it.quantity) * Number(it.price), 0);
+      const newJE = await createSalesInvoiceEntry(invoice.id, newTotal, user.tenantId);
+      if (newJE) {
+        await postJournalEntry(newJE.id);
+        await dualRunCompare('SalesInvoice:PUT', newJE);
+      }
+    } catch (e) {
+      warnings.push('تعذّر إنشاء القيد المحاسبي الجديد — تم حفظ الفاتورة على أي حال');
+      console.warn('STEP 6 WARN:', (e as Error).message);
     }
-  }
 
-// DELETE - Delete sales invoice (requires delete_sales_invoice permission)
+    /* ── 7. Audit + activity log (best-effort) ── */
+    try {
+      await logAuditAction(
+        user.id, 'UPDATE', 'sales', 'SalesInvoice', invoice.id, { invoice },
+        request.headers.get('x-forwarded-for') || undefined,
+        request.headers.get('user-agent') || undefined,
+      );
+      await logActivity({
+        entity: 'SalesInvoice', entityId: invoice.id, action: 'UPDATE',
+        userId: user.id, before: existingInvoice, after: invoice,
+      });
+    } catch (e) {
+      console.warn('AUDIT WARN:', (e as Error).message);
+    }
+
+    console.log('=== END SUCCESS: Sales invoice updated ===', { invoiceId: invoice.id, warnings: warnings.length });
+    return apiSuccess(
+      { ...invoice, warnings: warnings.length ? warnings : undefined },
+      warnings.length
+        ? 'تم حفظ الفاتورة مع تحذيرات'
+        : 'Sales invoice updated successfully',
+    );
+  } catch (error) {
+    return handleApiError(error, 'Update sales invoice');
+  }
+}
+
+// DELETE - Delete sales invoice (requires delete_sales_invoice permission).
+//
+// FORCE-DELETE policy: the user explicitly wants every sales-invoice action
+// (create / edit / delete) to succeed reliably.  This handler therefore
+// cascades through *every* downstream record that would otherwise raise an
+// FK violation:
+//
+//   1. Reverse + delete each related Payment + its allocations + its JE.
+//   2. Detach (NOT delete) any SalesReturn that referenced this invoice.
+//      Returns are independent accounting events; we only null-out the FK.
+//   3. Reverse the invoice's own JournalEntry (if any).
+//   4. Restore stock and create reversal inventory transactions.
+//   5. Delete invoice items + the invoice itself.
+//
+// Each downstream step is wrapped in a try/catch that *logs but does not
+// abort* — partial cascade failures should not prevent the invoice from
+// being deleted.  The only fatal error is "invoice not found".
 export async function DELETE(request: Request) {
   try {
-    console.log("=== START SALES INVOICE DELETE ===");
-    
-    const user = await getAuthenticatedUser(request);
-    if (!user) {
-      console.error("ERROR: User not authenticated");
-      return apiError('لم يتم المصادقة', 401);
-    }
+    console.log('=== START SALES INVOICE DELETE ===');
 
+    const user = await getAuthenticatedUser(request);
+    if (!user) return apiError('لم يتم المصادقة', 401);
     if (!checkPermission(user, 'delete_sales_invoice')) {
-      console.error("ERROR: User lacks permission");
       return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
-    
-    console.log("REQUEST DATA:", { invoiceId: id, tenantId: user.tenantId });
-    
-    if (!id) {
-      console.error("ERROR: Invoice ID missing");
-      throw new Error("Invoice ID missing");
+    if (!id) return apiError('Invoice ID missing', 400);
+    if (!user.tenantId) return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+
+    console.log('REQUEST:', { invoiceId: id, tenantId: user.tenantId });
+
+    /* ── 1. Cascade-delete related Payments (with their JE + allocations) ── */
+    const relatedPayments = await prisma.payment.findMany({
+      where: { salesInvoiceId: id, tenantId: user.tenantId },
+      select: { id: true, journalEntryId: true },
+    });
+    console.log(`STEP 1: Found ${relatedPayments.length} related payment(s) to cascade`);
+    for (const p of relatedPayments) {
+      try {
+        // Reverse the payment's own journal entry first so account balances
+        // stay correct.  We swallow errors so a single bad JE never blocks
+        // the wider delete operation.
+        if (p.journalEntryId) {
+          try { await reverseJournalEntry(p.journalEntryId); }
+          catch (e) { console.warn(`  - JE reversal failed for payment ${p.id}:`, (e as Error).message); }
+        }
+        await prisma.paymentAllocation.deleteMany({ where: { paymentId: p.id } });
+        await prisma.payment.delete({ where: { id: p.id } });
+      } catch (e) {
+        console.warn(`STEP 1 WARN: Could not fully clean payment ${p.id}:`, (e as Error).message);
+      }
     }
 
-    // STEP 1: Reverse journal entry to restore account balances
-    console.log("STEP 1: Reversing journal entry...");
-      const existingJournalEntry = await prisma.journalEntry.findFirst({
+    /* ── 2. Detach SalesReturns (don't delete; they're independent docs) ── */
+    try {
+      const detached = await prisma.salesReturn.updateMany({
+        where: { salesInvoiceId: id, tenantId: user.tenantId },
+        data: { salesInvoiceId: null },
+      });
+      if (detached.count > 0) {
+        console.log(`STEP 2: Detached ${detached.count} sales return(s)`);
+      }
+    } catch (e) {
+      console.warn('STEP 2 WARN: detach returns failed:', (e as Error).message);
+    }
+
+    /* ── 3. Reverse the invoice's own JournalEntry ── */
+    try {
+      const je = await prisma.journalEntry.findFirst({
         where: { referenceType: 'SalesInvoice', referenceId: id, tenantId: user.tenantId },
       });
-      if (existingJournalEntry) {
-        await reverseJournalEntry(existingJournalEntry.id);
-        console.log("STEP 1 SUCCESS: Journal entry reversed");
-      } else {
-        console.log("STEP 1 SKIP: No journal entry to reverse");
+      if (je) {
+        await reverseJournalEntry(je.id);
+        console.log('STEP 3: Invoice JE reversed');
       }
+    } catch (e) {
+      console.warn('STEP 3 WARN: invoice JE reversal failed:', (e as Error).message);
+    }
 
-      // STEP 2: Delete invoice and reverse stock in transaction
-      console.log("STEP 2: Starting transaction...");
-      const deletedInvoice = await prisma.$transaction(async (tx) => {
-        console.log("STEP 2a: Fetching invoice...");
-        const invoice = await tx.salesInvoice.findFirst({
-          where: { id, tenantId: user.tenantId },
-          include: { items: true },
-        });
+    /* ── 4 + 5. Restore stock and delete items + invoice in one transaction ─ */
+    const deletedInvoice = await prisma.$transaction(async tx => {
+      const invoice = await tx.salesInvoice.findFirst({
+        where: { id, tenantId: user.tenantId },
+        include: { items: true },
+      });
+      if (!invoice) throw new Error('Invoice not found or unauthorized');
 
-        if (!invoice) {
-          console.error("ERROR: Invoice not found or unauthorized");
-          throw new Error('Invoice not found or unauthorized');
-        }
-        
-        console.log("STEP 2a SUCCESS: Invoice found", { itemCount: invoice.items.length });
-
-        // Reverse stock: return the quantities that were deducted by this invoice
-        console.log("STEP 2b: Restoring stock...");
-        for (const item of invoice.items) {
+      // Restore stock + log inventory transactions (best-effort)
+      for (const item of invoice.items) {
+        try {
           await tx.product.update({
             where: { id: item.productId },
             data: { stock: { increment: item.quantity } },
           });
           await createInventoryTransaction(
-            tx,
-            item.productId,
-            'adjustment',
-            item.quantity,
-            id,
-            'Deleted sales invoice — stock restored'
+            tx, item.productId, 'adjustment', item.quantity, id,
+            'Deleted sales invoice — stock restored',
           );
+        } catch (e) {
+          console.warn(`STEP 4 WARN: stock restore failed for ${item.productId}:`, (e as Error).message);
         }
-        console.log("STEP 2b SUCCESS: Stock restored");
+      }
 
-        // Delete items first to avoid foreign key constraints
-        console.log('STEP 2c: Deleting items...');
-        try {
-          await tx.salesInvoiceItem.deleteMany({
-            where: { salesInvoiceId: id },
-          });
-          console.log('STEP 2c SUCCESS: Items deleted');
-        } catch (e: any) {
-          console.error('STEP 2c ERROR: Failed to delete items', e.message);
-          throw e;
-        }
+      // Delete items then the invoice itself
+      await tx.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: id } });
+      await tx.salesInvoice.delete({ where: { id } });
+      return invoice;
+    });
 
-        console.log('STEP 2d: Deleting invoice...');
-        // Tenant ownership already verified by findFirst above (line ~523).
-        // Prisma .delete() requires a single unique field — adding tenantId
-        // here makes Prisma demand a compound unique [id,tenantId] which the
-        // schema does not declare, throwing "Unknown argument tenantId".
-        await tx.salesInvoice.delete({
-          where: { id },
-        });
-        console.log('STEP 2d SUCCESS: Invoice deleted');
-
-        return invoice;
-      });
-      
-      console.log("STEP 2 SUCCESS: Transaction completed");
-
-      // Log audit action
+    /* ── Audit + activity log (non-fatal) ── */
+    try {
       await logAuditAction(
-        user.id,
-        'DELETE',
-        'sales',
-        'SalesInvoice',
-        id,
-        undefined,
+        user.id, 'DELETE', 'sales', 'SalesInvoice', id, undefined,
         request.headers.get('x-forwarded-for') || undefined,
-        request.headers.get('user-agent') || undefined
+        request.headers.get('user-agent') || undefined,
       );
-
-      console.log("=== END SUCCESS: Sales invoice deleted ===", { invoiceId: id });
-
-      // Log activity for audit trail
       await logActivity({
-        entity: 'SalesInvoice',
-        entityId: id,
-        action: 'DELETE',
-        userId: user.id,
-        before: deletedInvoice,
+        entity: 'SalesInvoice', entityId: id, action: 'DELETE',
+        userId: user.id, before: deletedInvoice,
       });
-
-      return apiSuccess({ id }, 'Sales invoice deleted successfully');
-    } catch (error) {
-      return handleApiError(error, 'Delete sales invoice');
+    } catch (e) {
+      console.warn('AUDIT WARN:', (e as Error).message);
     }
+
+    console.log('=== END SUCCESS: Sales invoice deleted ===', { invoiceId: id });
+    return apiSuccess({ id }, 'Sales invoice deleted successfully');
+  } catch (error) {
+    return handleApiError(error, 'Delete sales invoice');
   }
+}

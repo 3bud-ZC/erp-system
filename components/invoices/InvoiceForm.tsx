@@ -4,11 +4,12 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  Plus, Trash2, ArrowRight, AlertCircle, CheckCircle, Printer,
+  Plus, Trash2, ArrowRight, AlertCircle, CheckCircle, Printer, UserPlus,
 } from 'lucide-react';
 import { Toast, useToast } from '@/components/ui/patterns';
 import { InvoiceConfig, fmtMoney } from './InvoiceConfig';
 import { InvoiceLayout } from './InvoiceLayout';
+import { QuickAddPartyModal, type CreatedParty } from './QuickAddPartyModal';
 
 /* ─── Types ──────────────────────────────────────────────────────── */
 interface PartyOption  { id: string; nameAr: string; phone?: string | null; }
@@ -104,6 +105,7 @@ export function InvoiceForm({
   const [saving, setSaving] = useState(false);
   const [saveMode, setSaveMode] = useState<'draft' | 'confirm' | 'new' | 'print'>('confirm');
   const [formError, setFormError] = useState('');
+  const [showAddParty, setShowAddParty] = useState(false);
 
   /* ── Load reference data ── */
   useEffect(() => {
@@ -287,6 +289,18 @@ export function InvoiceForm({
     >
       <Toast toast={toast} />
 
+      <QuickAddPartyModal
+        config={config}
+        open={showAddParty}
+        onClose={() => setShowAddParty(false)}
+        onCreated={(p: CreatedParty) => {
+          // Prepend to options + auto-select.
+          setParties(prev => [{ id: p.id, nameAr: p.nameAr, phone: p.phone ?? null }, ...prev]);
+          setPartyId(p.id);
+          showToast(`تمت إضافة ${p.nameAr}`, 'success');
+        }}
+      />
+
       <form onSubmit={handleSubmit} className="space-y-5">
         {formError && (
           <div className="flex items-center gap-2 text-red-700 text-sm bg-red-50 border border-red-200 rounded-xl px-4 py-3">
@@ -302,11 +316,19 @@ export function InvoiceForm({
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="sm:col-span-2">
               <Label>{config.partyLabel} *</Label>
-              <select required value={partyId} onChange={e => setPartyId(e.target.value)}
-                className={inputCls}>
-                <option value="">— اختر {config.partyLabel} —</option>
-                {parties.map(p => <option key={p.id} value={p.id}>{p.nameAr}</option>)}
-              </select>
+              <div className="flex gap-2">
+                <select required value={partyId} onChange={e => setPartyId(e.target.value)}
+                  className={`${inputCls} flex-1`}>
+                  <option value="">— اختر {config.partyLabel} —</option>
+                  {parties.map(p => <option key={p.id} value={p.id}>{p.nameAr}</option>)}
+                </select>
+                <button type="button" onClick={() => setShowAddParty(true)}
+                  title={config.addPartyLabel}
+                  className="flex items-center gap-1 px-3 py-2 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors flex-shrink-0">
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{config.addPartyLabel}</span>
+                </button>
+              </div>
             </div>
             <div>
               <Label>التاريخ *</Label>

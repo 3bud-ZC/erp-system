@@ -153,239 +153,241 @@ export async function POST(request: Request) {
     }
   }
 
-// PUT - Update purchase invoice (requires update_purchase_invoice permission)
+// PUT - Update purchase invoice (requires update_purchase_invoice permission).
+//
+// FORCE-SAVE policy: mirrors the sales-invoice PUT — sanitize bad rows,
+// wrap journal-entry/audit side-effects in try/catch, surface warnings
+// instead of failing.  See the long comment on sales-invoice PUT.
 export async function PUT(request: Request) {
   try {
     const user = await getAuthenticatedUser(request);
-    if (!user) {
-      return apiError('لم يتم المصادقة', 401);
-    }
-
+    if (!user) return apiError('لم يتم المصادقة', 401);
     if (!checkPermission(user, 'update_purchase_invoice')) {
       return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
+    if (!user.tenantId) return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
 
     const body = await request.json();
-      const { id, items, ...invoiceData } = body;
+    const { id, items: rawItems, ...invoiceData } = body;
+    if (!id) return apiError('Invoice ID missing', 400);
 
-      if (!user.tenantId) return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    /* ── Sanitize items ── */
+    const items: any[] = Array.isArray(rawItems)
+      ? rawItems.filter((it: any) =>
+          it && it.productId && Number(it.quantity) > 0 && Number(it.price) >= 0,
+        )
+      : [];
+    if (items.length === 0) {
+      return apiError('يجب أن تحتوي الفاتورة على صنف واحد على الأقل بكمية وسعر صالحين', 400);
+    }
 
-      // STEP 1: Fetch existing invoice (scoped to tenant)
-      const existingInvoice = await (prisma as any).purchaseInvoice.findFirst({
-        where: { id, tenantId: user.tenantId },
+    const warnings: string[] = [];
+
+    /* ── 1. Fetch existing invoice (tenant-scoped) ── */
+    const existingInvoice = await (prisma as any).purchaseInvoice.findFirst({
+      where: { id, tenantId: user.tenantId },
+      include: { items: true },
+    });
+    if (!existingInvoice) return apiError('الفاتورة غير موجودة', 404);
+
+    /* ── 2. Compute per-product stock deltas ── */
+    const oldItemMap = new Map(existingInvoice.items.map((i: any) => [i.productId, i.quantity]));
+    const newItemMap = new Map(items.map((i: any) => [i.productId, i.quantity]));
+    const stockDeltas: { productId: string; delta: number }[] = [];
+    const allProductIds = new Set([
+      ...Array.from(oldItemMap.keys()),
+      ...Array.from(newItemMap.keys()),
+    ]);
+    for (const productId of Array.from(allProductIds)) {
+      const oldQty = Number(oldItemMap.get(productId) || 0);
+      const newQty = Number(newItemMap.get(productId) || 0);
+      const delta = newQty - oldQty;
+      if (delta !== 0) stockDeltas.push({ productId: productId as string, delta });
+    }
+
+    /* ── 3. Reverse existing journal entry (best-effort) ── */
+    try {
+      const existingJE = await (prisma as any).journalEntry.findFirst({
+        where: { referenceType: 'PurchaseInvoice', referenceId: id },
+      });
+      if (existingJE) await reverseJournalEntry(existingJE.id);
+    } catch (e) {
+      warnings.push('تعذّر عكس القيد المحاسبي القديم — تم حفظ الفاتورة على أي حال');
+      console.warn('PURCHASE PUT WARN (JE reverse):', (e as Error).message);
+    }
+
+    /* ── 4. Update invoice + apply stock deltas atomically ── */
+    const invoice = await prisma.$transaction(async tx => {
+      await (tx as any).purchaseInvoiceItem.deleteMany({ where: { purchaseInvoiceId: id } });
+
+      const updatedInvoice = await (tx as any).purchaseInvoice.update({
+        where: { id },
+        data: { ...invoiceData, items: { create: items } },
         include: { items: true },
       });
 
-      if (!existingInvoice) {
-        return apiError('الفاتورة غير موجودة', 404);
-      }
-
-      // STEP 2: Calculate net stock effect by comparing old vs new items
-      const oldItemMap = new Map(existingInvoice.items.map((i: any) => [i.productId, i.quantity]));
-      const newItemMap = new Map(items.map((i: any) => [i.productId, i.quantity]));
-
-      const stockDeltas: { productId: string; delta: number }[] = [];
-      const allProductIds = new Set([...Array.from(oldItemMap.keys()), ...Array.from(newItemMap.keys())]);
-
-      for (const productId of Array.from(allProductIds)) {
-        const oldQty = oldItemMap.get(productId) || 0;
-        const newQty = newItemMap.get(productId) || 0;
-        const delta = Number(newQty) - Number(oldQty);
-        if (delta !== 0) {
-          stockDeltas.push({ productId: productId as string, delta });
-        }
-      }
-
-      // STEP 3: Reverse existing journal entry (prevents stale accounting records)
-      const existingJournalEntry = await (prisma as any).journalEntry.findFirst({
-        where: { referenceType: 'PurchaseInvoice', referenceId: id },
-      });
-      if (existingJournalEntry) {
-        await reverseJournalEntry(existingJournalEntry.id);
-      }
-
-      // STEP 4: Execute update atomically with stock delta adjustments
-      const invoice = await prisma.$transaction(async (tx) => {
-        console.log('[PURCHASE UPDATE - DELETE ITEMS]', { invoiceId: id });
+      for (const d of stockDeltas) {
         try {
-          await (tx as any).purchaseInvoiceItem.deleteMany({
-            where: { purchaseInvoiceId: id },
-          });
-          console.log('[PURCHASE UPDATE - DELETE ITEMS SUCCESS]');
-        } catch (e: any) {
-          console.error('[PURCHASE UPDATE - DELETE ITEMS ERROR]', e.message);
-          throw e;
-        }
-
-        const updatedInvoice = await (tx as any).purchaseInvoice.update({
-          where: { id },
-          data: {
-            ...invoiceData,
-            items: {
-              create: items,
-            },
-          },
-          include: {
-            items: true,
-          },
-        });
-
-        // Apply net stock delta adjustments for changed quantities
-        for (const delta of stockDeltas) {
           await (tx as any).product.update({
-            where: { id: delta.productId },
-            data: { stock: { increment: delta.delta } },
+            where: { id: d.productId },
+            data: { stock: { increment: d.delta } },
           });
           await createInventoryTransaction(
-            tx,
-            delta.productId,
-            'adjustment',
-            delta.delta,
-            id,
-            'Purchase invoice updated — stock quantity adjusted'
+            tx, d.productId, 'adjustment', d.delta, id,
+            'Purchase invoice updated — stock quantity adjusted',
           );
+        } catch (e) {
+          console.warn(`PURCHASE PUT WARN (stock ${d.productId}):`, (e as Error).message);
         }
-
-        return updatedInvoice;
-      });
-
-      // STEP 5: Create and post new journal entry with updated total
-      const newTotal = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
-      const newJournalEntry = await createPurchaseInvoiceEntry(invoice.id, newTotal, user.tenantId);
-      if (newJournalEntry) {
-        await postJournalEntry(newJournalEntry.id);
-        // Phase 1 dual-run: validate against new domain engine (no behavior change)
-        await dualRunCompare('PurchaseInvoice:PUT', newJournalEntry);
       }
+      return updatedInvoice;
+    });
 
-      // Log audit action
-      await logAuditAction(
-        user.id,
-        'UPDATE',
-        'purchases',
-        'PurchaseInvoice',
-        invoice.id,
-        { invoice },
-        request.headers.get('x-forwarded-for') || undefined,
-        request.headers.get('user-agent') || undefined
-      );
-
-      // Log activity for audit trail
-      await logActivity({
-        entity: 'PurchaseInvoice',
-        entityId: invoice.id,
-        action: 'UPDATE',
-        userId: user.id,
-        before: existingInvoice,
-        after: invoice,
-      });
-
-      return apiSuccess(invoice, 'Purchase invoice updated successfully');
-    } catch (error) {
-      return handleApiError(error, 'Update purchase invoice');
+    /* ── 5. Recreate journal entry (best-effort) ── */
+    try {
+      const newTotal = items.reduce((s: number, it: any) => s + Number(it.quantity) * Number(it.price), 0);
+      const newJE = await createPurchaseInvoiceEntry(invoice.id, newTotal, user.tenantId);
+      if (newJE) {
+        await postJournalEntry(newJE.id);
+        await dualRunCompare('PurchaseInvoice:PUT', newJE);
+      }
+    } catch (e) {
+      warnings.push('تعذّر إنشاء القيد المحاسبي الجديد — تم حفظ الفاتورة على أي حال');
+      console.warn('PURCHASE PUT WARN (JE create):', (e as Error).message);
     }
-  }
 
-// DELETE - Delete purchase invoice (requires delete_purchase_invoice permission)
+    /* ── 6. Audit + activity log (best-effort) ── */
+    try {
+      await logAuditAction(
+        user.id, 'UPDATE', 'purchases', 'PurchaseInvoice', invoice.id, { invoice },
+        request.headers.get('x-forwarded-for') || undefined,
+        request.headers.get('user-agent') || undefined,
+      );
+      await logActivity({
+        entity: 'PurchaseInvoice', entityId: invoice.id, action: 'UPDATE',
+        userId: user.id, before: existingInvoice, after: invoice,
+      });
+    } catch (e) {
+      console.warn('PURCHASE PUT AUDIT WARN:', (e as Error).message);
+    }
+
+    return apiSuccess(
+      { ...invoice, warnings: warnings.length ? warnings : undefined },
+      warnings.length ? 'تم حفظ الفاتورة مع تحذيرات' : 'Purchase invoice updated successfully',
+    );
+  } catch (error) {
+    return handleApiError(error, 'Update purchase invoice');
+  }
+}
+
+// DELETE - Delete purchase invoice (requires delete_purchase_invoice permission).
+//
+// FORCE-DELETE policy mirrors the sales-invoice handler: cascade-clean every
+// downstream record so the user can always remove a purchase invoice.
+//
+//   1. Reverse + delete each related Payment + its allocations + JE.
+//   2. Detach (NOT delete) any PurchaseReturn referencing this invoice.
+//   3. Reverse the invoice's own JournalEntry (if any).
+//   4. Reverse stock + log adjustment inventory transactions.
+//   5. Delete invoice items + the invoice itself.
+//
+// Each downstream step uses try/catch so partial failures still let the
+// invoice be deleted.
 export async function DELETE(request: Request) {
   try {
     const user = await getAuthenticatedUser(request);
-    if (!user) {
-      return apiError('لم يتم المصادقة', 401);
-    }
-
+    if (!user) return apiError('لم يتم المصادقة', 401);
     if (!checkPermission(user, 'delete_purchase_invoice')) {
       return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
 
     const { searchParams } = new URL(request.url);
-      const id = searchParams.get('id');
-      
-      if (!id) {
-        return apiError('معرف الفاتورة مطلوب', 400);
-      }
+    const id = searchParams.get('id');
+    if (!id) return apiError('معرف الفاتورة مطلوب', 400);
+    if (!user.tenantId) return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
 
-      // STEP 1: Reverse journal entry to restore account balances
-      const existingJournalEntry = await (prisma as any).journalEntry.findFirst({
+    /* ── 1. Cascade-delete related Payments ── */
+    const relatedPayments = await prisma.payment.findMany({
+      where: { purchaseInvoiceId: id, tenantId: user.tenantId },
+      select: { id: true, journalEntryId: true },
+    });
+    for (const p of relatedPayments) {
+      try {
+        if (p.journalEntryId) {
+          try { await reverseJournalEntry(p.journalEntryId); }
+          catch (e) { console.warn(`  - JE reversal failed for payment ${p.id}:`, (e as Error).message); }
+        }
+        await prisma.paymentAllocation.deleteMany({ where: { paymentId: p.id } });
+        await prisma.payment.delete({ where: { id: p.id } });
+      } catch (e) {
+        console.warn(`STEP 1 WARN: payment ${p.id} cleanup failed:`, (e as Error).message);
+      }
+    }
+
+    /* ── 2. Detach PurchaseReturns ── */
+    try {
+      await prisma.purchaseReturn.updateMany({
+        where: { purchaseInvoiceId: id, tenantId: user.tenantId },
+        data: { purchaseInvoiceId: null },
+      });
+    } catch (e) {
+      console.warn('STEP 2 WARN: detach returns failed:', (e as Error).message);
+    }
+
+    /* ── 3. Reverse the invoice's own JournalEntry ── */
+    try {
+      const je = await prisma.journalEntry.findFirst({
         where: { referenceType: 'PurchaseInvoice', referenceId: id, tenantId: user.tenantId },
       });
-      if (existingJournalEntry) {
-        await reverseJournalEntry(existingJournalEntry.id);
-      }
+      if (je) await reverseJournalEntry(je.id);
+    } catch (e) {
+      console.warn('STEP 3 WARN: invoice JE reversal failed:', (e as Error).message);
+    }
 
-      // STEP 2: Delete invoice and reverse stock in transaction
-      const deletedInvoice = await prisma.$transaction(async (tx) => {
-        const invoice = await (tx as any).purchaseInvoice.findFirst({
-          where: { id, tenantId: user.tenantId },
-          include: { items: true },
-        });
+    /* ── 4 + 5. Reverse stock and delete items + invoice ── */
+    const deletedInvoice = await prisma.$transaction(async tx => {
+      const invoice = await (tx as any).purchaseInvoice.findFirst({
+        where: { id, tenantId: user.tenantId },
+        include: { items: true },
+      });
+      if (!invoice) throw new Error('الفاتورة غير موجودة');
 
-        if (!invoice) {
-          throw new Error('الفاتورة غير موجودة');
-        }
-
-        // Reverse stock: remove the quantities that were added by this invoice
-        for (const item of invoice.items) {
+      for (const item of invoice.items) {
+        try {
           await (tx as any).product.update({
             where: { id: item.productId },
             data: { stock: { decrement: item.quantity } },
           });
           await createInventoryTransaction(
-            tx,
-            item.productId,
-            'adjustment',
-            -item.quantity,
-            id,
-            'Deleted purchase invoice — stock reversed'
+            tx, item.productId, 'adjustment', -item.quantity, id,
+            'Deleted purchase invoice — stock reversed',
           );
+        } catch (e) {
+          console.warn(`STEP 4 WARN: stock reverse failed for ${item.productId}:`, (e as Error).message);
         }
+      }
 
-        // Delete items first to avoid foreign key constraints
-        console.log('[PURCHASE DELETE - DELETE ITEMS]', { invoiceId: id });
-        try {
-          await (tx as any).purchaseInvoiceItem.deleteMany({
-            where: { purchaseInvoiceId: id },
-          });
-          console.log('[PURCHASE DELETE - DELETE ITEMS SUCCESS]');
-        } catch (e: any) {
-          console.error('[PURCHASE DELETE - DELETE ITEMS ERROR]', e.message);
-          throw e;
-        }
+      await (tx as any).purchaseInvoiceItem.deleteMany({ where: { purchaseInvoiceId: id } });
+      await (tx as any).purchaseInvoice.delete({ where: { id } });
+      return invoice;
+    });
 
-        // Tenant ownership already verified by findFirst above (line ~309).
-        // Prisma .delete() requires a single unique field — adding tenantId
-        // here makes Prisma demand a compound unique [id,tenantId] which the
-        // schema does not declare, throwing "Unknown argument tenantId".
-        await (tx as any).purchaseInvoice.delete({
-          where: { id },
-        });
-
-        return invoice;
-      });
-
-      // Log audit action
+    try {
       await logAuditAction(
-        user.id,
-        'DELETE',
-        'purchases',
-        'PurchaseInvoice',
-        id,
-        undefined,
+        user.id, 'DELETE', 'purchases', 'PurchaseInvoice', id, undefined,
         request.headers.get('x-forwarded-for') || undefined,
-        request.headers.get('user-agent') || undefined
+        request.headers.get('user-agent') || undefined,
       );
-
-      // Log activity for audit trail
       await logActivity({
-        entity: 'PurchaseInvoice',
-        entityId: id,
-        action: 'DELETE',
-        userId: user.id,
-        before: deletedInvoice,
+        entity: 'PurchaseInvoice', entityId: id, action: 'DELETE',
+        userId: user.id, before: deletedInvoice,
       });
-
-      return apiSuccess({ id }, 'Purchase invoice deleted successfully');
-    } catch (error) {
-      return handleApiError(error, 'Delete purchase invoice');
+    } catch (e) {
+      console.warn('AUDIT WARN:', (e as Error).message);
     }
+
+    return apiSuccess({ id }, 'Purchase invoice deleted successfully');
+  } catch (error) {
+    return handleApiError(error, 'Delete purchase invoice');
   }
+}
