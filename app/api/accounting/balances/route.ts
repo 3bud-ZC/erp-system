@@ -3,10 +3,10 @@
  * REST endpoints for account balance queries
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { accountingService } from '@/lib/accounting/accounting.service';
 import { getAuthenticatedUser, checkPermission } from '@/lib/auth';
-import { apiError } from '@/lib/api-response';
+import { apiError, apiSuccess, handleApiError } from '@/lib/api-response';
 
 // ============================================================================
 // GET /api/accounting/balances
@@ -26,10 +26,7 @@ export async function GET(req: NextRequest) {
     const accountingPeriodId = searchParams.get('accountingPeriodId');
 
     if (accountCodes.length === 0) {
-      return NextResponse.json(
-        { error: 'At least one account code is required' },
-        { status: 400 }
-      );
+      return apiError('At least one account code is required', 400);
     }
 
     const balances = await accountingService.getAccountBalances(
@@ -42,12 +39,8 @@ export async function GET(req: NextRequest) {
       }
     );
 
-    return NextResponse.json(balances);
+    return apiSuccess(balances);
   } catch (error: any) {
-    console.error('Error getting balances:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to get balances' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'Get balances');
   }
 }
