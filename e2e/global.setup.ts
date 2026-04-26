@@ -16,28 +16,28 @@ import { TEST_EMAIL, TEST_PASSWORD } from './fixtures/credentials';
 const STORAGE_PATH = path.join(__dirname, '.auth', 'admin.json');
 
 /**
- * Best-effort seed + admin-password reset.
+ * Safe-mode admin self-heal — never destructive against existing data.
  *
- * 1) Run the full demo seed (richer data for sales/journal flows). If unavailable,
- *    fall back to the auth-only seed. Both seeds use upsert({ update: {} }), so
- *    if the user already exists in the DB their password is NOT re-hashed.
+ * IMPORTANT: We deliberately do NOT run `npm run seed` here. That script
+ * (prisma/seed.ts) executes `deleteMany()` against business tables (customers,
+ * products, accounts, journalEntries, ...) which would WIPE the live DB on
+ * every E2E run. The upsert-only `prisma/seed-auth.ts` and
+ * `e2e/scripts/reset-admin-password.ts` are sufficient to guarantee:
+ *   - the admin user exists with the documented password, AND
+ *   - the E2E_DEFAULT tenant + base chart-of-accounts exist for that admin.
  *
- * 2) Always run reset-admin-password.ts after seeding. This forces the seeded
- *    admin's password to match TEST_PASSWORD, recovering from the very common
- *    case where the user exists with a stale hash from a prior seed/dev run.
+ * Both scripts are idempotent and only mutate auth/role rows + the dedicated
+ * E2E tenant — no other production data is touched.
  *
- * Failures in any step are non-fatal — the subsequent login attempt will
- * surface the real problem with a clearer error.
+ * Set E2E_SKIP_SEED=1 to skip even these safe heals (run purely against
+ * existing data; tests will fail-fast if admin login is broken).
  */
 function ensureSeed(): void {
+  if (process.env.E2E_SKIP_SEED === '1') return;
   try {
-    execSync('npm run seed', { stdio: 'ignore', timeout: 60_000 });
+    execSync('npx tsx prisma/seed-auth.ts', { stdio: 'ignore', timeout: 30_000 });
   } catch {
-    try {
-      execSync('npx tsx prisma/seed-auth.ts', { stdio: 'ignore', timeout: 30_000 });
-    } catch {
-      // ignore — login below will fail informatively if the user truly missing
-    }
+    // ignore — login below will fail informatively if the user truly missing
   }
   try {
     execSync('npx tsx e2e/scripts/reset-admin-password.ts', {

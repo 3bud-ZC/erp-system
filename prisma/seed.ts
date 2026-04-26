@@ -2,7 +2,31 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// ============================================================================
+// 🛡️  PRODUCTION SAFETY GUARD
+// ----------------------------------------------------------------------------
+// This seed performs `deleteMany()` against business tables (customers,
+// products, accounts, journalEntries, ...). Running it against a real DB
+// would WIPE production data. Block by default unless one of:
+//   - NODE_ENV === 'development', OR
+//   - ALLOW_SEED === 'true' (explicit opt-in)
+// ============================================================================
+function assertSeedAllowed(): void {
+  const isDev = process.env.NODE_ENV === 'development';
+  const explicit = process.env.ALLOW_SEED === 'true';
+  if (isDev || explicit) return;
+
+  const reason =
+    `❌ Seeding is disabled in this environment.\n` +
+    `   NODE_ENV='${process.env.NODE_ENV ?? '(unset)'}' ALLOW_SEED='${process.env.ALLOW_SEED ?? '(unset)'}'\n` +
+    `   This script wipes business tables. To allow it on purpose, set\n` +
+    `   either NODE_ENV=development or ALLOW_SEED=true and re-run.\n`;
+  throw new Error(reason);
+}
+
 async function main() {
+  assertSeedAllowed();
+
   console.log('🌱 بدء تنظيف قاعدة البيانات...');
 
   // حذف جميع البيانات (ماعدا المستخدمين)

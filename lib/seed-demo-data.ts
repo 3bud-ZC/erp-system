@@ -3,6 +3,7 @@
  * All codes are suffixed with a tenant-unique token to avoid global unique conflicts.
  */
 import { prisma } from './db';
+import { seedChartOfAccounts } from './chart-of-accounts';
 
 interface SeedResult {
   warehouses: number;
@@ -11,6 +12,8 @@ interface SeedResult {
   products: number;
   salesInvoices: number;
   purchaseInvoices: number;
+  accounts: number;
+  journalEntries: number;
 }
 
 export async function seedDemoData(tenantId: string): Promise<SeedResult> {
@@ -155,6 +158,68 @@ export async function seedDemoData(tenantId: string): Promise<SeedResult> {
         { productId: products[9].id, quantity: 10, price: products[9].price },
       ],
     },
+    {
+      invoiceNumber: `INV-S-006-${s}`,
+      customerId: customers[5].id,
+      date: daysAgo(5),
+      status: 'paid',
+      paymentStatus: 'paid',
+      notes: 'فاتورة الإبداع',
+      items: [
+        { productId: products[3].id, quantity: 8, price: products[3].price },
+        { productId: products[4].id, quantity: 8, price: products[4].price },
+      ],
+    },
+    {
+      invoiceNumber: `INV-S-007-${s}`,
+      customerId: customers[6].id,
+      date: daysAgo(9),
+      status: 'paid',
+      paymentStatus: 'paid',
+      notes: 'فاتورة رواد الصناعة',
+      items: [
+        { productId: products[1].id, quantity: 1, price: products[1].price },
+        { productId: products[10].id, quantity: 5, price: products[10].price },
+        { productId: products[11].id, quantity: 12, price: products[11].price },
+      ],
+    },
+    {
+      invoiceNumber: `INV-S-008-${s}`,
+      customerId: customers[0].id,
+      date: daysAgo(12),
+      status: 'pending',
+      paymentStatus: 'credit',
+      notes: 'بانتظار التحصيل',
+      items: [
+        { productId: products[2].id, quantity: 1, price: products[2].price },
+        { productId: products[7].id, quantity: 2, price: products[7].price },
+      ],
+    },
+    {
+      invoiceNumber: `INV-S-009-${s}`,
+      customerId: customers[3].id,
+      date: daysAgo(2),
+      status: 'paid',
+      paymentStatus: 'paid',
+      notes: 'طلب طارئ',
+      items: [
+        { productId: products[6].id, quantity: 3, price: products[6].price },
+        { productId: products[8].id, quantity: 30, price: products[8].price },
+      ],
+    },
+    {
+      invoiceNumber: `INV-S-010-${s}`,
+      customerId: customers[2].id,
+      date: daysAgo(4),
+      status: 'paid',
+      paymentStatus: 'paid',
+      notes: 'دفعة ثانية',
+      items: [
+        { productId: products[0].id, quantity: 1, price: products[0].price },
+        { productId: products[1].id, quantity: 1, price: products[1].price },
+        { productId: products[2].id, quantity: 1, price: products[2].price },
+      ],
+    },
   ];
 
   const salesInvoices = await Promise.all(
@@ -263,6 +328,168 @@ export async function seedDemoData(tenantId: string): Promise<SeedResult> {
     })
   );
 
+  // ── 7. CHART OF ACCOUNTS ───────────────────────────────────────────────────
+  const accountsCount = await seedChartOfAccounts(tenantId);
+
+  // ── 8. JOURNAL ENTRIES (10) ────────────────────────────────────────────────
+  // Use simple, well-known account codes from the default COA
+  // 1100 = Cash, 1110 = Bank, 1200 = AR, 1300 = Inventory,
+  // 2100 = AP, 2200 = VAT Payable, 3100 = Capital,
+  // 4100 = Sales Revenue, 5100 = COGS, 5200 = Operating Expenses, 5300 = Salaries
+  const journalEntriesRaw: Array<{
+    entryNumber: string;
+    entryDate: Date;
+    description: string;
+    referenceType?: string;
+    referenceId?: string;
+    isPosted: boolean;
+    lines: Array<{ accountCode: string; debit: number; credit: number; description?: string }>;
+  }> = [
+    {
+      entryNumber: `JE-001-${s}`,
+      entryDate: daysAgo(30),
+      description: 'إيداع رأس المال الافتتاحي',
+      isPosted: true,
+      lines: [
+        { accountCode: '1110', debit: 100000, credit: 0, description: 'إيداع بنكي' },
+        { accountCode: '3100', debit: 0, credit: 100000, description: 'رأس المال' },
+      ],
+    },
+    {
+      entryNumber: `JE-002-${s}`,
+      entryDate: daysAgo(25),
+      description: 'شراء بضاعة نقداً',
+      isPosted: true,
+      lines: [
+        { accountCode: '1300', debit: 25000, credit: 0, description: 'إضافة مخزون' },
+        { accountCode: '1110', debit: 0, credit: 25000, description: 'دفع من البنك' },
+      ],
+    },
+    {
+      entryNumber: `JE-003-${s}`,
+      entryDate: daysAgo(21),
+      description: `قيد فاتورة بيع ${salesInvoices[0].invoiceNumber}`,
+      referenceType: 'SalesInvoice',
+      referenceId: salesInvoices[0].id,
+      isPosted: true,
+      lines: [
+        { accountCode: '1200', debit: 18000, credit: 0, description: 'مديونية عميل' },
+        { accountCode: '4100', debit: 0, credit: 15652, description: 'إيرادات مبيعات' },
+        { accountCode: '2200', debit: 0, credit: 2348, description: 'ضريبة القيمة المضافة' },
+      ],
+    },
+    {
+      entryNumber: `JE-004-${s}`,
+      entryDate: daysAgo(21),
+      description: `تكلفة البضاعة المباعة ${salesInvoices[0].invoiceNumber}`,
+      referenceType: 'SalesInvoice',
+      referenceId: salesInvoices[0].id,
+      isPosted: true,
+      lines: [
+        { accountCode: '5100', debit: 11000, credit: 0, description: 'COGS' },
+        { accountCode: '1300', debit: 0, credit: 11000, description: 'تخفيض مخزون' },
+      ],
+    },
+    {
+      entryNumber: `JE-005-${s}`,
+      entryDate: daysAgo(15),
+      description: 'دفع رواتب الموظفين',
+      isPosted: true,
+      lines: [
+        { accountCode: '5300', debit: 12000, credit: 0, description: 'رواتب' },
+        { accountCode: '1110', debit: 0, credit: 12000, description: 'دفع من البنك' },
+      ],
+    },
+    {
+      entryNumber: `JE-006-${s}`,
+      entryDate: daysAgo(14),
+      description: `قيد فاتورة بيع ${salesInvoices[1].invoiceNumber}`,
+      referenceType: 'SalesInvoice',
+      referenceId: salesInvoices[1].id,
+      isPosted: true,
+      lines: [
+        { accountCode: '1100', debit: 8050, credit: 0, description: 'تحصيل نقدي' },
+        { accountCode: '4100', debit: 0, credit: 7000, description: 'إيرادات مبيعات' },
+        { accountCode: '2200', debit: 0, credit: 1050, description: 'ضريبة القيمة المضافة' },
+      ],
+    },
+    {
+      entryNumber: `JE-007-${s}`,
+      entryDate: daysAgo(10),
+      description: 'مصروفات تشغيلية - كهرباء وماء',
+      isPosted: true,
+      lines: [
+        { accountCode: '5200', debit: 1500, credit: 0, description: 'فواتير الخدمات' },
+        { accountCode: '1110', debit: 0, credit: 1500, description: 'دفع من البنك' },
+      ],
+    },
+    {
+      entryNumber: `JE-008-${s}`,
+      entryDate: daysAgo(7),
+      description: 'سداد دفعة لمورد',
+      isPosted: true,
+      lines: [
+        { accountCode: '2100', debit: 6000, credit: 0, description: 'تخفيض الذمم الدائنة' },
+        { accountCode: '1110', debit: 0, credit: 6000, description: 'دفع من البنك' },
+      ],
+    },
+    {
+      entryNumber: `JE-009-${s}`,
+      entryDate: daysAgo(5),
+      description: 'تحصيل دفعة من عميل',
+      isPosted: true,
+      lines: [
+        { accountCode: '1110', debit: 9500, credit: 0, description: 'إيداع بنكي' },
+        { accountCode: '1200', debit: 0, credit: 9500, description: 'سداد ذمم العملاء' },
+      ],
+    },
+    {
+      entryNumber: `JE-010-${s}`,
+      entryDate: daysAgo(1),
+      description: 'إيجار المكتب الشهري',
+      isPosted: false,
+      lines: [
+        { accountCode: '5200', debit: 4000, credit: 0, description: 'إيجار' },
+        { accountCode: '1110', debit: 0, credit: 4000, description: 'دفع من البنك' },
+      ],
+    },
+  ];
+
+  let journalEntriesCount = 0;
+  for (const je of journalEntriesRaw) {
+    const totalDebit = je.lines.reduce((sum, l) => sum + l.debit, 0);
+    const totalCredit = je.lines.reduce((sum, l) => sum + l.credit, 0);
+
+    try {
+      await prisma.journalEntry.create({
+        data: {
+          entryNumber: je.entryNumber,
+          entryDate: je.entryDate,
+          description: je.description,
+          referenceType: je.referenceType,
+          referenceId: je.referenceId,
+          totalDebit,
+          totalCredit,
+          isPosted: je.isPosted,
+          postedDate: je.isPosted ? je.entryDate : null,
+          tenantId,
+          lines: {
+            create: je.lines.map((l) => ({
+              tenantId,
+              accountCode: l.accountCode,
+              debit: l.debit,
+              credit: l.credit,
+              description: l.description,
+            })),
+          },
+        },
+      });
+      journalEntriesCount++;
+    } catch (err) {
+      console.error(`Failed to seed journal entry ${je.entryNumber}:`, err);
+    }
+  }
+
   return {
     warehouses: 2,
     customers: customers.length,
@@ -270,5 +497,7 @@ export async function seedDemoData(tenantId: string): Promise<SeedResult> {
     products: products.length,
     salesInvoices: salesInvoices.length,
     purchaseInvoices: purchaseInvoices.length,
+    accounts: accountsCount,
+    journalEntries: journalEntriesCount,
   };
 }

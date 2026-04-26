@@ -8,6 +8,7 @@ import { WorkflowValidator, ValidationContext, ValidationResult } from '../valid
 import { journalEntryService, CreateJournalEntryInput } from './journal-entry.service';
 // import { chartOfAccountsService } from './chart-of-accounts.service';
 import { accountingPeriodService } from './period.service';
+import { prisma } from '../db';
 
 // ============================================================================
 // JOURNAL ENTRY VALIDATOR
@@ -170,22 +171,40 @@ export class JournalEntryValidator implements WorkflowValidator {
   }
 
   private async validateAccounts(lines: any[], tenantId: string, errors: any[]): Promise<void> {
-    // TODO: Re-enable when chartOfAccountsService is fixed for schema
-    // for (let i = 0; i < lines.length; i++) {
-    //   const line = lines[i];
-    //   const fieldPrefix = `lines[${i}]`;
-    //   try {
-    //     await chartOfAccountsService.validateAccountForEntry(line.accountCode, tenantId);
-    //   } catch (error: any) {
-    //     errors.push({
-    //       code: 'INVALID_ACCOUNT',
-    //       severity: 'error',
-    //       message: error.message || 'Invalid account',
-    //       field: `${fieldPrefix}.accountCode`,
-    //       context: { accountCode: line.accountCode },
-    //     });
-    //   }
-    // }
+    // Validate that each referenced account exists and is active for this tenant
+    const codes = Array.from(
+      new Set(lines.map((l) => l.accountCode).filter((c) => typeof c === 'string' && c.length > 0))
+    );
+    if (codes.length === 0) return;
+
+    const existing = await prisma.account.findMany({
+      where: { tenantId, code: { in: codes } },
+      select: { code: true, isActive: true },
+    });
+    const accountMap = new Map(existing.map((a) => [a.code, a]));
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const fieldPrefix = `lines[${i}]`;
+      const acc = accountMap.get(line.accountCode);
+      if (!acc) {
+        errors.push({
+          code: 'ACCOUNT_NOT_FOUND',
+          severity: 'error',
+          message: `Account ${line.accountCode} not found`,
+          field: `${fieldPrefix}.accountCode`,
+          context: { accountCode: line.accountCode },
+        });
+      } else if (!acc.isActive) {
+        errors.push({
+          code: 'ACCOUNT_INACTIVE',
+          severity: 'error',
+          message: `Account ${line.accountCode} is inactive`,
+          field: `${fieldPrefix}.accountCode`,
+          context: { accountCode: line.accountCode },
+        });
+      }
+    }
   }
 
   private async validatePeriodOpen(periodId: string, tenantId: string, errors: any[]): Promise<void> {

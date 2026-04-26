@@ -2,7 +2,22 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// ============================================================================
+// 🛡️  PRODUCTION SAFETY GUARD — same policy as prisma/seed.ts
+// ============================================================================
+function assertSeedAllowed(): void {
+  const isDev = process.env.NODE_ENV === 'development';
+  const explicit = process.env.ALLOW_SEED === 'true';
+  if (isDev || explicit) return;
+  throw new Error(
+    `❌ Database wipe is disabled in this environment. ` +
+      `Set NODE_ENV=development or ALLOW_SEED=true to allow it.`
+  );
+}
+
 async function main() {
+  assertSeedAllowed();
+
   console.log('🧹 بدء تنظيف قاعدة البيانات...');
 
   // حذف جميع البيانات بالترتيب الصحيح (من الأسفل للأعلى)

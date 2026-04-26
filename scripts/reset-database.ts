@@ -2,7 +2,20 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// 🛡️  PRODUCTION SAFETY GUARD — same policy as prisma/seed.ts
+function assertResetAllowed(): void {
+  const isDev = process.env.NODE_ENV === 'development';
+  const explicit = process.env.ALLOW_SEED === 'true';
+  if (isDev || explicit) return;
+  throw new Error(
+    `❌ Database reset is disabled in this environment. ` +
+      `Set NODE_ENV=development or ALLOW_SEED=true to allow it.`
+  );
+}
+
 async function main() {
+  assertResetAllowed();
+
   console.log('🧹 بدء إعادة تعيين قاعدة البيانات إلى حالة نظيفة...\n');
 
   try {
