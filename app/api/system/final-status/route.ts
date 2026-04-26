@@ -5,9 +5,9 @@
  * GET /api/system/final-status
  */
 
-import { NextResponse } from 'next/server';
 import { systemOrchestrator, SystemOrchestratorReport } from '@/lib/system/orchestrator/system-orchestrator';
 import { logger } from '@/lib/logger';
+import { apiSuccess, apiError } from '@/lib/api-response';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,23 +23,11 @@ export async function GET() {
       report = await systemOrchestrator.runValidation();
     }
 
-    return NextResponse.json({
-      success: true,
-      ...report,
-    });
+    return apiSuccess(report);
 
   } catch (error: any) {
     logger.error({ error: error.message }, 'Final status endpoint error');
-    
-    return NextResponse.json(
-      { 
-        success: false,
-        status: 'FAILED',
-        error: error.message,
-        timestamp: Date.now(),
-      },
-      { status: 500 }
-    );
+    return apiError(error.message || 'Final status failed', 500, { status: 'FAILED', timestamp: Date.now() });
   }
 }
 
@@ -50,20 +38,9 @@ export async function POST() {
   try {
     const report = await systemOrchestrator.runValidation();
     
-    return NextResponse.json({
-      success: true,
-      message: 'Fresh validation completed',
-      ...report,
-    });
+    return apiSuccess(report, 'Fresh validation completed');
 
   } catch (error: any) {
-    return NextResponse.json(
-      { 
-        success: false,
-        status: 'FAILED',
-        error: error.message,
-      },
-      { status: 500 }
-    );
+    return apiError(error.message || 'Validation failed', 500, { status: 'FAILED' });
   }
 }
