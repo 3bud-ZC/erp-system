@@ -1,484 +1,202 @@
-# 🏢 نظام ERP متكامل | Enterprise ERP System
-
 <div align="center">
 
-![Next.js](https://img.shields.io/badge/Next.js-14-black?style=flat-square&logo=next.js)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?style=flat-square&logo=typescript)
-![Prisma](https://img.shields.io/badge/Prisma-5.0-2D3748?style=flat-square&logo=prisma)
-![TailwindCSS](https://img.shields.io/badge/Tailwind-3.4-38B2AC?style=flat-square&logo=tailwind-css)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?style=flat-square&logo=postgresql)
-![Production Ready](https://img.shields.io/badge/Status-Production%20Ready-success?style=flat-square)
+# 🏢 ERP System
 
-**🎯 نظام ERP احترافي - جاهز للإنتاج**
+**A production-ready, multi-tenant Enterprise Resource Planning platform**
 
-**Production-Ready Enterprise Resource Planning System**
+[![Next.js](https://img.shields.io/badge/Next.js-14.2-black?style=flat-square&logo=next.js)](https://nextjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.4-3178C6?style=flat-square&logo=typescript)](https://www.typescriptlang.org)
+[![Prisma](https://img.shields.io/badge/Prisma-5.22-2D3748?style=flat-square&logo=prisma)](https://www.prisma.io)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?style=flat-square&logo=postgresql)](https://www.postgresql.org)
+[![TailwindCSS](https://img.shields.io/badge/Tailwind-3.4-38B2AC?style=flat-square&logo=tailwind-css)](https://tailwindcss.com)
+[![Tests](https://img.shields.io/badge/Tests-135%20passing-success?style=flat-square)]()
+[![Production Ready](https://img.shields.io/badge/Status-Production%20Ready-success?style=flat-square)]()
 
-نظام متكامل لإدارة المخزون والمبيعات والمشتريات والتصنيع والمحاسبة
-
-Integrated system for inventory, sales, purchases, manufacturing, and accounting management
-
-[Features](#-features) • [Quick Start](#-quick-start) • [Architecture](#-architecture) • [Documentation](#-documentation)
+[Features](#-features) · [Quick Start](#-quick-start) · [API](#-api-reference) · [Deploy](#-deployment) · [Demo](#-live-demo)
 
 </div>
 
 ---
 
-## 🎯 نظرة عامة | Overview
+## 🎯 Overview
 
-نظام ERP متكامل مبني بأحدث التقنيات لإدارة جميع عمليات المؤسسة من المخزون والمبيعات والمشتريات والتصنيع والحسابات.
+A fully integrated ERP system covering inventory, sales, purchasing, manufacturing,
+and double-entry accounting — built with modern web technologies and production-grade
+safety guards. Bilingual UI (Arabic RTL + English).
 
-A fully integrated ERP system built with modern technologies to manage all enterprise operations including inventory, sales, purchases, manufacturing, and accounting.
+### Highlights
 
-### ✨ المميزات الرئيسية | Key Features
-
-| الموديول | الوصف | Module |
-|----------|-------|--------|
-| 📊 **Dashboard** | مؤشرات الأداء والتقارير | KPIs & Reports |
-| 📦 **المخزون** | إدارة المنتجات والمخزون | Inventory Management |
-| 🛒 **المبيعات** | فواتير وأوامر وعملاء | Sales & Customers |
-| 🏭 **المشتريات** | فواتير وأوامر وموردين | Purchases & Suppliers |
-| 🔧 **التصنيع** | أوامر إنتاج وقوائم مواد | Manufacturing & BOM |
-| 💰 **المحاسبة** | قيود يومية وتقارير | Accounting & Reports |
+- 🧾 **Real double-entry accounting** with trial balance, income statement, balance sheet, and journal entry posting
+- 📊 **Live KPI dashboard** with 6-month trend charts and recent activity tables
+- 🖥️ **Client demo page** (`/demo`) — view-only board safe to present to stakeholders
+- 🛡️ **Production-safe by default** — 5 layered guards prevent any test/seed/reset script from touching the live DB
+- 🏢 **Multi-tenant** with strict row-level isolation
+- ✅ **135 unit tests + Playwright E2E + GitHub Actions CI**
 
 ---
 
-## 🚀 البدء السريع | Quick Start
+## 🚀 Quick Start
 
-### 📋 المتطلبات | Prerequisites
-- Node.js >= 18.0
-- npm >= 8.0
-- PostgreSQL (للإنتاج | for production)
+### Prerequisites
 
-### 💻 التثبيت المحلي | Local Installation
+- Node.js ≥ 18.0
+- PostgreSQL ≥ 13 (local or hosted: Railway / Neon / Supabase / RDS)
+
+### Local setup (5 minutes)
 
 ```bash
-# 1) Clone & install
+# 1. Clone & install
 git clone https://github.com/3bud-ZC/erp-system.git
 cd erp-system
 npm install
 
-# 2) Configure environment
+# 2. Configure environment
 cp .env.example .env
-# Edit .env: set DATABASE_URL, JWT_SECRET, NEXTAUTH_SECRET (32+ chars each)
+# Edit .env: set DATABASE_URL, JWT_SECRET, NEXTAUTH_SECRET (each 32+ chars)
 
-# 3) Generate Prisma client
+# 3. Initialize the database (your local DB only — never run this against prod)
 npx prisma generate
-
-# 4) Apply schema to YOUR OWN database (dev only — never against production)
 npx prisma migrate deploy
 
-# 5) (Optional) Seed demo data on a fresh dev DB
-ALLOW_SEED=true npx tsx prisma/seed-auth.ts   # creates admin@erp.com / admin
+# 4. (Optional) Bootstrap the default admin user
+ALLOW_SEED=true npx tsx prisma/seed-auth.ts
 
-# 6) Start dev server
+# 5. Start dev server
 npm run dev
 ```
 
-> 🛡️ **Production safety**: `prisma/seed.ts`, `prisma/seed-clean.ts`, and
-> `scripts/reset-database.ts` refuse to run unless `NODE_ENV=development` or
-> `ALLOW_SEED=true`. This protects the live DB from accidental wipes.
+Open **<http://localhost:3000>** and sign in with `admin@erp.com` / `admin`.
+
+> ⚠️ **Rotate the default credentials before deploying anywhere public.**
 
 ---
 
-## 🔐 Environment Separation Contract
-
-The repo enforces strict isolation between three environments. **No tooling
-ever touches production data by default**:
-
-| Environment | Database                          | What runs                                   | Destructive ops |
-|-------------|-----------------------------------|---------------------------------------------|-----------------|
-| **Production** | Railway (live)                  | The Next.js app only                        | ❌ Blocked by all script-level guards |
-| **CI**         | Ephemeral postgres in GH Actions | type-check · unit tests · build · Playwright | ✅ Allowed (in CI's own DB only); needs `ALLOW_SEED=true` to wipe |
-| **Local E2E**  | Local/test postgres (operator-provided) | Playwright against `npm run dev`        | ✅ Allowed in your isolated DB |
-
-### How isolation is enforced
-
-1. **Script-level guards** — `prisma/seed.ts`, `prisma/seed-clean.ts`,
-   `prisma/seed.js`, `scripts/reset-database.ts`, and
-   `e2e/scripts/reset-admin-password.ts` each call an `assert*Allowed()`
-   function that **throws before opening any DB connection** unless an
-   explicit env flag is set. (Verified by running each one with
-   `NODE_ENV=production` — all four refuse to start.)
-
-2. **E2E DB host guard** — `e2e/scripts/assert-isolated-db.ts` parses the
-   active `DATABASE_URL` and **refuses** to run if the host isn't `localhost`/
-   `127.0.0.1` and the dbname doesn't contain a `_test` / `_e2e` / `_ci`
-   marker. Bypass requires `E2E_ALLOW_PRODUCTION_DB=1` (loud, explicit, never
-   default-on). The guard runs at the top of `e2e/global.setup.ts` and at the
-   start of `reset-admin-password.ts` — defense in depth.
-
-3. **CI uses upsert-only seeding** — `.github/workflows/ci.yml` runs
-   `npx tsx prisma/seed-auth.ts` (idempotent upsert; no `deleteMany`) instead
-   of `npm run seed`. The destructive seed is never invoked in CI.
-
-### Running E2E locally (against an isolated DB)
-
-```bash
-# 1. Start a local postgres (Docker example)
-docker run -d --name erp-test-pg -p 5433:5432 \
-  -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=erp_test postgres:15
-
-# 2. Point this shell at it (DO NOT use the production .env)
-$env:DATABASE_URL = "postgresql://postgres:postgres@localhost:5433/erp_test"
-$env:E2E_ALLOW_AUTH_RESET = "1"
-
-# 3. Apply schema + bootstrap admin
-npx prisma migrate deploy
-npx tsx prisma/seed-auth.ts
-
-# 4. Run E2E
-npm run e2e
-```
-
-If you accidentally leave `DATABASE_URL` pointing at Railway, the guard will
-refuse to start with a clear error message — the production DB is safe.
-
-### Required production env flags
-
-| Variable                | Production value | Purpose                                  |
-|-------------------------|------------------|------------------------------------------|
-| `ALLOW_SEED`            | `false` (or unset) | Blocks destructive seed/reset scripts |
-| `E2E_BYPASS_RATE_LIMIT` | `0` (or unset)   | Keeps the auth rate-limiter active       |
-| `E2E_ALLOW_AUTH_RESET`  | `0` (or unset)   | Blocks the admin password-reset helper   |
-| `E2E_ALLOW_PRODUCTION_DB` | `0` (or unset) | Blocks E2E from connecting at all        |
-
-افتح [http://localhost:3000](http://localhost:3000) في المتصفح
-
-Open [http://localhost:3000](http://localhost:3000) in your browser
-
-### 🔑 Demo Credentials | بيانات الدخول التجريبية
-
-After running the seed (`npm run seed` or via the onboarding flow), you can log in with the default admin user:
-
-| Field        | Value                |
-|--------------|----------------------|
-| 📧 Email     | `admin@erp.com`      |
-| 🔒 Password  | `admin`              |
-| 🌐 Login URL | `/login`             |
-| 🖥️ Demo View | `/demo` (view-only)  |
-| 📊 Dashboard | `/dashboard`         |
-
-> ⚠️ Change these credentials immediately for any production deployment.
-
-The demo seeder (triggered automatically on first onboarding) creates:
-- 7 customers, 4 suppliers, 12 products
-- 10 sales invoices, 3 purchase invoices
-- 18 chart-of-accounts entries
-- 10 sample journal entries (9 posted, 1 draft)
-
----
-
-## 🖥️ Demo Page (`/demo`)
-
-A self-contained, **view-only** display board for client presentations.
-Authentication required (same login). No edit, create, or delete actions are
-exposed — the page can be safely shown to non-technical stakeholders.
-
-What it renders:
-- 📊 KPI cards: Total Revenue, Total Expenses, Net Profit, Inventory Value
-- 📈 Charts: 6-month sales / purchases trend (line), inventory mix (pie)
-- 🧾 Tables: latest activities + latest journal entries
-- 🔄 Manual refresh button (read-only requery; no write actions)
-
-Open at: `http://<your-host>/demo`
-
-```
-┌─────────────────────────────────────────────┐
-│  ERP System — Client Demo Dashboard         │
-│  View-only financial and operational view   │
-├─────────────────────────────────────────────┤
-│  [Revenue]  [Expenses]  [Net Profit]  ...   │
-│  ──────  Trend chart  ──────  Pie chart     │
-│  Latest activities │ Latest journal entries │
-└─────────────────────────────────────────────┘
-```
-
----
-
-## 🚀 Deployment
-
-### Option A — Vercel (frontend) + Railway (PostgreSQL)
-
-This is the recommended pairing. Vercel hosts the Next.js app; Railway hosts
-the database. Both have free starter tiers.
-
-**1. Provision PostgreSQL on Railway**
-- Sign in at [railway.app](https://railway.app) → New Project → Add PostgreSQL
-- Copy the connection string from the database service's *Connect* tab
-  (format: `postgresql://user:pass@host:port/dbname`)
-
-**2. Apply the schema once (from your local machine)**
-```bash
-# From this repo, with the Railway URL in .env
-DATABASE_URL=<railway-url> npx prisma migrate deploy
-```
-
-**3. Deploy the app to Vercel**
-```bash
-# Push to GitHub, then on https://vercel.com:
-#   - Import the GitHub repo
-#   - Framework preset: Next.js (auto-detected)
-#   - Build command: npm run build (uses package.json)
-#   - Output: .next (default)
-```
-
-**4. Configure Vercel environment variables** (Settings → Environment Variables)
-| Variable           | Value                                        |
-|--------------------|----------------------------------------------|
-| `DATABASE_URL`     | Railway connection string                    |
-| `JWT_SECRET`       | 32+ char random string                       |
-| `NEXTAUTH_SECRET`  | 32+ char random string                       |
-| `NEXTAUTH_URL`     | `https://<your-app>.vercel.app`              |
-| `NODE_ENV`         | `production`                                 |
-| `ALLOW_SEED`       | `false` (must stay false on production!)     |
-| `E2E_BYPASS_RATE_LIMIT` | `0` (must stay 0 on production!)        |
-| `E2E_ALLOW_AUTH_RESET`  | `0` (must stay 0/unset on production!)   |
-| `E2E_ALLOW_PRODUCTION_DB` | `0` (must stay 0/unset on production!) |
-
-Vercel will redeploy on every push to the connected branch. The seed/reset
-scripts are blocked at runtime by the production safety guards.
-
-### Option B — Railway (full-stack: app + DB on same provider)
-
-```bash
-# 1. Push to GitHub, then on https://railway.app:
-#    New Project → Deploy from GitHub repo
-# 2. Add a PostgreSQL service to the same project
-# 3. Set environment variables (same list as Option A)
-# 4. Build/start commands are read from railway.json (committed)
-```
-
-`railway.json` and `nixpacks.toml` already exist in the repo — no extra
-configuration needed.
-
-### Option C — Render
-
-`render.yaml` is committed. Render will pick it up automatically.
-Secrets are marked `sync: false` — you'll be prompted in the Render
-dashboard for each.
-
----
-
-### 🛠️ First-Time Deploy Checklist
-
-The build pipeline does **NOT** apply schema migrations or seed any data —
-this is intentional safety. Run these once, manually, after the first
-successful deploy:
-
-```bash
-# Option 1: from your local machine, with the production DATABASE_URL
-DATABASE_URL=<prod-url> npx prisma migrate deploy
-
-# Option 2: one-off opt-in on Railway — set RAILWAY_RUN_MIGRATE=true for
-# a single deploy, let it apply migrations, then unset the variable
-```
-
-**Steady-state behavior:** every deploy / restart performs **zero** DB
-mutations. Only the Next.js app runs.
-
-| Op                    | When does it run?                                  |
-|-----------------------|----------------------------------------------------|
-| `prisma generate`     | Build phase only (writes to `node_modules`)        |
-| `prisma migrate deploy` | Operator-managed (manual, one-off)               |
-| `npm run seed`        | Blocked unless `ALLOW_SEED=true` is set            |
-| `npm run db:reset`    | Blocked unless `ALLOW_SEED=true` is set            |
-| Demo user injection   | Blocked unless `RAILWAY_RUN_INIT=true` is set      |
-
----
-
-## 📋 Core Features
-
-### ✅ Inventory Management
-- Real-time stock tracking with movement audit trail
-- Automatic stock validation before operations
-- Prevents negative stock at database level
-- Multi-location inventory (foundation ready)
-
-### ✅ Sales Operations
-- Sales order and invoice creation
-- Automatic stock deduction upon sale
-- Customer relationship tracking
-- Real-time sales analytics
-
-### ✅ Purchase Management
-- Purchase order and invoice creation
-- Automatic stock increase upon purchase
-- Supplier management and tracking
-- Purchase analytics and reporting
-
-### ✅ Manufacturing System
-- Bill of Materials (BOM) definition
-- Production order creation with BOM explosion
-- Raw material validation and deduction
-- Work-in-Progress (WIP) cost tracking
-- Finished goods automatic creation
-
-### ✅ Accounting Integration
-- Double-entry bookkeeping (all entries balance)
-- Automatic GL posting on all transactions
-- 18-account chart of accounts
-- Profit & Loss statement (real-time)
-- Balance Sheet (point-in-time)
-- Cash Flow analysis
-
-### ✅ Quality Features
-- Full form validation
-- Comprehensive error handling
-- Loading states on all async operations
-- Arabic localization with RTL support
-- Responsive design (mobile-friendly)
-
----
-
-## 🏗️ البنية التقنية | Architecture
-
-### 🛠️ التقنيات | Tech Stack
-
-| Layer | Technology |
-|-------|------------|
-| **Frontend** | Next.js 14, React 18, TypeScript |
-| **Styling** | TailwindCSS, Lucide Icons |
-| **Backend** | Next.js API Routes |
-| **Database** | PostgreSQL, Prisma ORM |
-| **Auth** | JWT, bcryptjs |
-| **Language** | Arabic (RTL)
-
-### 🏗️ Clean Architecture (Production-Ready)
-
-**Component Structure (14 files, 3 folders)**
-```
-/components
-├── /layout (3 files)          # Layout components ONLY
-│   ├── Sidebar.tsx            # Single navigation sidebar
-│   ├── Topbar.tsx             # Search + notifications
-│   └── Workspace.tsx          # Layout wrapper
-│
-├── /ui (10 files)             # Design system ONLY
-│   ├── patterns.tsx           # Unified UI patterns
-│   ├── dialog.tsx             # Modal system
-│   ├── card.tsx               # Card component
-│   ├── button.tsx             # Button component
-│   ├── Table.tsx              # Table component
-│   └── ... (5 more)
-│
-└── /providers (1 file)        # Context providers
-    └── AppProviders.tsx
-```
-
-**Page Structure (20 pages)**
-```
-/app
-├── /(dashboard)               # Protected routes
-│   ├── dashboard/             # Main dashboard
-│   ├── sales/                 # Sales invoices
-│   ├── purchases/             # Purchase invoices
-│   ├── inventory/             # Products & stock
-│   ├── accounting/            # Journal entries
-│   ├── finance/               # Financial management
-│   ├── reports/               # Reporting
-│   ├── customers/             # Customer management
-│   ├── suppliers/             # Supplier management
-│   └── warehouses/            # Warehouse management
-│
-├── /login                     # Authentication
-├── /onboarding                # Company setup
-├── /setup                     # System initialization
-└── /preview                   # Health check
-```
-
-**API Structure (50+ endpoints)**
-```
-/app/api
-├── products/                  # CRUD for products
-├── customers/                 # Customer management
-├── suppliers/                 # Supplier management
-├── warehouses/                # Warehouse management
-├── sales-invoices/            # Sales with auto GL posting
-├── purchase-invoices/         # Purchases with auto GL posting
-├── expenses/                  # Expenses with auto GL posting
-├── accounting/                # Journal entries + financial statements
-├── reports/                   # Financial reports
-└── dashboard/                 # Dashboard KPIs
-```
-
----
-
-## 📡 API Overview | نظرة عامة على الـ APIs
-
-All APIs return a standardized envelope:
-```json
-{ "success": true, "data": <payload>, "message": "..." }
-```
-Errors:
-```json
-{ "success": false, "code": 400, "message": "...", "details": { ... } }
-```
-
-### 🔐 Authentication
-| Method | Endpoint                   | Description                     |
-|--------|----------------------------|---------------------------------|
-| POST   | `/api/auth/login`          | Email/password login → cookie   |
-| POST   | `/api/auth/register`       | New user signup                 |
-| POST   | `/api/auth/logout`         | Invalidate session              |
-| POST   | `/api/onboarding/init`     | Create tenant + seed demo data  |
-
-### 📊 Dashboard
-| Method | Endpoint          | Description                                   |
-|--------|-------------------|-----------------------------------------------|
-| GET    | `/api/dashboard`  | KPIs, trends, recent activities + JE entries  |
-
-### 🛒 Sales / Purchases / Inventory
-| Method | Endpoint                       | Description           |
-|--------|--------------------------------|-----------------------|
-| CRUD   | `/api/sales-invoices`          | Sales invoices + GL   |
-| CRUD   | `/api/purchase-invoices`       | Purchase invoices + GL|
-| CRUD   | `/api/customers`               | Customers             |
-| CRUD   | `/api/suppliers`               | Suppliers             |
-| CRUD   | `/api/products`                | Products              |
-| CRUD   | `/api/warehouses`              | Warehouses            |
-| GET    | `/api/inventory/...`           | Stock movements/value |
+## ✨ Features
 
 ### 💰 Accounting
-| Method | Endpoint                                       | Description                                |
-|--------|------------------------------------------------|--------------------------------------------|
-| GET    | `/api/accounting/trial-balance`                | Aggregated debit/credit per account        |
-| GET    | `/api/accounting/income-statement`             | Revenue, expenses, net profit              |
-| GET    | `/api/accounting/balance-sheet`                | Assets, liabilities, equity                |
-| GET    | `/api/accounting/journal-entries`              | List journal entries                       |
-| POST   | `/api/accounting/journal-entries`              | Create draft entry (validated)             |
-| POST   | `/api/accounting/journal-entries/:id/post`     | Post a draft entry                         |
-| GET    | `/api/accounting/balances`                     | Account balances                           |
-| GET    | `/api/accounting/cash-flow`                    | Cash flow statement                        |
-| GET    | `/api/accounting/aging-report`                 | A/R + A/P aging                            |
-| CRUD   | `/api/accounting/periods`                      | Manage accounting periods                  |
-| CRUD   | `/api/accounting-periods`                      | Manage accounting periods (legacy alias)   |
 
-### 📈 Reports
-| Method | Endpoint                              | Description                  |
-|--------|---------------------------------------|------------------------------|
-| GET    | `/api/reports/profit-loss`            | Detailed P&L report          |
-| GET    | `/api/reports/balance-sheet`          | Detailed balance sheet       |
-| GET    | `/api/reports/aging`                  | Aging report                 |
-| GET    | `/api/reports/customer-statement`     | Per-customer statement       |
-| GET    | `/api/reports/supplier-statement`     | Per-supplier statement       |
+- Double-entry journal entries with automatic GL posting
+- 18-account default chart of accounts (multi-tenant)
+- Real-time trial balance, income statement, balance sheet
+- Period locking + accounting period management
+- Validated entries (account existence, balance check, period lock)
 
-### 🩺 Health
-| Method | Endpoint               | Description           |
-|--------|------------------------|-----------------------|
-| GET    | `/api/health`          | Liveness probe        |
-| GET    | `/api/health/detailed` | Full readiness probe  |
+### 📦 Inventory
+
+- Multi-warehouse stock tracking with audit trail
+- Negative-stock prevention at DB level
+- Inventory valuation (FIFO + average cost)
+- Stock transfers, adjustments, stocktakes
+
+### 🛒 Sales & Purchasing
+
+- Quotations → sales orders → invoices → returns
+- Purchase requisitions → orders → goods receipts → invoices
+- Three-way matching (PO + GRN + invoice)
+- Customer / supplier ledgers + aging reports
+
+### 🏭 Manufacturing
+
+- Bill of Materials (BOM) with raw-material explosion
+- Production orders with WIP cost tracking
+- Multi-line production with capacity planning
+
+### 📊 Dashboard & Reports
+
+- Real-time KPIs: revenue, expenses, net profit, profit margin
+- 6-month sales/purchases trend chart
+- Inventory composition pie chart
+- Profit & loss, balance sheet, cash flow, aging reports
+
+---
+
+## 🖥️ Live Demo
+
+Authenticated `/demo` route — a clean, **view-only** display board for client
+presentations. No edit / create / delete actions are exposed.
+
+```
+┌──────────────────────────────────────────────────┐
+│  ERP System — Client Demo Dashboard              │
+│  View-only financial and operational overview    │
+├──────────────────────────────────────────────────┤
+│  [Revenue]  [Expenses]  [Net Profit]  [Stock]    │
+│  ────  6-mo trend (line chart)  ────  Pie chart  │
+│  Latest activities  │  Latest journal entries    │
+└──────────────────────────────────────────────────┘
+```
+
+Visit `/demo` after signing in.
+
+---
+
+## 📡 API Reference
+
+All endpoints return a standardized envelope:
+
+```jsonc
+{ "success": true, "data": <payload>, "message": "..." }     // 2xx
+{ "success": false, "code": 400, "message": "..." }          // errors
+```
+
+### Authentication
+
+| Method | Endpoint                | Description                      |
+|--------|-------------------------|----------------------------------|
+| POST   | `/api/auth/login`       | Email/password login → JWT cookie |
+| POST   | `/api/auth/logout`      | Invalidate session               |
+| POST   | `/api/onboarding/init`  | Create tenant + bootstrap demo data |
+
+### Accounting
+
+| Method | Endpoint                                       | Description                              |
+|--------|------------------------------------------------|------------------------------------------|
+| GET    | `/api/accounting/trial-balance`                | Aggregated debit/credit per account      |
+| GET    | `/api/accounting/income-statement`             | Revenue, expenses, net profit            |
+| GET    | `/api/accounting/balance-sheet`                | Assets, liabilities, equity (with NI)    |
+| GET    | `/api/accounting/journal-entries`              | List journal entries                     |
+| POST   | `/api/accounting/journal-entries`              | Create draft entry (validated)           |
+| POST   | `/api/accounting/journal-entries/:id/post`     | Post a draft entry                       |
+| GET    | `/api/accounting/balances`                     | Account balances                         |
+| GET    | `/api/accounting/cash-flow`                    | Cash flow statement                      |
+| GET    | `/api/accounting/aging-report`                 | A/R + A/P aging                          |
+| CRUD   | `/api/accounting/periods`                      | Manage accounting periods                |
+
+### Sales · Purchases · Inventory
+
+| Method | Endpoint                       | Description                        |
+|--------|--------------------------------|------------------------------------|
+| CRUD   | `/api/sales-invoices`          | Sales invoices (auto GL posting)   |
+| CRUD   | `/api/purchase-invoices`       | Purchase invoices (auto GL posting)|
+| CRUD   | `/api/customers`               | Customers                          |
+| CRUD   | `/api/suppliers`               | Suppliers                          |
+| CRUD   | `/api/products`                | Products                           |
+| CRUD   | `/api/warehouses`              | Warehouses                         |
+| GET    | `/api/inventory/...`           | Stock movements / valuation        |
+
+### Reports & Health
+
+| Method | Endpoint                              | Description           |
+|--------|---------------------------------------|-----------------------|
+| GET    | `/api/dashboard`                      | KPIs + recent activity|
+| GET    | `/api/reports/profit-loss`            | P&L report            |
+| GET    | `/api/reports/balance-sheet`          | Balance sheet         |
+| GET    | `/api/reports/aging`                  | Aging report          |
+| GET    | `/api/health`                         | Liveness probe        |
+| GET    | `/api/health/detailed`                | Full readiness        |
 
 #### Example — Trial Balance
+
 ```bash
 curl -b cookie.txt "http://localhost:3000/api/accounting/trial-balance?asOfDate=2026-04-30"
 ```
-```json
+
+```jsonc
 {
   "success": true,
   "data": [
-    { "account": "النقدية", "accountCode": "1100", "debit": 8050, "credit": 0 },
-    { "account": "البنك",   "accountCode": "1110", "debit": 100000, "credit": 48500 },
-    { "account": "إيرادات المبيعات", "accountCode": "4100", "debit": 0, "credit": 22652 }
+    { "account": "Cash", "accountCode": "1100", "debit": 8050, "credit": 0 },
+    { "account": "Sales Revenue", "accountCode": "4100", "debit": 0, "credit": 22652 }
   ],
   "message": "Trial balance fetched (3 accounts, balanced=true)"
 }
@@ -486,254 +204,240 @@ curl -b cookie.txt "http://localhost:3000/api/accounting/trial-balance?asOfDate=
 
 ---
 
-## 🖼️ Screenshots | لقطات الشاشة
-
-> Place screenshots inside `docs/screenshots/` and reference them here.
-
-| View             | Path                                  | Description                      |
-|------------------|---------------------------------------|----------------------------------|
-| 🔐 Login         | `docs/screenshots/login.png`          | Login screen                     |
-| 📊 Dashboard     | `docs/screenshots/dashboard.png`      | Main KPI dashboard               |
-| 🖥️ Demo Board    | `docs/screenshots/demo.png`           | `/demo` view-only client board   |
-| 💰 Accounting    | `docs/screenshots/accounting.png`     | Journal entries module           |
-| 🛒 Sales         | `docs/screenshots/sales.png`          | Sales invoices                   |
-| 📦 Inventory     | `docs/screenshots/inventory.png`      | Products & stock                 |
-| 📈 Reports       | `docs/screenshots/reports.png`        | Financial reports                |
-
-To regenerate screenshots:
-```bash
-npm run dev
-# then visit each route in a browser at 1440×900 and capture
-```
-
-**Business Logic Layer**
-```
-/lib
-├── accounting/                # Accounting services
-│   ├── accounting.service.ts  # GL posting engine
-│   └── journal-entry.service.ts
-├── api/                       # API clients
-│   ├── client.ts              # Base API client
-│   └── accounting.ts          # Accounting API
-├── store/                     # State management
-│   └── auth.ts                # Auth store (Zustand)
-└── ... (38 utility files)
-```
-
-**Database Layer**
-```
-/prisma
-├── schema.prisma              # Database schema (14 models)
-├── seed.ts                    # Database seeding
-└── migrations/                # Migration history
-```
-
----
-
-## 📊 Database Schema
-
-### 14 Data Models
-1. **Product** - Inventory items
-2. **Supplier** - Vendor information
-3. **Customer** - Customer data
-4. **StockMovement** ⭐ - Audit trail
-5. **WorkInProgress** ⭐ - Manufacturing costs
-6. **InventoryValuation** ⭐ - Product costing
-7. **SalesInvoice** - Sales transactions
-8. **SalesInvoiceItem** - Sales line items
-9. **SalesOrder** - Sales orders
-10. **PurchaseInvoice** - Purchase transactions
-11. **PurchaseInvoiceItem** - Purchase line items
-12. **ProductionOrder** ⭐ - Manufacturing orders
-13. **BOMItem** ⭐ - Bill of Materials
-14. **Expense** - Expense tracking
-
-See `prisma/schema.prisma` for the complete relational schema.
-
----
-
-## 🔌 واجهات برمجية | API Endpoints
-
-### REST API متكامل | Complete REST API
-
-جميع الـ APIs تستخدم صيغة موحدة للاستجابة:
-
-All APIs use standardized response format:
-
-```typescript
-// Success Response
-{
-  success: true,
-  data: {...},
-  message: "Operation successful"
-}
-
-// Error Response
-{
-  success: false,
-  message: "Error description",
-  code: 400
-}
-```
-
-| Endpoint | Methods | الوصف | Description |
-|----------|---------|--------|-------------|
-| `/api/products` | GET/POST/PUT/DELETE | إدارة المنتجات | Product management |
-| `/api/customers` | GET/POST/PUT/DELETE | إدارة العملاء | Customer management |
-| `/api/suppliers` | GET/POST/PUT/DELETE | إدارة الموردين | Supplier management |
-| `/api/warehouses` | GET/POST/PUT/DELETE | إدارة المخازن | Warehouse management |
-| `/api/sales-invoices` | GET/POST/PUT/DELETE | فواتير البيع + قيود محاسبية | Sales with auto GL |
-| `/api/purchase-invoices` | GET/POST/PUT/DELETE | فواتير الشراء + قيود محاسبية | Purchases with auto GL |
-| `/api/sales-orders` | GET/POST/PUT/DELETE | أوامر البيع | Sales orders |
-| `/api/purchase-orders` | GET/POST/PUT/DELETE | أوامر الشراء | Purchase orders |
-| `/api/expenses` | GET/POST/PUT/DELETE | المصروفات + قيود محاسبية | Expenses with auto GL |
-| `/api/production-orders` | GET/POST/PUT/DELETE | أوامر الإنتاج + BOM | Manufacturing with BOM |
-| `/api/bom` | GET/POST/PUT/DELETE | قوائم المواد | Bill of Materials |
-| `/api/journal-entries` | GET/POST/PUT/DELETE | القيود اليومية | Journal entries |
-| `/api/reports` | GET | التقارير المالية | Financial reports |
-| `/api/dashboard` | GET | لوحة التحكم | Dashboard KPIs |
-
----
-
-## ⚙️ Business Logic
-
-### Automatic Stock Management
-```
-When Purchase Invoice Created:
-  1. Save invoice
-  2. Increment product stock
-  3. Record stock movement
-  4. Auto-post GL: DR Inventory / CR Accounts Payable
-
-When Sales Invoice Created:
-  1. Validate stock available
-  2. If yes: Save invoice, decrement stock, record movement
-  3. Auto-post GL: DR AR / CR Revenue + DR COGS / CR Inventory
-  4. If no: Show error, prevent operation
-```
-
-### Manufacturing Workflow
-```
-1. Define BOM (e.g., Product A = 2x Material B + 3x Material C)
-2. Create Production Order (Produce 10 units of A)
-3. System calculates: Need 20x B + 30x C
-4. Validate stock available
-5. If yes: Decrement B&C, create WIP record
-6. On completion: Add A to inventory, post GL entries
-7. If no: Show error with details
-```
-
----
-
-## 📈 Reports (Real-time from GL)
-
-All reports are calculated from actual transactions:
-- **Profit & Loss** - Revenue, COGS, expenses, net income
-- **Balance Sheet** - Assets, liabilities, equity (must balance)
-- **Cash Flow** - Operating, investing, financing activities
-- **Inventory Valuation** - Product costs and totals
-
----
-
 ## 🚀 Deployment
 
-### Vercel (Recommended)
-```bash
-npm install -g vercel
-vercel
-# Set DATABASE_URL in dashboard
-```
+The repository is **safe to deploy directly from GitHub** to Vercel, Railway,
+Render, or Netlify. Build commands never mutate the database.
 
-### Traditional Server
-```bash
-npm run build
-npm start
-# Use PM2 for process management
-```
+### Vercel + Railway (recommended)
 
-### PostgreSQL Upgrade
-```bash
-# Update .env: DATABASE_URL="postgresql://..."
-npx prisma migrate deploy
-```
+1. Provision PostgreSQL on [Railway](https://railway.app) → copy the connection string.
+2. From your local machine, apply the schema once:
+   ```bash
+   DATABASE_URL=<railway-url> npx prisma migrate deploy
+   ```
+3. Push the repo to GitHub and import it in [Vercel](https://vercel.com).
+4. Set the following environment variables in the Vercel dashboard:
 
----
+   | Variable                  | Value                                       |
+   |---------------------------|---------------------------------------------|
+   | `DATABASE_URL`            | Railway connection string                   |
+   | `JWT_SECRET`              | 32+ char random string                      |
+   | `NEXTAUTH_SECRET`         | 32+ char random string                      |
+   | `NEXTAUTH_URL`            | `https://<your-app>.vercel.app`             |
+   | `NODE_ENV`                | `production`                                |
+   | `ALLOW_SEED`              | `false`                                     |
+   | `E2E_BYPASS_RATE_LIMIT`   | `0`                                         |
+   | `E2E_ALLOW_AUTH_RESET`    | `0`                                         |
+   | `E2E_ALLOW_PRODUCTION_DB` | `0`                                         |
 
-## 📚 Documentation
+> Generate strong secrets:
+> ```bash
+> node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+> ```
 
-- **[prisma/schema.prisma](./prisma/schema.prisma)** - Database schema
-- **[prisma/README.md](./prisma/README.md)** - Database seeding guide
+### Other targets
 
----
+| Target  | Manifest         | Notes                                            |
+|---------|------------------|--------------------------------------------------|
+| Render  | `render.yaml`    | Secrets are `sync: false` — fill in dashboard    |
+| Railway | `railway.json` + `nixpacks.toml` | Same env vars as Vercel                  |
+| Netlify | `netlify.toml`   | Build is non-destructive                         |
+| Docker  | `Dockerfile.prod`| Standalone Next.js output                        |
 
-## 🔒 Security
+### First-time deploy checklist
 
-- **JWT Authentication** - Token-based auth
-- **RBAC Authorization** - Role-based permissions
-- **Input Validation** - Type-safe endpoints
-- **Atomic Transactions** - Database consistency
-- **Type Safety** - Full TypeScript coverage
-
----
-
-## 🛠️ Development Commands
-
-```bash
-npm run dev       # Development server
-npm run build     # Production build
-npm start         # Production server
-npm run seed      # Clean database
-npx prisma studio # Database UI
-```
-
----
-
-## 🤝 المساهمة | Contributing
-
-نرحب بجميع المساهمات! | We welcome all contributions!
+The build pipeline does **not** run migrations or seeds. Run these once
+manually after the first successful deploy:
 
 ```bash
-# 1. Fork the repository
-# 2. Create your feature branch
-git checkout -b feature/AmazingFeature
+DATABASE_URL=<prod-url> npx prisma migrate deploy
+```
 
-# 3. Commit your changes
-git commit -m 'Add some AmazingFeature'
+| Operation                 | Steady-state?                          |
+|---------------------------|----------------------------------------|
+| `npm ci` + `prisma generate` + `next build` | ✅ Every deploy        |
+| `prisma migrate deploy`   | 🛠️ Operator-managed (one-off)         |
+| `npm run seed`            | 🛡️ Blocked unless `ALLOW_SEED=true`   |
+| `npm run db:reset`        | 🛡️ Blocked unless `ALLOW_SEED=true`   |
+| Demo user injection       | 🛡️ Blocked unless `RAILWAY_RUN_INIT=true` |
 
-# 4. Push to the branch
-git push origin feature/AmazingFeature
+---
 
-# 5. Open a Pull Request
+## 🛡️ Production Safety
+
+The repository enforces strict environment isolation through five independent
+guards. **No test, seed, or reset script can touch the live database without
+explicit, loud opt-in.**
+
+| Guard | File | Default | Override |
+|-------|------|---------|----------|
+| Destructive seed | `prisma/seed.ts` | ❌ blocked | `NODE_ENV=development` or `ALLOW_SEED=true` |
+| Database wipe | `prisma/seed-clean.ts` | ❌ blocked | same |
+| DB reset | `scripts/reset-database.ts` | ❌ blocked | same |
+| Admin auth-reset | `e2e/scripts/reset-admin-password.ts` | ❌ blocked | `E2E_ALLOW_AUTH_RESET=1` |
+| E2E DB host check | `e2e/scripts/assert-isolated-db.ts` | refuses non-local hosts | `E2E_ALLOW_PRODUCTION_DB=1` |
+
+Every guard throws **before** opening any database connection, and refuses by
+default. Production environments must keep all override flags off.
+
+### Environment separation
+
+| Environment | Database                              | What runs here                                    |
+|-------------|---------------------------------------|---------------------------------------------------|
+| Production  | Hosted PostgreSQL                     | Next.js application only                          |
+| CI          | Ephemeral PostgreSQL service container | type-check · unit tests · build · Playwright    |
+| Local E2E   | Operator-provided isolated PostgreSQL | Playwright against `npm run dev`                  |
+
+---
+
+## 🏗️ Architecture
+
+### Tech stack
+
+| Layer          | Technology                                  |
+|----------------|---------------------------------------------|
+| Frontend       | Next.js 14 (App Router) · React 18 · TypeScript |
+| Styling        | Tailwind CSS · Lucide icons · Recharts      |
+| Backend        | Next.js API routes                          |
+| Database       | PostgreSQL · Prisma ORM 5                   |
+| Auth           | JWT (HS256) · bcrypt                        |
+| Testing        | Vitest (unit) · Playwright (E2E)            |
+| CI             | GitHub Actions                              |
+
+### Project layout
+
+```
+erp-system/
+├── app/
+│   ├── (dashboard)/         # Protected routes (sidebar + topbar)
+│   │   ├── dashboard/       # Main KPI dashboard
+│   │   ├── accounting/      # Journal entries
+│   │   ├── sales/           # Sales invoices
+│   │   ├── purchases/       # Purchase invoices
+│   │   ├── inventory/       # Products & stock
+│   │   ├── customers/       # Customer management
+│   │   ├── suppliers/       # Supplier management
+│   │   ├── warehouses/      # Warehouse management
+│   │   └── reports/         # Financial reports
+│   ├── api/                 # 95+ API routes
+│   ├── demo/                # View-only client demo board
+│   ├── login/               # Authentication
+│   ├── onboarding/          # Tenant setup
+│   └── setup/               # System initialization
+│
+├── components/              # Reusable UI components
+│   ├── layout/              # Sidebar / Topbar / Workspace
+│   ├── ui/                  # Buttons, dialogs, tables, cards
+│   └── providers/           # React Query / auth providers
+│
+├── lib/                     # Business logic & utilities
+│   ├── accounting/          # Journal, periods, validation
+│   ├── domain/              # Pure domain models (rules engine)
+│   ├── reporting/           # Trial balance / P&L / BS
+│   ├── inventory/           # Stock movements
+│   └── auth.ts              # Authentication & RBAC
+│
+├── prisma/
+│   ├── schema.prisma        # 50+ models, multi-tenant
+│   ├── seed-auth.ts         # Upsert-only admin bootstrap (safe)
+│   └── seed.ts              # Demo seed (guarded)
+│
+├── e2e/                     # Playwright tests
+│   ├── auth/                # Login spec
+│   ├── customers/           # Customer CRUD
+│   ├── inventory/           # Product CRUD
+│   ├── sales/               # Invoice creation
+│   ├── accounting/          # Journal entries
+│   └── scripts/             # Setup helpers (with guards)
+│
+├── tests/                   # Vitest unit & contract tests
+│   └── domain/              # 135 tests covering accounting,
+│                            # rules engine, API contracts
+│
+└── scripts/                 # Operator tools (all guarded)
 ```
 
 ---
 
-## 📞 الدعم | Support
+## 🧪 Development
 
-- 📧 Email: support@erp-system.com
-- 🐛 Issues: [GitHub Issues](https://github.com/3bud-ZC/erp-system/issues)
-- 📖 Docs: [Documentation](#-documentation)
+### Available scripts
+
+| Command                   | Purpose                                       |
+|---------------------------|-----------------------------------------------|
+| `npm run dev`             | Start the dev server                          |
+| `npm run build`           | Production build                              |
+| `npm start`               | Run the production build                      |
+| `npm run lint`            | ESLint                                        |
+| `npm run type-check`      | TypeScript validation (`tsc --noEmit`)        |
+| `npm test`                | Vitest unit tests                             |
+| `npm run e2e`             | Playwright end-to-end tests (isolated DB)     |
+| `npm run db:studio`       | Open Prisma Studio                            |
+
+### CI pipeline (`.github/workflows/ci.yml`)
+
+Runs on every push & PR to `master`/`main`:
+
+```
+checkout → setup-node → npm ci → prisma generate → migrate (CI DB only) →
+seed-auth (upsert) → type-check → test → build → playwright
+```
+
+The CI job uses an ephemeral PostgreSQL service container — it can never reach
+the production database.
 
 ---
 
-## 📄 الترخيص | License
+## 🔐 Authentication & RBAC
 
-MIT License - مفتوح المصدر ومجاني للاستخدام
+- JWT auth (HS256) with httpOnly cookies
+- Role-based permissions (admin / manager / accountant / inventory_manager / sales_rep / purchase_officer)
+- Per-permission gating on every API route via `checkPermission(user, code)`
+- Multi-tenant isolation enforced at the data layer (`tenantId` scoping)
 
-MIT License - Open source and free to use
+Default seeded credentials (rotate before deployment!):
+
+| Role  | Email             | Password |
+|-------|-------------------|----------|
+| Admin | `admin@erp.com`   | `admin`  |
+
+---
+
+## 📚 Environment Variables
+
+See [`.env.example`](./.env.example) for the full list. Required:
+
+| Variable          | Notes                                       |
+|-------------------|---------------------------------------------|
+| `DATABASE_URL`    | PostgreSQL connection string                |
+| `JWT_SECRET`      | 32+ character random string                 |
+| `NEXTAUTH_SECRET` | 32+ character random string                 |
+| `NEXTAUTH_URL`    | Public URL of the app                       |
+| `NODE_ENV`        | `development` or `production`               |
+
+Production safety flags (must stay `false` / `0` in production):
+
+| Variable                  | Production value |
+|---------------------------|------------------|
+| `ALLOW_SEED`              | `false`          |
+| `E2E_BYPASS_RATE_LIMIT`   | `0`              |
+| `E2E_ALLOW_AUTH_RESET`    | `0`              |
+| `E2E_ALLOW_PRODUCTION_DB` | `0`              |
+
+---
+
+## 📄 License
+
+Proprietary — © 2026 3bud-ZC. All rights reserved.
 
 ---
 
 <div align="center">
 
-**صُنع بإتقان | Crafted with precision**
+**Built with ❤️ for production**
 
-</div>
-
----
-
-<div align="center">
-
-Made with ❤️ by [3bud-ZC](https://github.com/3bud-ZC)
+[Report an issue](https://github.com/3bud-ZC/erp-system/issues) ·
+[View source](https://github.com/3bud-ZC/erp-system)
 
 </div>
