@@ -10,6 +10,7 @@ import { dualRunCompare } from '@/lib/domain/accounting/dual-run';
 import { apiSuccess, handleApiError, apiError } from '@/lib/api-response';
 import { logAuditAction, getAuthenticatedUser, checkPermission } from '@/lib/auth';
 import { logActivity } from '@/lib/activity-log';
+import { resolveInvoiceNumber } from '@/lib/invoice-numbering';
 
 // Translate backend errors to user-friendly Arabic messages
 function translatePurchaseError(error: any): string {
@@ -81,10 +82,19 @@ export async function POST(request: Request) {
       // Calculate total server-side (ignore client-sent total)
       const total = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
 
+      // Auto-generate invoiceNumber if missing/empty so the form's "(اختياري)"
+      // hint matches reality. If the user typed one, we use it as-is.
+      const invoiceNumber = await resolveInvoiceNumber(
+        invoiceData.invoiceNumber,
+        'PI',
+        user.tenantId!,
+      );
+
       const invoice = await prisma.$transaction(async (tx) => {
         const newInvoice = await (tx as any).purchaseInvoice.create({
           data: {
             ...invoiceData,
+            invoiceNumber,
             tenantId: user.tenantId,   // always from server — never trust client
             total,
             items: {

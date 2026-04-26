@@ -146,3 +146,4 @@ build-*.tmp
 /test-results/
 /playwright-report/
 /playwright/.cache/
+cookie.txt*

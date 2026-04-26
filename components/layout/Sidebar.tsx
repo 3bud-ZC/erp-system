@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/lib/store/auth';
@@ -13,6 +14,7 @@ import {
   FileText,
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
   Warehouse,
   Building2,
   BarChart3,
@@ -24,10 +26,18 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-interface NavItem {
+interface NavSubItem {
   title: string;
   href: string;
+}
+
+interface NavItem {
+  title: string;
+  /** Either a direct link or a parent for `children`. */
+  href: string;
   icon: React.ReactNode;
+  /** When present, the item becomes a collapsible group. */
+  children?: NavSubItem[];
 }
 
 const navItems: NavItem[] = [
@@ -85,6 +95,12 @@ const navItems: NavItem[] = [
     title: 'التقارير',
     href: '/reports',
     icon: <PieChart className="w-5 h-5" />,
+    children: [
+      { title: 'تقارير المبيعات', href: '/reports/sales' },
+      { title: 'تقارير المشتريات', href: '/reports/purchases' },
+      { title: 'تقارير العملاء', href: '/reports/customers' },
+      { title: 'تقارير المخزون', href: '/reports/inventory' },
+    ],
   },
 ];
 
@@ -96,6 +112,12 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const { user } = useAuthStore();
+  // افتح مجموعة التقارير تلقائياً لو المستخدم داخل أي صفحة تقارير.
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => ({
+    '/reports': pathname?.startsWith('/reports') ?? false,
+  }));
+  const toggleGroup = (href: string) =>
+    setOpenGroups(prev => ({ ...prev, [href]: !prev[href] }));
 
   return (
     <div
@@ -128,6 +150,54 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const isActive = pathname?.startsWith(item.href);
+            const hasChildren = !!(item.children && item.children.length > 0);
+            const isOpen = openGroups[item.href] ?? false;
+
+            // Group with submenu — only when sidebar isn't collapsed.
+            if (hasChildren && !collapsed) {
+              return (
+                <div key={item.href}>
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(item.href)}
+                    className={cn(
+                      'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors flex-row-reverse justify-end',
+                      isActive
+                        ? 'bg-blue-600 text-white'
+                        : 'text-slate-300 hover:bg-slate-800 hover:text-white',
+                    )}
+                    aria-expanded={isOpen}
+                  >
+                    <ChevronDown className={cn('w-4 h-4 transition-transform', isOpen ? 'rotate-180' : '')} />
+                    <span className="flex-1 text-sm font-medium text-right">{item.title}</span>
+                    {item.icon}
+                  </button>
+                  {isOpen && (
+                    <div className="mt-1 ms-4 ps-2 border-r-2 border-slate-700 space-y-0.5">
+                      {item.children!.map(child => {
+                        const childActive = pathname === child.href || pathname?.startsWith(child.href + '/');
+                        return (
+                          <Link
+                            key={child.href}
+                            href={child.href}
+                            className={cn(
+                              'block px-3 py-1.5 rounded-md text-xs transition-colors text-right',
+                              childActive
+                                ? 'bg-blue-600/20 text-blue-200 font-medium'
+                                : 'text-slate-400 hover:text-white hover:bg-slate-800',
+                            )}
+                          >
+                            {child.title}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            // Plain link (or collapsed sidebar)
             return (
               <Link
                 key={item.href}
