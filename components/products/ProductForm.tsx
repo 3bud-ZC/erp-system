@@ -2,34 +2,45 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import { Package, AlertTriangle } from 'lucide-react';
 import { useToast, Toast } from '@/components/ui/patterns';
 import { Field, SelectField, Section, FieldGrid } from '@/components/ui/modal';
 import { EntityFormPage } from '@/components/forms/EntityFormPage';
+import { apiGet } from '@/lib/api/fetcher';
 
 export interface ProductExisting {
-  id:        string;
-  code:      string;
-  nameAr:    string;
-  nameEn?:   string | null;
-  type?:     string | null;
-  unit?:     string | null;
-  stock:     number;
-  minStock?: number | null;
-  cost:      number;
-  price:     number;
+  id:           string;
+  code:         string;
+  nameAr:       string;
+  nameEn?:      string | null;
+  type?:        string | null;
+  unit?:        string | null;
+  stock:        number;
+  minStock?:    number | null;
+  cost:         number;
+  price:        number;
+  warehouseId?: string | null;
+}
+
+interface WarehouseLite {
+  id:     string;
+  code?:  string;
+  nameAr: string;
+  isActive?: boolean;
 }
 
 const empty = {
-  code:     '',
-  nameAr:   '',
-  nameEn:   '',
-  type:     'finished_product',
-  unit:     'قطعة',
-  price:    '',
-  cost:     '',
-  stock:    '0',
-  minStock: '',
+  code:        '',
+  nameAr:      '',
+  nameEn:      '',
+  type:        'finished_product',
+  unit:        'قطعة',
+  price:       '',
+  cost:        '',
+  stock:       '0',
+  minStock:    '',
+  warehouseId: '',
 };
 
 export function ProductForm({
@@ -45,18 +56,27 @@ export function ProductForm({
   const [form, setForm] = useState(() =>
     existing
       ? {
-          code:     existing.code,
-          nameAr:   existing.nameAr,
-          nameEn:   existing.nameEn ?? '',
-          type:     existing.type    ?? 'finished_product',
-          unit:     existing.unit    ?? 'قطعة',
-          price:    existing.price != null ? String(existing.price) : '',
-          cost:     existing.cost  != null ? String(existing.cost)  : '',
-          stock:    String(existing.stock ?? 0),
-          minStock: existing.minStock != null ? String(existing.minStock) : '',
+          code:        existing.code,
+          nameAr:      existing.nameAr,
+          nameEn:      existing.nameEn ?? '',
+          type:        existing.type    ?? 'finished_product',
+          unit:        existing.unit    ?? 'قطعة',
+          price:       existing.price != null ? String(existing.price) : '',
+          cost:        existing.cost  != null ? String(existing.cost)  : '',
+          stock:       String(existing.stock ?? 0),
+          minStock:    existing.minStock != null ? String(existing.minStock) : '',
+          warehouseId: existing.warehouseId ?? '',
         }
       : empty,
   );
+
+  // Pull active warehouses for the picker. Same shape returned across the app.
+  const warehousesQ = useQuery({
+    queryKey: ['warehouses'],
+    queryFn:  () => apiGet<WarehouseLite[]>('/api/warehouses'),
+    staleTime: 60_000,
+  });
+  const warehouses = (warehousesQ.data ?? []).filter(w => w.isActive !== false);
 
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState<string | null>(null);
@@ -82,17 +102,19 @@ export function ProductForm({
               cost:   Number(form.cost)  || 0,
               stock:  Number(form.stock) || 0,
               ...(form.minStock && { minStock: Number(form.minStock) }),
+              ...(form.warehouseId && { warehouseId: form.warehouseId }),
             }
           : {
-              id:       existing!.id,
-              code:     form.code.trim(),
-              nameAr:   form.nameAr.trim(),
-              nameEn:   form.nameEn.trim() || null,
-              type:     form.type,
-              unit:     form.unit || 'قطعة',
-              price:    Number(form.price) || 0,
-              cost:     Number(form.cost)  || 0,
-              minStock: form.minStock ? Number(form.minStock) : null,
+              id:          existing!.id,
+              code:        form.code.trim(),
+              nameAr:      form.nameAr.trim(),
+              nameEn:      form.nameEn.trim() || null,
+              type:        form.type,
+              unit:        form.unit || 'قطعة',
+              price:       Number(form.price) || 0,
+              cost:        Number(form.cost)  || 0,
+              minStock:    form.minStock ? Number(form.minStock) : null,
+              warehouseId: form.warehouseId || null,
             };
 
       const res = await fetch('/api/products', {
@@ -149,7 +171,6 @@ export function ProductForm({
                 onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
                 <option value="finished_product">منتج نهائي</option>
                 <option value="raw_material">مواد خام</option>
-                <option value="packaging">تغليف</option>
               </SelectField>
               <Field label="الاسم بالعربية" required value={form.nameAr} placeholder="اسم المنتج"
                 className="sm:col-span-2"
@@ -171,8 +192,17 @@ export function ProductForm({
             </FieldGrid>
           </Section>
 
-          <Section title="إعدادات المخزون" subtitle="الحد الأدنى للمخزون لتنبيه إعادة الطلب">
+          <Section title="إعدادات المخزون" subtitle="المستودع الافتراضي للمنتج والحد الأدنى للمخزون">
             <FieldGrid>
+              <SelectField label="المستودع" value={form.warehouseId}
+                onChange={e => setForm(f => ({ ...f, warehouseId: e.target.value }))}>
+                <option value="">بدون مستودع محدد</option>
+                {warehouses.map(w => (
+                  <option key={w.id} value={w.id}>
+                    {w.nameAr}{w.code ? ` (${w.code})` : ''}
+                  </option>
+                ))}
+              </SelectField>
               <Field label="الحد الأدنى للمخزون" type="number" min="0" value={form.minStock} placeholder="0"
                 onChange={e => setForm(f => ({ ...f, minStock: e.target.value }))} />
             </FieldGrid>

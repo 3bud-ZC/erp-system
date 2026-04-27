@@ -28,8 +28,13 @@ export async function GET(request: Request) {
     if (!checkPermission(user, 'read_production_order')) {
       return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
+    if (!user.tenantId) {
+      return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    }
 
+    // Tenant-scope so a tenant only sees its own production orders.
     const orders = await (prisma as any).productionOrder.findMany({
+      where: { tenantId: user.tenantId },
       include: {
         product: true,
         productionLine: true,
@@ -60,8 +65,29 @@ export async function POST(request: Request) {
       return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
 
+    if (!user.tenantId) {
+      return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    }
+
     const body = await request.json();
-      const { productId, quantity, laborCost = 0, overheadCost = 0, ...orderData } = body;
+      const {
+        productId,
+        quantity,
+        laborCost = 0,
+        overheadCost = 0,
+        items: manualItems,
+        ...orderData
+      } = body as {
+        productId: string;
+        quantity: number;
+        laborCost?: number;
+        overheadCost?: number;
+        // Hybrid path: caller supplies the BOM-equivalent rows directly
+        // (per-unit quantities, mirroring how a saved BOM is structured).
+        // When omitted, we fall back to the saved BOM for `productId`.
+        items?: Array<{ materialId: string; quantity: number }>;
+        [k: string]: unknown;
+      };
 
       // Auto-generate orderNumber in format PO-YYYY-XXXX
       const year = new Date().getFullYear();
@@ -84,20 +110,60 @@ export async function POST(request: Request) {
       
       const orderNumber = `PO-${year}-${String(nextNumber).padStart(4, '0')}`;
 
-      // STEP 1: Fetch the BOM for this product
-      const bomItems = await (prisma as any).bOMItem.findMany({
-        where: { productId },
-        include: { material: true },
-      });
+      // STEP 1: Resolve per-unit raw-material rows.
+      //   - If caller passed `items`, treat that as the source of truth
+      //     (manual-entry / hybrid flow from the form).
+      //   - Otherwise, fall back to the saved BOM for the product.
+      let perUnitRows: Array<{ materialId: string; quantity: number }>;
 
-      if (bomItems.length === 0) {
-        return apiError('لا يوجد قائمة مواد (BOM) محددة لهذا المنتج. يرجى إضافة المواد الخام المطلوبة في صفحة عمليات الإنتاج أولاً.', 400);
+      if (Array.isArray(manualItems) && manualItems.length > 0) {
+        // Validate, deduplicate, and tenant-check every supplied material.
+        const cleaned = manualItems
+          .map((it) => ({
+            materialId: String(it.materialId || '').trim(),
+            quantity: Number(it.quantity),
+          }))
+          .filter((it) => it.materialId && it.quantity > 0);
+
+        if (cleaned.length === 0) {
+          return apiError('يجب اختيار مادة خام واحدة على الأقل بكمية صحيحة', 400);
+        }
+
+        const materialIds = Array.from(new Set(cleaned.map((it) => it.materialId)));
+        const owned = await (prisma as any).product.findMany({
+          where: { id: { in: materialIds }, tenantId: user.tenantId },
+          select: { id: true },
+        });
+        if (owned.length !== materialIds.length) {
+          return apiError('بعض المواد المختارة غير موجودة', 400);
+        }
+
+        // Collapse duplicates by summing their quantities.
+        const collapsed = new Map<string, number>();
+        for (const it of cleaned) {
+          collapsed.set(it.materialId, (collapsed.get(it.materialId) ?? 0) + it.quantity);
+        }
+        perUnitRows = Array.from(collapsed, ([materialId, q]) => ({ materialId, quantity: q }));
+      } else {
+        const bomItems = await (prisma as any).bOMItem.findMany({
+          where: { productId, product: { tenantId: user.tenantId } },
+          include: { material: true },
+        });
+
+        if (bomItems.length === 0) {
+          return apiError('لا يوجد قائمة مواد (BOM) محددة لهذا المنتج، ولم يتم تمرير مواد يدوياً.', 400);
+        }
+
+        perUnitRows = bomItems.map((bom: any) => ({
+          materialId: bom.materialId,
+          quantity: bom.quantity,
+        }));
       }
 
-      // STEP 2: Calculate total raw materials needed (BOM explosion)
-      const rawMaterialsNeeded = bomItems.map((bom: any) => ({
-        materialId: bom.materialId,
-        quantity: bom.quantity * quantity,
+      // STEP 2: Scale per-unit rows by the order quantity (BOM explosion).
+      const rawMaterialsNeeded = perUnitRows.map((row) => ({
+        materialId: row.materialId,
+        quantity: row.quantity * quantity,
       }));
 
       // Convert to inventory transaction format (productId instead of materialId)
@@ -140,7 +206,7 @@ export async function POST(request: Request) {
             quantity,
             plannedQuantity: quantity,
             actualOutputQuantity: 0,
-            date: new Date(orderData.date),
+            date: new Date(orderData.date as string),
             tenantId: user.tenantId,
             items: {
               create: inventoryItems.map((rm: any) => ({
@@ -173,7 +239,7 @@ export async function POST(request: Request) {
         // Orders created as 'pending' consume stock when transitioned to 'approved' via PUT.
         // atomicDecrementStock is race-condition safe (throws + rolls back if stock insufficient).
         if ((orderData.status || 'pending') === 'approved') {
-          await atomicDecrementStock(tx, inventoryItems, newOrder.id, 'production_out', user.tenantId || orderData.tenantId);
+          await atomicDecrementStock(tx, inventoryItems, newOrder.id, 'production_out', user.tenantId || (orderData.tenantId as string));
         }
 
         // Create WIP journal entry inside transaction for atomicity

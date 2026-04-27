@@ -66,7 +66,10 @@ async function getMonthlyChartData(tenantId: string) {
   return { labels: months, sales, purchases };
 }
 
-// Safe find many with fallback — always tenant-scoped
+// Safe find many with fallback — always tenant-scoped.
+// For products, also filters out soft-deleted rows (isActive: false) so
+// dashboard counts/values reflect only what the user can still see in
+// the products list.
 async function safeFindMany<T>(
   modelName: 'product' | 'salesInvoice' | 'purchaseInvoice',
   tenantId: string,
@@ -74,10 +77,11 @@ async function safeFindMany<T>(
 ): Promise<T[]> {
   try {
     const model = prisma[modelName] as any;
-    const args = {
-      ...extraArgs,
-      where: { ...(extraArgs?.where ?? {}), tenantId },
-    };
+    const baseWhere: Record<string, any> = { ...(extraArgs?.where ?? {}), tenantId };
+    if (modelName === 'product' && baseWhere.isActive === undefined) {
+      baseWhere.isActive = true;
+    }
+    const args = { ...extraArgs, where: baseWhere };
     return await model.findMany(args);
   } catch (error: any) {
     if (error.code === 'P2021') {
@@ -94,9 +98,8 @@ async function getInventoryBreakdown(tenantId: string) {
 
   const rawMaterials = products.filter((p: any) => p.type === 'raw_material').length;
   const finishedGoods = products.filter((p: any) => p.type === 'finished_product').length;
-  const packaging = products.filter((p: any) => p.type === 'packaging').length;
 
-  return { rawMaterials, finishedGoods, packaging };
+  return { rawMaterials, finishedGoods };
 }
 
 // Helper: Generate recent activities — always tenant-scoped

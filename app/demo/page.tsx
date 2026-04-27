@@ -54,7 +54,7 @@ interface DashboardData {
   totalProducts: number;
   totalInventoryValue: number;
   chartData?: { labels: string[]; sales: number[]; purchases: number[] };
-  inventoryData?: { rawMaterials: number; finishedGoods: number; packaging: number };
+  inventoryData?: { rawMaterials: number; finishedGoods: number };
   recentActivities?: Array<{
     id: string; type: string; title: string; description: string;
     amount: number; date: string; status: string;
@@ -136,7 +136,6 @@ export default function DemoPage() {
   const inventoryPie = [
     { name: 'تام الصنع', value: dash?.inventoryData?.finishedGoods ?? 0 },
     { name: 'مواد خام', value: dash?.inventoryData?.rawMaterials ?? 0 },
-    { name: 'تغليف', value: dash?.inventoryData?.packaging ?? 0 },
   ].filter((d) => d.value > 0);
 
   return (

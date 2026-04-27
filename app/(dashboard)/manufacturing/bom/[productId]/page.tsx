@@ -45,13 +45,13 @@ export default function BOMEditPage() {
   const product  = useMemo(() => products.find(p => p.id === productId), [products, productId]);
 
   // Materials = anything that's not the product itself, not already in BOM,
-  // and not a finished product (only raw_material / packaging are valid).
+  // and is a raw material (finished products can't be raw inputs of others).
   const availableMaterials = useMemo(() => {
     const usedIds = new Set(bom.map(b => b.materialId));
     return products.filter(p =>
       p.id !== productId &&
       !usedIds.has(p.id) &&
-      (p.type === 'raw_material' || p.type === 'packaging' || !p.type),
+      (p.type === 'raw_material' || !p.type),
     );
   }, [products, bom, productId]);
 

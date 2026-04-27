@@ -30,20 +30,17 @@ function fmtEGP(v?: number | null) {
 const typeLabels: Record<string, string> = {
   finished_product: 'منتج نهائي',
   raw_material:     'مواد خام',
-  packaging:        'تغليف',
 };
 
 const typeColors: Record<string, string> = {
   finished_product: 'bg-blue-50 text-blue-700',
   raw_material:     'bg-amber-50 text-amber-700',
-  packaging:        'bg-purple-50 text-purple-700',
 };
 
 const typeTabs = [
   { key: 'all',              label: 'الكل' },
   { key: 'finished_product', label: 'منتجات نهائية' },
   { key: 'raw_material',     label: 'مواد خام' },
-  { key: 'packaging',        label: 'تغليف' },
 ];
 
 const TABLE_COLS = ['w-16', 'w-32', 'w-20', 'w-16', 'w-16', 'w-24', 'w-24', 'w-16', 'w-20'];

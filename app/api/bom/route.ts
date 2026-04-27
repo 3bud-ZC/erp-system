@@ -12,27 +12,26 @@ export async function GET(request: Request) {
     if (!user) {
       return apiError('لم يتم المصادقة', 401);
     }
+    if (!user.tenantId) {
+      return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    }
 
     const { searchParams } = new URL(request.url);
     const productId = searchParams.get('productId');
 
-    if (!productId) {
-      const allBOMs = await prisma.bOMItem.findMany({
-        include: {
-          product: true,
-          material: true,
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-      return apiSuccess(allBOMs, 'BOM items fetched successfully');
-    }
+    // BOMItem inherits its tenant via the related Product; we always scope
+    // on `product.tenantId` to prevent cross-tenant reads.
+    const where = productId
+      ? { productId, product: { tenantId: user.tenantId } }
+      : { product: { tenantId: user.tenantId } };
 
     const bom = await prisma.bOMItem.findMany({
-      where: { productId },
+      where,
       include: {
         product: true,
         material: true,
       },
+      orderBy: { createdAt: 'desc' },
     });
 
     return apiSuccess(bom, 'BOM items fetched successfully');
@@ -52,21 +51,25 @@ export async function POST(request: Request) {
       return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
 
+    if (!user.tenantId) {
+      return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    }
+
     const body = await request.json();
     const { productId, materialId, quantity } = body;
 
-    const product = await prisma.product.findUnique({
-      where: { id: productId },
+    // Both ends of a BOM row must belong to the caller's tenant. This stops
+    // a tenant from grafting another tenant's product/material into their BOM.
+    const product = await prisma.product.findFirst({
+      where: { id: productId, tenantId: user.tenantId },
     });
-
     if (!product) {
       return apiError('المنتج النهائي غير موجود', 404);
     }
 
-    const material = await prisma.product.findUnique({
-      where: { id: materialId },
+    const material = await prisma.product.findFirst({
+      where: { id: materialId, tenantId: user.tenantId },
     });
-
     if (!material) {
       return apiError('المادة الخام غير موجودة', 404);
     }
@@ -139,9 +142,21 @@ export async function PUT(request: Request) {
     if (!checkPermission(user, 'update_product')) {
       return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
+    if (!user.tenantId) {
+      return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    }
 
     const body = await request.json();
     const { id, quantity } = body;
+
+    // Tenant-scope the update by combining `id` with `product.tenantId`.
+    const tenantOwned = await prisma.bOMItem.findFirst({
+      where: { id, product: { tenantId: user.tenantId } },
+      select: { id: true },
+    });
+    if (!tenantOwned) {
+      return apiError('عنصر BOM غير موجود', 404);
+    }
 
     const bomItem = await prisma.bOMItem.update({
       where: { id },
@@ -176,12 +191,24 @@ export async function DELETE(request: Request) {
     if (!checkPermission(user, 'delete_product')) {
       return apiError('ليس لديك صلاحية للقيام بهذا الإجراء', 403);
     }
+    if (!user.tenantId) {
+      return apiError('لم يتم تعيين مستأجر للمستخدم', 400);
+    }
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
     if (!id) {
       return apiError('معرف عنصر BOM مطلوب', 400);
+    }
+
+    // Verify the BOM row belongs to the caller's tenant before deleting.
+    const tenantOwned = await prisma.bOMItem.findFirst({
+      where: { id, product: { tenantId: user.tenantId } },
+      select: { id: true },
+    });
+    if (!tenantOwned) {
+      return apiError('عنصر BOM غير موجود', 404);
     }
 
     await prisma.bOMItem.delete({

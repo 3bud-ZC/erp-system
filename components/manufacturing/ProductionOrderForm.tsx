@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ClipboardList, Layers, AlertTriangle } from 'lucide-react';
+import { ClipboardList, Layers, AlertTriangle, Plus, Trash2, Sparkles } from 'lucide-react';
 import { useToast, Toast } from '@/components/ui/patterns';
 import { Field, SelectField, TextAreaField, Section, FieldGrid } from '@/components/ui/modal';
 import { EntityFormPage } from '@/components/forms/EntityFormPage';
@@ -65,8 +65,17 @@ export function ProductionOrderForm() {
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState<string | null>(null);
 
-  /* Pull BOM for the selected finished product so we can show the materials
-   * required + warn the user if any raw stock won't cover the order. */
+  /* Hybrid material editor:
+   *   - On product select, the saved BOM (if any) auto-fills these rows.
+   *   - User can add / remove / edit rows freely before saving.
+   *   - On submit, we send `items` directly to the API so it skips its own
+   *     BOM lookup and uses exactly what the user picked.
+   *   - If no BOM exists, the table starts empty and the user enters rows manually.
+   */
+  type MaterialRow = { id: string; materialId: string; quantity: string };
+  const [rows, setRows] = useState<MaterialRow[]>([]);
+
+  /* Pull saved BOM for the selected product (template). */
   const bomQ = useQuery({
     queryKey: ['bom', form.productId],
     queryFn:  () => apiGet<BOMItemEntry[]>(`/api/bom?productId=${form.productId}`),
@@ -74,28 +83,92 @@ export function ProductionOrderForm() {
   });
   const bom = useMemo(() => bomQ.data ?? [], [bomQ.data]);
 
+  // Tracks which product we last auto-filled for, so manual edits aren't
+  // wiped if the BOM query refetches.
+  const [autoFilledFor, setAutoFilledFor] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!form.productId) {
+      if (autoFilledFor !== null) setAutoFilledFor(null);
+      return;
+    }
+    if (bomQ.isLoading) return;
+    if (autoFilledFor === form.productId) return;
+
+    // First time we see this product — copy the BOM into the editable rows.
+    setRows(
+      bom.map((b, i) => ({
+        id:         `${b.materialId}-${i}`,
+        materialId: b.materialId,
+        quantity:   String(b.quantity),
+      })),
+    );
+    setAutoFilledFor(form.productId);
+  }, [form.productId, bom, bomQ.isLoading, autoFilledFor]);
+
+  // Raw-material picker options: only raw materials, exclude the chosen finished product.
+  const rawMaterials = useMemo(
+    () => products.filter(p =>
+      (p.type ?? 'raw_material') === 'raw_material' && p.id !== form.productId,
+    ),
+    [products, form.productId],
+  );
   const productMap = useMemo(() => new Map(products.map(p => [p.id, p] as const)), [products]);
 
   const requirements = useMemo(() => {
     const qty = parseFloat(form.quantity) || 0;
-    return bom.map(b => {
-      const required  = b.quantity * qty;
-      const available = productMap.get(b.materialId)?.stock ?? b.material.stock ?? 0;
+    return rows.map(r => {
+      const perUnit   = parseFloat(r.quantity) || 0;
+      const required  = perUnit * qty;
+      const product   = productMap.get(r.materialId);
+      const available = product?.stock ?? 0;
       const shortage  = required - available;
       return {
-        materialId: b.materialId,
-        nameAr:     b.material.nameAr,
-        code:       b.material.code,
-        unit:       b.material.unit ?? '',
-        perUnit:    b.quantity,
+        rowId:      r.id,
+        materialId: r.materialId,
+        nameAr:     product?.nameAr ?? '—',
+        code:       product?.code ?? '',
+        unit:       product?.unit ?? '',
+        perUnit,
         required,
         available,
         shortage:   shortage > 0 ? shortage : 0,
       };
     });
-  }, [bom, form.quantity, productMap]);
+  }, [rows, form.quantity, productMap]);
 
   const hasShortage = requirements.some(r => r.shortage > 0);
+
+  // BOM templates are still useful even though they're not required:
+  //   - We surface a "reset from BOM template" action so the user can revert
+  //     manual edits to the saved recipe in one click.
+  const isCustomized = useMemo(() => {
+    if (!form.productId || bomQ.isLoading) return false;
+    if (rows.length !== bom.length) return true;
+    const bomMap = new Map(bom.map(b => [b.materialId, b.quantity]));
+    return rows.some(r =>
+      bomMap.get(r.materialId) !== parseFloat(r.quantity),
+    );
+  }, [rows, bom, form.productId, bomQ.isLoading]);
+
+  function addRow() {
+    setRows(rs => [...rs, { id: `new-${Date.now()}-${rs.length}`, materialId: '', quantity: '' }]);
+  }
+  function updateRow(id: string, patch: Partial<MaterialRow>) {
+    setRows(rs => rs.map(r => (r.id === id ? { ...r, ...patch } : r)));
+  }
+  function removeRow(id: string) {
+    setRows(rs => rs.filter(r => r.id !== id));
+  }
+  function resetFromBOM() {
+    setRows(
+      bom.map((b, i) => ({
+        id:         `${b.materialId}-${i}`,
+        materialId: b.materialId,
+        quantity:   String(b.quantity),
+      })),
+    );
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -103,7 +176,22 @@ export function ProductionOrderForm() {
     if (!form.productId)                       return setError('يجب اختيار المنتج النهائي');
     const qty = parseFloat(form.quantity);
     if (!qty || qty <= 0)                      return setError('الكمية يجب أن تكون أكبر من صفر');
-    if (bom.length === 0)                      return setError('لا توجد قائمة مواد (BOM) للمنتج المختار — أضف BOM أولاً');
+
+    // Validate the manual material rows: at least one row, every row must have
+    // a material + a positive quantity, no duplicates.
+    const cleaned = rows
+      .map(r => ({ materialId: r.materialId, quantity: parseFloat(r.quantity) }))
+      .filter(r => r.materialId && r.quantity > 0);
+    if (cleaned.length === 0) {
+      return setError('يجب تحديد مادة خام واحدة على الأقل بكمية صحيحة');
+    }
+    const seen = new Set<string>();
+    for (const r of cleaned) {
+      if (seen.has(r.materialId)) {
+        return setError('توجد مادة خام مكررة في القائمة');
+      }
+      seen.add(r.materialId);
+    }
 
     setSaving(true);
     try {
@@ -121,6 +209,8 @@ export function ProductionOrderForm() {
           date:              form.date,
           notes:             form.notes.trim() || undefined,
           status:            'pending',
+          // Send the editable rows as the source of truth (per-unit qty).
+          items:             cleaned,
         }),
       });
       const j = await res.json();
@@ -142,14 +232,14 @@ export function ProductionOrderForm() {
       <Toast toast={toast} />
       <EntityFormPage
         title="إنشاء أمر إنتاج جديد"
-        subtitle="حدّد المنتج النهائي والكمية، وسيتم حساب احتياجات المواد تلقائياً من قائمة المواد"
+        subtitle="حدّد المنتج النهائي والكمية، واختر المواد الخام دلوقتي (تجي من الـ BOM إن وجد أو أضفها يدوياً)"
         backHref="/manufacturing/production-orders"
         icon={<ClipboardList className="w-5 h-5" />}
         error={error}
         saving={saving}
         formId="production-order-form"
         primaryLabel="حفظ الأمر"
-        primaryDisabled={!form.productId || !form.quantity || bom.length === 0}
+        primaryDisabled={!form.productId || !form.quantity || rows.length === 0}
       >
         <form id="production-order-form" onSubmit={handleSubmit} className="space-y-5">
           <Section title="بيانات الأمر" subtitle="المنتج النهائي وخط الإنتاج والكمية">
@@ -203,64 +293,127 @@ export function ProductionOrderForm() {
 
           {form.productId && (
             <Section
-              title="المواد المطلوبة من قائمة المواد"
+              title="المواد المطلوبة"
               subtitle={
-                bom.length === 0
-                  ? 'لا توجد قائمة مواد لهذا المنتج — أضفها من قسم BOM أولاً'
-                  : `${bom.length} مادة سيتم خصمها عند إكمال الأمر`
+                bomQ.isLoading
+                  ? 'جاري تحميل قائمة المواد…'
+                  : bom.length === 0
+                    ? 'لا توجد وصفة (BOM) محفوظة — أضف المواد يدوياً، أو حفظها كـ BOM لاحقاً'
+                    : `تم التعبئة تلقائياً من الـ BOM المحفوظ — يمكنك التعديل، الإضافة، أو الحذف قبل الحفظ`
               }
               action={<Layers className="w-4 h-4 text-slate-400" />}
             >
-              {bom.length === 0 ? (
-                <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3 text-sm flex items-start gap-2">
-                  <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  لا توجد قائمة مواد (BOM) معرّفة لهذا المنتج — لا يمكن إنشاء أمر إنتاج بدونها.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200">
-                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500">المادة</th>
-                        <th className="px-3 py-2 text-left  text-xs font-semibold text-slate-500">للوحدة</th>
-                        <th className="px-3 py-2 text-left  text-xs font-semibold text-slate-500">المطلوب</th>
-                        <th className="px-3 py-2 text-left  text-xs font-semibold text-slate-500">المتوفر</th>
-                        <th className="px-3 py-2 text-center text-xs font-semibold text-slate-500">الحالة</th>
+              {/* Editable material rows */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500">المادة الخام</th>
+                      <th className="px-3 py-2 text-left  text-xs font-semibold text-slate-500 w-32">للوحدة</th>
+                      <th className="px-3 py-2 text-left  text-xs font-semibold text-slate-500 w-32">المطلوب</th>
+                      <th className="px-3 py-2 text-left  text-xs font-semibold text-slate-500 w-28">المتوفر</th>
+                      <th className="px-3 py-2 text-center text-xs font-semibold text-slate-500 w-28">الحالة</th>
+                      <th className="px-3 py-2 text-center text-xs font-semibold text-slate-500 w-12"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {rows.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-3 py-6 text-center text-sm text-slate-400">
+                          لا توجد مواد بعد — اضغط «إضافة مادة» لبدء الإدخال.
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {requirements.map(r => (
-                        <tr key={r.materialId}>
-                          <td className="px-3 py-2 text-slate-800">
-                            <div className="font-medium">{r.nameAr}</div>
-                            <div className="text-xs text-slate-400 font-mono">{r.code}</div>
+                    )}
+                    {rows.map(row => {
+                      const r = requirements.find(x => x.rowId === row.id);
+                      return (
+                        <tr key={row.id}>
+                          <td className="px-3 py-2">
+                            <select
+                              value={row.materialId}
+                              onChange={e => updateRow(row.id, { materialId: e.target.value })}
+                              className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              <option value="">— اختر المادة —</option>
+                              {rawMaterials
+                                .filter(p =>
+                                  // Allow currently-selected row's option to stay even if used by another row
+                                  p.id === row.materialId ||
+                                  !rows.some(rr => rr.id !== row.id && rr.materialId === p.id),
+                                )
+                                .map(p => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.nameAr} ({p.code})
+                                  </option>
+                                ))}
+                            </select>
                           </td>
-                          <td className="px-3 py-2 text-slate-500 text-left tabular-nums">
-                            {r.perUnit.toLocaleString('ar-EG')} {r.unit}
+                          <td className="px-3 py-2">
+                            <input
+                              type="number" min="0" step="0.01"
+                              value={row.quantity}
+                              onChange={e => updateRow(row.id, { quantity: e.target.value })}
+                              placeholder="0"
+                              className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm tabular-nums text-left focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
                           </td>
                           <td className="px-3 py-2 text-slate-700 font-semibold text-left tabular-nums">
-                            {r.required.toLocaleString('ar-EG')} {r.unit}
+                            {r ? `${r.required.toLocaleString('ar-EG')} ${r.unit}` : '—'}
                           </td>
                           <td className="px-3 py-2 text-slate-500 text-left tabular-nums">
-                            {r.available.toLocaleString('ar-EG')} {r.unit}
+                            {r ? `${r.available.toLocaleString('ar-EG')} ${r.unit}` : '—'}
                           </td>
                           <td className="px-3 py-2 text-center">
-                            {r.shortage > 0 ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-700 text-xs font-medium border border-red-200">
-                                <AlertTriangle className="w-3 h-3" /> نقص {r.shortage.toLocaleString('ar-EG')}
-                              </span>
+                            {r && r.materialId && r.perUnit > 0 && (parseFloat(form.quantity) || 0) > 0 ? (
+                              r.shortage > 0 ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-700 text-xs font-medium border border-red-200">
+                                  <AlertTriangle className="w-3 h-3" /> نقص {r.shortage.toLocaleString('ar-EG')}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium border border-emerald-200">
+                                  متوفر
+                                </span>
+                              )
                             ) : (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium border border-emerald-200">
-                                متوفر
-                              </span>
+                              <span className="text-slate-300">—</span>
                             )}
                           </td>
+                          <td className="px-3 py-2 text-center">
+                            <button
+                              type="button"
+                              onClick={() => removeRow(row.id)}
+                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="حذف"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={addRow}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-sm font-medium border border-blue-200 transition-colors"
+                >
+                  <Plus className="w-4 h-4" /> إضافة مادة
+                </button>
+                {bom.length > 0 && isCustomized && (
+                  <button
+                    type="button"
+                    onClick={resetFromBOM}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-700 hover:bg-slate-100 rounded-lg text-sm font-medium border border-slate-200 transition-colors"
+                    title="إعادة تعبئة الصفوف من الـ BOM المحفوظ"
+                  >
+                    <Sparkles className="w-4 h-4" /> إعادة تعبئة من BOM
+                  </button>
+                )}
+              </div>
 
               {hasShortage && (
                 <div className="mt-3 bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-xs flex items-start gap-2">

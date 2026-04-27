@@ -19,13 +19,14 @@ import { KpiCard } from '@/components/accounting/AccountingLayout';
 
 interface Product {
   id: string;
-  name?: string;
   nameAr?: string;
-  quantity?: number;
-  minQuantity?: number;
-  reorderLevel?: number;
-  costPrice?: number;
-  sellingPrice?: number;
+  // The /api/products envelope returns these field names — earlier the
+  // hub read `quantity` / `costPrice` / `minQuantity`, which don't exist,
+  // so every KPI silently rendered as zero.
+  stock?: number;
+  minStock?: number;
+  cost?: number;
+  price?: number;
   isActive?: boolean;
 }
 interface WarehouseItem {
@@ -65,10 +66,10 @@ export default function InventoryHubPage() {
     let lowStock = 0;
     let outOfStock = 0;
     for (const p of products) {
-      const qty = Number(p.quantity ?? 0);
-      const cost = Number(p.costPrice ?? 0);
+      const qty = Number(p.stock ?? 0);
+      const cost = Number(p.cost ?? 0);
       stockValue += qty * cost;
-      const threshold = Number(p.minQuantity ?? p.reorderLevel ?? 0);
+      const threshold = Number(p.minStock ?? 0);
       if (qty <= 0) outOfStock++;
       else if (threshold > 0 && qty <= threshold) lowStock++;
     }

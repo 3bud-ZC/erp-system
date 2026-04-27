@@ -24,7 +24,6 @@ const TYPE_OPTS = [
   { k: 'all',              label: 'جميع الأنواع' },
   { k: 'finished_product', label: 'منتجات نهائية' },
   { k: 'raw_material',     label: 'مواد خام' },
-  { k: 'packaging',        label: 'تغليف' },
 ];
 
 export default function InventoryReportPage() {
@@ -131,7 +130,7 @@ export default function InventoryReportPage() {
                         <td className="px-3 py-2 font-mono text-slate-500">{p.code}</td>
                         <td className="px-3 py-2 text-slate-800">{p.nameAr}</td>
                         <td className="px-3 py-2 text-slate-500 text-xs">
-                          {p.type === 'raw_material' ? 'مواد خام' : p.type === 'packaging' ? 'تغليف' : 'منتج نهائي'}
+                          {p.type === 'raw_material' ? 'مواد خام' : 'منتج نهائي'}
                         </td>
                         <td className="px-3 py-2 text-left tabular-nums font-semibold">
                           {p.stock.toLocaleString('ar-EG')} {p.unit ?? ''}
