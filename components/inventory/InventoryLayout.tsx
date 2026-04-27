@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutGrid, Package, ArrowUpDown, Warehouse } from 'lucide-react';
+import { LayoutGrid, Package, Warehouse } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
@@ -14,10 +14,9 @@ import { cn } from '@/lib/utils';
  * just points there directly.
  */
 const INVENTORY_TABS = [
-  { href: '/inventory',                          title: 'نظرة عامة',     icon: LayoutGrid },
-  { href: '/inventory/products',                 title: 'المنتجات',       icon: Package },
-  { href: '/inventory/stock-adjustments/new',    title: 'تسوية المخزون',  icon: ArrowUpDown },
-  { href: '/warehouses',                         title: 'المستودعات',     icon: Warehouse },
+  { href: '/inventory',          title: 'نظرة عامة', icon: LayoutGrid },
+  { href: '/inventory/products', title: 'المنتجات',   icon: Package },
+  { href: '/warehouses',         title: 'المستودعات', icon: Warehouse },
 ] as const;
 
 export function InventoryLayout({
@@ -45,16 +44,11 @@ export function InventoryLayout({
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-1.5 flex gap-1 overflow-x-auto">
         {INVENTORY_TABS.map(t => {
-          // Exact match for the hub. Stock-adjustments tab covers the whole
-          // /inventory/stock-adjustments subtree so the tab stays highlighted
-          // on list/detail pages, not just the /new form.
-          const active = (() => {
-            if (t.href === '/inventory') return pathname === '/inventory';
-            if (t.href === '/inventory/stock-adjustments/new') {
-              return pathname?.startsWith('/inventory/stock-adjustments') ?? false;
-            }
-            return pathname === t.href || pathname?.startsWith(t.href + '/');
-          })();
+          // Exact match for the hub, prefix match for sub-routes.
+          const active =
+            t.href === '/inventory'
+              ? pathname === '/inventory'
+              : pathname === t.href || pathname?.startsWith(t.href + '/');
           const Icon = t.icon;
           return (
             <Link

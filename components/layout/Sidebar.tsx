@@ -67,10 +67,9 @@ const navItems: NavItem[] = [
     href: '/inventory',
     icon: <Package className="w-5 h-5" />,
     children: [
-      { title: 'نظرة عامة',     href: '/inventory' },
-      { title: 'المنتجات',       href: '/inventory/products' },
-      { title: 'تسوية المخزون',  href: '/inventory/stock-adjustments/new' },
-      { title: 'المستودعات',     href: '/warehouses' },
+      { title: 'نظرة عامة', href: '/inventory' },
+      { title: 'المنتجات',  href: '/inventory/products' },
+      { title: 'المستودعات', href: '/warehouses' },
     ],
   },
   {

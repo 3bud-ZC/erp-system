@@ -7,7 +7,6 @@ import { apiGet } from '@/lib/api/fetcher';
 import { queryKeys } from '@/lib/api/query-keys';
 import {
   Package,
-  ArrowUpDown,
   Warehouse,
   ArrowLeft,
   AlertTriangle,
@@ -117,7 +116,7 @@ export default function InventoryHubPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <NavCard
           href="/inventory/products"
           title="المنتجات"
@@ -125,14 +124,6 @@ export default function InventoryHubPage() {
           icon={Package}
           stat={`${stats.productsCount} منتج`}
           accentClass="bg-blue-50 text-blue-600"
-        />
-        <NavCard
-          href="/inventory/stock-adjustments/new"
-          title="تسوية المخزون"
-          description="تسجيل زيادة أو نقص في المخزون مع تحديث القيم تلقائياً"
-          icon={ArrowUpDown}
-          stat="تسوية جديدة"
-          accentClass="bg-amber-50 text-amber-600"
         />
         <NavCard
           href="/warehouses"

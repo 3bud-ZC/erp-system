@@ -1,28 +1,25 @@
 #!/usr/bin/env node
 
 /**
- * Railway / production startup wrapper — PRODUCTION-SAFE BY DEFAULT.
+ * Railway / production startup wrapper.
  *
- * Behavior:
+ * Behavior on every start:
  *   1. Verify DATABASE_URL is set (fail fast if not).
- *   2. Start the Next.js app (`next start`).
+ *   2. Run `prisma migrate deploy` — forward-only, idempotent. Applies any
+ *      pending migrations and is a no-op when the DB is already up to date.
+ *      This is the standard Prisma+Railway pattern and prevents the failure
+ *      mode where a freshly-deployed code expects columns that don't exist.
+ *   3. Start the Next.js app (`next start`).
  *
- * Behavior NOT included by default:
- *   - `prisma db push` — destructive on schema drift; operator-managed.
- *   - `prisma migrate deploy` — operator-managed (one-off, manual).
- *   - `railway-init.js` — creates demo users; operator-managed (one-off).
+ * Opt-in only:
+ *   - `RAILWAY_RUN_INIT=true` — runs scripts/railway-init.js (demo seed).
  *
- * To run schema migrations once after first deploy, set
- * `RAILWAY_RUN_MIGRATE=true` for that single deployment, then unset it.
- * Likewise `RAILWAY_RUN_INIT=true` for the demo bootstrap.
- *
- * In normal steady-state operation, every restart performs ZERO database
- * mutations — only the application runs.
+ * `prisma db push` is NEVER run — it's destructive on schema drift.
  */
 
 const { execSync } = require('child_process');
 
-console.log('🚀 Production startup — safe-by-default');
+console.log('🚀 Production startup');
 console.log('═══════════════════════════════════════');
 
 if (!process.env.DATABASE_URL) {
@@ -30,16 +27,14 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
-// One-off opt-in: schema migrations.
-if (process.env.RAILWAY_RUN_MIGRATE === 'true') {
-  console.log('⚙️  RAILWAY_RUN_MIGRATE=true — running prisma migrate deploy...');
-  try {
-    execSync('npx prisma migrate deploy', { stdio: 'inherit', cwd: process.cwd() });
-    console.log('✅ Migrations applied.');
-  } catch (e) {
-    console.error('❌ Migration failed. Refusing to start.');
-    process.exit(1);
-  }
+// Auto: forward-only migrations (idempotent — no-op if up to date).
+console.log('⚙️  Running prisma migrate deploy ...');
+try {
+  execSync('npx prisma migrate deploy', { stdio: 'inherit', cwd: process.cwd() });
+  console.log('✅ Migrations up to date.');
+} catch (e) {
+  console.error('❌ Migration failed. Refusing to start.');
+  process.exit(1);
 }
 
 // One-off opt-in: demo data bootstrap.
