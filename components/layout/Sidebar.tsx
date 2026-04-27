@@ -17,7 +17,6 @@ import {
   ChevronDown,
   BarChart3,
   TrendingUp,
-  PieChart,
   BookOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -80,19 +79,7 @@ const navItems: NavItem[] = [
       { title: 'نظرة عامة',     href: '/accounting' },
       { title: 'القيود المحاسبية', href: '/accounting/journal-entries' },
       { title: 'المالية',          href: '/accounting/finance' },
-      { title: 'دليل الحسابات',    href: '/accounting/chart-of-accounts' },
       { title: 'ميزان المراجعة',   href: '/accounting/trial-balance' },
-    ],
-  },
-  {
-    title: 'التقارير',
-    href: '/reports',
-    icon: <PieChart className="w-5 h-5" />,
-    children: [
-      { title: 'تقارير المبيعات', href: '/reports/sales' },
-      { title: 'تقارير المشتريات', href: '/reports/purchases' },
-      { title: 'تقارير العملاء', href: '/reports/customers' },
-      { title: 'تقارير المخزون', href: '/reports/inventory' },
     ],
   },
 ];
@@ -111,7 +98,6 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     '/services':   pathname?.startsWith('/services')   || pathname?.startsWith('/customers') || pathname?.startsWith('/suppliers') || false,
     '/inventory':  pathname?.startsWith('/inventory')  || pathname?.startsWith('/warehouses') || false,
     '/accounting': pathname?.startsWith('/accounting') ?? false,
-    '/reports':    pathname?.startsWith('/reports')    ?? false,
   }));
   const toggleGroup = (href: string) =>
     setOpenGroups(prev => ({ ...prev, [href]: !prev[href] }));

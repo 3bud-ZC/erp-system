@@ -8,7 +8,6 @@ import { queryKeys } from '@/lib/api/query-keys';
 import {
   BookOpen,
   Wallet,
-  ListTree,
   Scale,
   TrendingDown,
   CheckCircle,
@@ -64,6 +63,7 @@ export default function AccountingHubPage() {
     queryKey: ['accounting', 'accounts'],
     queryFn: () => apiGet<Account[]>('/api/accounting/accounts'),
     staleTime: 60_000,
+    enabled: false,
     retry: false,
   });
   const trialQ = useQuery({
@@ -122,10 +122,10 @@ export default function AccountingHubPage() {
   return (
     <AccountingLayout
       title="المحاسبة"
-      subtitle="نظرة شاملة على القيود والمالية ودليل الحسابات وميزان المراجعة"
+      subtitle="نظرة شاملة على القيود والمالية وميزان المراجعة"
     >
       {/* Top-line KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <KpiCard
           title="القيود المحاسبية"
           value={stats.totalEntries}
@@ -139,13 +139,6 @@ export default function AccountingHubPage() {
           subtitle={`الإجمالي: ${fmtMoney(stats.totalExpenses)}`}
           icon={TrendingDown}
           color="red"
-        />
-        <KpiCard
-          title="دليل الحسابات"
-          value={stats.accountsCount}
-          subtitle={`${stats.activeAccounts} حساب نشط`}
-          icon={ListTree}
-          color="purple"
         />
         <KpiCard
           title="ميزان المراجعة"
@@ -173,14 +166,6 @@ export default function AccountingHubPage() {
           icon={Wallet}
           stat={fmtMoney(stats.monthExpenses) + ' هذا الشهر'}
           accentClass="bg-red-50 text-red-600"
-        />
-        <NavCard
-          href="/accounting/chart-of-accounts"
-          title="دليل الحسابات"
-          description="هيكل الحسابات الرئيسية والفرعية المستخدمة في القيود المحاسبية"
-          icon={ListTree}
-          stat={`${stats.accountsCount} حساب`}
-          accentClass="bg-purple-50 text-purple-600"
         />
         <NavCard
           href="/accounting/trial-balance"

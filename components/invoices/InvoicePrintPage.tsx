@@ -69,9 +69,9 @@ export function InvoicePrintPage({ config }: { config: InvoiceConfig }) {
     let cancelled = false;
     (async () => {
       try {
-        const [invJ, sysJ] = await Promise.all([
+        const [invJ, infoJ] = await Promise.all([
           fetch(config.detailApi(id), { credentials: 'include' }).then(r => r.json()),
-          fetch('/api/system-settings', { credentials: 'include' }).then(r => r.json()).catch(() => ({ success: false })),
+          fetch('/api/company-info', { credentials: 'include' }).then(r => r.json()).catch(() => ({ success: false })),
         ]);
         if (cancelled) return;
         if (!invJ.success) {
@@ -79,13 +79,13 @@ export function InvoicePrintPage({ config }: { config: InvoiceConfig }) {
         } else {
           setInvoice(invJ.data);
         }
-        if (sysJ?.success && sysJ.data) {
+        if (infoJ?.success && infoJ.data) {
           setCompany({
-            name:    sysJ.data.companyName ?? sysJ.data.tenantName ?? undefined,
-            address: sysJ.data.companyAddress ?? null,
-            phone:   sysJ.data.companyPhone   ?? null,
-            email:   sysJ.data.companyEmail   ?? null,
-            taxId:   sysJ.data.taxId          ?? null,
+            name:    infoJ.data.companyName    || undefined,
+            address: infoJ.data.companyAddress ?? null,
+            phone:   infoJ.data.companyPhone   ?? null,
+            email:   infoJ.data.companyEmail   ?? null,
+            taxId:   infoJ.data.taxId          ?? null,
           });
         }
       } catch {

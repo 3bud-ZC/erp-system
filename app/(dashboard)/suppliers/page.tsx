@@ -8,6 +8,7 @@ import { Plus, X, Pencil, Trash2, FileText, AlertCircle, Search, Truck } from 'l
 import Link from 'next/link';
 import { TableSkeleton, EmptyState, ErrorBanner, Toast, useToast } from '@/components/ui/patterns';
 import { ServicesLayout } from '@/components/services/ServicesLayout';
+import { Modal, Field, PrimaryButton, SecondaryButton, FormError } from '@/components/ui/modal';
 
 interface Supplier {
   id: string;
@@ -28,16 +29,6 @@ function fmtEGP(v?: number | null) {
 const emptyForm = { code: '', nameAr: '', nameEn: '', email: '', phone: '', creditLimit: '' };
 
 const TABLE_COLS = ['w-16', 'w-36', 'w-24', 'w-32', 'w-24', 'w-20'];
-
-function InputField({ label, required, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string; required?: boolean }) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-slate-700 mb-1">{label}{required && ' *'}</label>
-      <input {...props} required={required}
-        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-    </div>
-  );
-}
 
 export default function SuppliersPage() {
   const qc = useQueryClient();
@@ -227,86 +218,74 @@ export default function SuppliersPage() {
       )}
 
       {/* Add Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" dir="rtl">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-            <div className="flex items-center justify-between p-5 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-900">إضافة مورد جديد</h2>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
-            </div>
-            <form onSubmit={handleSubmit} className="p-5 space-y-4">
-              {formError && <div className="text-red-600 text-sm bg-red-50 border border-red-200 p-3 rounded-lg">{formError}</div>}
-              <div className="grid grid-cols-2 gap-3">
-                <InputField label="الرمز" required value={form.code} placeholder="SUP-001"
-                  onChange={e => setForm(f => ({ ...f, code: e.target.value }))} />
-                <InputField label="حد الائتمان (ج.م)" type="number" min="0" value={form.creditLimit} placeholder="0"
-                  onChange={e => setForm(f => ({ ...f, creditLimit: e.target.value }))} />
-              </div>
-              <InputField label="الاسم بالعربية" required value={form.nameAr} placeholder="شركة التوريد"
-                onChange={e => setForm(f => ({ ...f, nameAr: e.target.value }))} />
-              <InputField label="الاسم بالإنجليزية" value={form.nameEn} placeholder="Supply Company (اختياري)"
-                onChange={e => setForm(f => ({ ...f, nameEn: e.target.value }))} />
-              <div className="grid grid-cols-2 gap-3">
-                <InputField label="الهاتف" value={form.phone} placeholder="0501234567"
-                  onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
-                <InputField label="البريد الإلكتروني" type="email" value={form.email} placeholder="info@supplier.com"
-                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
-              </div>
-              <div className="flex gap-3 pt-1">
-                <button type="submit" disabled={saving}
-                  className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                  {saving ? 'جاري الحفظ…' : 'حفظ'}
-                </button>
-                <button type="button" onClick={() => setShowModal(false)}
-                  className="flex-1 bg-slate-100 text-slate-700 rounded-lg py-2 text-sm font-medium hover:bg-slate-200 transition-colors">
-                  إلغاء
-                </button>
-              </div>
-            </form>
+      <Modal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title="إضافة مورد جديد"
+        footer={
+          <>
+            <SecondaryButton onClick={() => setShowModal(false)}>إلغاء</SecondaryButton>
+            <PrimaryButton type="submit" form="add-supplier-form" disabled={saving}>
+              {saving ? 'جاري الحفظ…' : 'حفظ'}
+            </PrimaryButton>
+          </>
+        }
+      >
+        <form id="add-supplier-form" onSubmit={handleSubmit} className="space-y-4">
+          <FormError>{formError}</FormError>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="الرمز" required value={form.code} placeholder="SUP-001"
+              onChange={e => setForm(f => ({ ...f, code: e.target.value }))} />
+            <Field label="حد الائتمان (ج.م)" type="number" min="0" value={form.creditLimit} placeholder="0"
+              onChange={e => setForm(f => ({ ...f, creditLimit: e.target.value }))} />
           </div>
-        </div>
-      )}
+          <Field label="الاسم بالعربية" required value={form.nameAr} placeholder="شركة التوريد"
+            onChange={e => setForm(f => ({ ...f, nameAr: e.target.value }))} />
+          <Field label="الاسم بالإنجليزية" value={form.nameEn} placeholder="Supply Company (اختياري)"
+            onChange={e => setForm(f => ({ ...f, nameEn: e.target.value }))} />
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="الهاتف" value={form.phone} placeholder="0501234567"
+              onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
+            <Field label="البريد الإلكتروني" type="email" value={form.email} placeholder="info@supplier.com"
+              onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+          </div>
+        </form>
+      </Modal>
 
       {/* Edit Modal */}
-      {editItem && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" dir="rtl">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-            <div className="flex items-center justify-between p-5 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-900">تعديل بيانات المورد</h2>
-              <button onClick={() => setEditItem(null)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
-            </div>
-            <form onSubmit={handleEdit} className="p-5 space-y-4">
-              {editError && <div className="text-red-600 text-sm bg-red-50 border border-red-200 p-3 rounded-lg">{editError}</div>}
-              <div className="grid grid-cols-2 gap-3">
-                <InputField label="الرمز" required value={editForm.code}
-                  onChange={e => setEditForm(f => ({ ...f, code: e.target.value }))} />
-                <InputField label="حد الائتمان (ج.م)" type="number" min="0" value={editForm.creditLimit}
-                  onChange={e => setEditForm(f => ({ ...f, creditLimit: e.target.value }))} />
-              </div>
-              <InputField label="الاسم بالعربية" required value={editForm.nameAr}
-                onChange={e => setEditForm(f => ({ ...f, nameAr: e.target.value }))} />
-              <InputField label="الاسم بالإنجليزية" value={editForm.nameEn}
-                onChange={e => setEditForm(f => ({ ...f, nameEn: e.target.value }))} />
-              <div className="grid grid-cols-2 gap-3">
-                <InputField label="الهاتف" value={editForm.phone}
-                  onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} />
-                <InputField label="البريد الإلكتروني" type="email" value={editForm.email}
-                  onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} />
-              </div>
-              <div className="flex gap-3 pt-1">
-                <button type="submit" disabled={editSaving}
-                  className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                  {editSaving ? 'جاري الحفظ…' : 'حفظ التعديلات'}
-                </button>
-                <button type="button" onClick={() => setEditItem(null)}
-                  className="flex-1 bg-slate-100 text-slate-700 rounded-lg py-2 text-sm font-medium hover:bg-slate-200 transition-colors">
-                  إلغاء
-                </button>
-              </div>
-            </form>
+      <Modal
+        open={!!editItem}
+        onClose={() => setEditItem(null)}
+        title="تعديل بيانات المورد"
+        footer={
+          <>
+            <SecondaryButton onClick={() => setEditItem(null)}>إلغاء</SecondaryButton>
+            <PrimaryButton type="submit" form="edit-supplier-form" disabled={editSaving}>
+              {editSaving ? 'جاري الحفظ…' : 'حفظ التعديلات'}
+            </PrimaryButton>
+          </>
+        }
+      >
+        <form id="edit-supplier-form" onSubmit={handleEdit} className="space-y-4">
+          <FormError>{editError}</FormError>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="الرمز" required value={editForm.code}
+              onChange={e => setEditForm(f => ({ ...f, code: e.target.value }))} />
+            <Field label="حد الائتمان (ج.م)" type="number" min="0" value={editForm.creditLimit}
+              onChange={e => setEditForm(f => ({ ...f, creditLimit: e.target.value }))} />
           </div>
-        </div>
-      )}
+          <Field label="الاسم بالعربية" required value={editForm.nameAr}
+            onChange={e => setEditForm(f => ({ ...f, nameAr: e.target.value }))} />
+          <Field label="الاسم بالإنجليزية" value={editForm.nameEn}
+            onChange={e => setEditForm(f => ({ ...f, nameEn: e.target.value }))} />
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="الهاتف" value={editForm.phone}
+              onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} />
+            <Field label="البريد الإلكتروني" type="email" value={editForm.email}
+              onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} />
+          </div>
+        </form>
+      </Modal>
 
       {/* Delete Confirm */}
       {deleteId && (

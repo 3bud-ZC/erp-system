@@ -7,6 +7,7 @@ import { queryKeys } from '@/lib/api/query-keys';
 import { Plus, X, CheckCircle, Clock, Trash2, BookOpen, RefreshCw, Pencil, RotateCcw, Send } from 'lucide-react';
 import { TableSkeleton, EmptyState, ErrorBanner } from '@/components/ui/patterns';
 import { AccountingLayout } from '@/components/accounting/AccountingLayout';
+import { Modal, Field, PrimaryButton, SecondaryButton, FormError } from '@/components/ui/modal';
 
 interface JournalEntry {
   id: string;
@@ -255,29 +256,26 @@ export default function JournalEntriesPage() {
       {error && <ErrorBanner message={error} onRetry={() => entriesQ.refetch()} />}
 
       {/* Create / Edit modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" dir="rtl">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-5 border-b border-slate-200 sticky top-0 bg-white">
-              <h2 className="text-lg font-semibold text-slate-900">
-                {editingId ? 'تعديل قيد محاسبي (مسودة)' : 'قيد محاسبي جديد'}
-              </h2>
-              <button onClick={() => { setShowModal(false); resetForm(); }} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
-            </div>
-            <form onSubmit={handleSubmit} className="p-5 space-y-4">
-              {formError && <div className="text-red-600 text-sm bg-red-50 border border-red-200 p-3 rounded-lg">{formError}</div>}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">تاريخ القيد *</label>
-                  <input type="date" required value={entryDate} onChange={e => setEntryDate(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">البيان *</label>
-                  <input required value={description} onChange={e => setDescription(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="وصف القيد" />
-                </div>
-              </div>
+      <Modal
+        open={showModal}
+        onClose={() => { setShowModal(false); resetForm(); }}
+        title={editingId ? 'تعديل قيد محاسبي (مسودة)' : 'قيد محاسبي جديد'}
+        size="xl"
+        footer={
+          <>
+            <SecondaryButton onClick={() => { setShowModal(false); resetForm(); }}>إلغاء</SecondaryButton>
+            <PrimaryButton type="submit" form="journal-entry-form" disabled={saving || !balanced}>
+              {saving ? 'جاري الحفظ…' : (editingId ? 'حفظ التعديلات' : 'حفظ القيد')}
+            </PrimaryButton>
+          </>
+        }
+      >
+        <form id="journal-entry-form" onSubmit={handleSubmit} className="space-y-4">
+          <FormError>{formError}</FormError>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="تاريخ القيد" required type="date" value={entryDate} onChange={e => setEntryDate(e.target.value)} />
+            <Field label="البيان" required value={description} placeholder="وصف القيد" onChange={e => setDescription(e.target.value)} />
+          </div>
 
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -336,30 +334,17 @@ export default function JournalEntriesPage() {
                     </tfoot>
                   </table>
                 </div>
-                {!balanced && totalDebit > 0 && (
-                  <p className="text-red-500 text-xs mt-1.5">
-                    ⚠ الفرق: {Math.abs(totalDebit - totalCredit).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م — المدين يجب أن يساوي الدائن
-                  </p>
-                )}
-                {balanced && totalDebit > 0 && (
-                  <p className="text-green-600 text-xs mt-1.5">✓ القيد متوازن</p>
-                )}
-              </div>
-
-              <div className="flex gap-3 pt-1">
-                <button type="submit" disabled={saving || !balanced}
-                  className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                  {saving ? 'جاري الحفظ…' : (editingId ? 'حفظ التعديلات' : 'حفظ القيد')}
-                </button>
-                <button type="button" onClick={() => { setShowModal(false); resetForm(); }}
-                  className="flex-1 bg-slate-100 text-slate-700 rounded-lg py-2 text-sm font-medium hover:bg-slate-200 transition-colors">
-                  إلغاء
-                </button>
-              </div>
-            </form>
+            {!balanced && totalDebit > 0 && (
+              <p className="text-red-500 text-xs mt-1.5">
+                ⚠ الفرق: {Math.abs(totalDebit - totalCredit).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م — المدين يجب أن يساوي الدائن
+              </p>
+            )}
+            {balanced && totalDebit > 0 && (
+              <p className="text-green-600 text-xs mt-1.5">✓ القيد متوازن</p>
+            )}
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
 
       {/* Confirm delete modal */}
       {confirmDelete && (

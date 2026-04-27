@@ -602,10 +602,6 @@ export default function DashboardPage() {
             <DollarSign className="w-4 h-4 text-slate-400" />
             ملخص الربحية — الشهر الحالي
           </p>
-          <Link href="/reports"
-            className="text-xs text-slate-400 hover:text-white transition-colors flex items-center gap-1">
-            التقرير الكامل <ArrowLeft className="w-3 h-3" />
-          </Link>
         </div>
         <div className="grid grid-cols-3 gap-4 text-center">
           <div className="bg-white/5 rounded-xl p-3">

@@ -7,7 +7,6 @@ import {
   LayoutGrid,
   BookOpen,
   Wallet,
-  ListTree,
   Scale,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -19,11 +18,10 @@ import { cn } from '@/lib/utils';
  * accounting and reports sections share the same look-and-feel.
  */
 const ACCOUNTING_TABS = [
-  { href: '/accounting',                   title: 'نظرة عامة',      icon: LayoutGrid },
-  { href: '/accounting/journal-entries',   title: 'القيود المحاسبية', icon: BookOpen },
-  { href: '/accounting/finance',           title: 'المالية',          icon: Wallet },
-  { href: '/accounting/chart-of-accounts', title: 'دليل الحسابات',    icon: ListTree },
-  { href: '/accounting/trial-balance',     title: 'ميزان المراجعة',   icon: Scale },
+  { href: '/accounting',                 title: 'نظرة عامة',      icon: LayoutGrid },
+  { href: '/accounting/journal-entries', title: 'القيود المحاسبية', icon: BookOpen },
+  { href: '/accounting/finance',         title: 'المالية',          icon: Wallet },
+  { href: '/accounting/trial-balance',   title: 'ميزان المراجعة',   icon: Scale },
 ] as const;
 
 /**

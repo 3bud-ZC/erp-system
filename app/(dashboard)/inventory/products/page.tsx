@@ -7,6 +7,7 @@ import { queryKeys } from '@/lib/api/query-keys';
 import { Plus, AlertTriangle, X, Pencil, Trash2, Search, Package, CheckCircle } from 'lucide-react';
 import { TableSkeleton, EmptyState, ErrorBanner, Toast, useToast } from '@/components/ui/patterns';
 import { InventoryLayout } from '@/components/inventory/InventoryLayout';
+import { Modal, Field, SelectField, PrimaryButton, SecondaryButton, FormError } from '@/components/ui/modal';
 
 interface Product {
   id: string;
@@ -162,53 +163,28 @@ export default function ProductsPage() {
   const ProductFormFields = ({ f, setF }: { f: typeof emptyForm; setF: (fn: (p: typeof emptyForm) => typeof emptyForm) => void }) => (
     <>
       <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">الرمز *</label>
-          <input required value={f.code} onChange={e => setF(p => ({ ...p, code: e.target.value }))}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="PRD-001" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">النوع</label>
-          <select value={f.type} onChange={e => setF(p => ({ ...p, type: e.target.value }))}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-            <option value="finished_product">منتج نهائي</option>
-            <option value="raw_material">مواد خام</option>
-            <option value="packaging">تغليف</option>
-          </select>
-        </div>
+        <Field label="الرمز" required value={f.code} placeholder="PRD-001"
+          onChange={e => setF(p => ({ ...p, code: e.target.value }))} />
+        <SelectField label="النوع" value={f.type} onChange={e => setF(p => ({ ...p, type: e.target.value }))}>
+          <option value="finished_product">منتج نهائي</option>
+          <option value="raw_material">مواد خام</option>
+          <option value="packaging">تغليف</option>
+        </SelectField>
       </div>
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">الاسم بالعربية *</label>
-        <input required value={f.nameAr} onChange={e => setF(p => ({ ...p, nameAr: e.target.value }))}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="اسم المنتج" />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">الاسم بالإنجليزية</label>
-        <input value={f.nameEn} onChange={e => setF(p => ({ ...p, nameEn: e.target.value }))}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Product Name (اختياري)" />
-      </div>
+      <Field label="الاسم بالعربية" required value={f.nameAr} placeholder="اسم المنتج"
+        onChange={e => setF(p => ({ ...p, nameAr: e.target.value }))} />
+      <Field label="الاسم بالإنجليزية" value={f.nameEn} placeholder="Product Name (اختياري)"
+        onChange={e => setF(p => ({ ...p, nameEn: e.target.value }))} />
       <div className="grid grid-cols-3 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">سعر البيع (ج.م) *</label>
-          <input required type="number" min="0" step="0.01" value={f.price} onChange={e => setF(p => ({ ...p, price: e.target.value }))}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">التكلفة (ج.م)</label>
-          <input type="number" min="0" step="0.01" value={f.cost} onChange={e => setF(p => ({ ...p, cost: e.target.value }))}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">وحدة القياس</label>
-          <input value={f.unit} onChange={e => setF(p => ({ ...p, unit: e.target.value }))}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="قطعة" />
-        </div>
+        <Field label="سعر البيع (ج.م)" required type="number" min="0" step="0.01" value={f.price} placeholder="0"
+          onChange={e => setF(p => ({ ...p, price: e.target.value }))} />
+        <Field label="التكلفة (ج.م)" type="number" min="0" step="0.01" value={f.cost} placeholder="0"
+          onChange={e => setF(p => ({ ...p, cost: e.target.value }))} />
+        <Field label="وحدة القياس" value={f.unit} placeholder="قطعة"
+          onChange={e => setF(p => ({ ...p, unit: e.target.value }))} />
       </div>
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">الحد الأدنى للمخزون</label>
-        <input type="number" min="0" value={f.minStock} onChange={e => setF(p => ({ ...p, minStock: e.target.value }))}
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
-      </div>
+      <Field label="الحد الأدنى للمخزون" type="number" min="0" value={f.minStock} placeholder="0"
+        onChange={e => setF(p => ({ ...p, minStock: e.target.value }))} />
     </>
   );
 
@@ -337,64 +313,51 @@ export default function ProductsPage() {
       )}
 
       {/* Add Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" dir="rtl">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-5 border-b border-slate-200 sticky top-0 bg-white">
-              <h2 className="text-lg font-semibold text-slate-900">إضافة منتج جديد</h2>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
-            </div>
-            <form onSubmit={handleSubmit} className="p-5 space-y-4">
-              {formError && <div className="text-red-600 text-sm bg-red-50 border border-red-200 p-3 rounded-lg">{formError}</div>}
-              <ProductFormFields f={form} setF={setForm} />
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">المخزون الابتدائي</label>
-                <input type="number" min="0" value={form.stock} onChange={e => setForm(f => ({ ...f, stock: e.target.value }))}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="0" />
-              </div>
-              <div className="flex gap-3 pt-1">
-                <button type="submit" disabled={saving}
-                  className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                  {saving ? 'جاري الحفظ…' : 'حفظ'}
-                </button>
-                <button type="button" onClick={() => setShowModal(false)}
-                  className="flex-1 bg-slate-100 text-slate-700 rounded-lg py-2 text-sm font-medium hover:bg-slate-200 transition-colors">
-                  إلغاء
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title="إضافة منتج جديد"
+        size="lg"
+        footer={
+          <>
+            <SecondaryButton onClick={() => setShowModal(false)}>إلغاء</SecondaryButton>
+            <PrimaryButton type="submit" form="add-product-form" disabled={saving}>
+              {saving ? 'جاري الحفظ…' : 'حفظ'}
+            </PrimaryButton>
+          </>
+        }
+      >
+        <form id="add-product-form" onSubmit={handleSubmit} className="space-y-4">
+          <FormError>{formError}</FormError>
+          <ProductFormFields f={form} setF={setForm} />
+          <Field label="المخزون الابتدائي" type="number" min="0" value={form.stock} placeholder="0"
+            onChange={e => setForm(f => ({ ...f, stock: e.target.value }))} />
+        </form>
+      </Modal>
 
       {/* Edit Modal */}
-      {editItem && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" dir="rtl">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-5 border-b border-slate-200 sticky top-0 bg-white">
-              <h2 className="text-lg font-semibold text-slate-900">تعديل بيانات المنتج</h2>
-              <button onClick={() => setEditItem(null)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
-            </div>
-            <form onSubmit={handleEdit} className="p-5 space-y-4">
-              {editError && <div className="text-red-600 text-sm bg-red-50 border border-red-200 p-3 rounded-lg">{editError}</div>}
-              <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg text-xs text-amber-700">
-                ملاحظة: لا يمكن تعديل المخزون مباشرة — استخدم &quot;تسويات المخزون&quot; لذلك.
-              </div>
-              <ProductFormFields f={editForm} setF={setEditForm} />
-              <div className="flex gap-3 pt-1">
-                <button type="submit" disabled={editSaving}
-                  className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                  {editSaving ? 'جاري الحفظ…' : 'حفظ التعديلات'}
-                </button>
-                <button type="button" onClick={() => setEditItem(null)}
-                  className="flex-1 bg-slate-100 text-slate-700 rounded-lg py-2 text-sm font-medium hover:bg-slate-200 transition-colors">
-                  إلغاء
-                </button>
-              </div>
-            </form>
+      <Modal
+        open={!!editItem}
+        onClose={() => setEditItem(null)}
+        title="تعديل بيانات المنتج"
+        size="lg"
+        footer={
+          <>
+            <SecondaryButton onClick={() => setEditItem(null)}>إلغاء</SecondaryButton>
+            <PrimaryButton type="submit" form="edit-product-form" disabled={editSaving}>
+              {editSaving ? 'جاري الحفظ…' : 'حفظ التعديلات'}
+            </PrimaryButton>
+          </>
+        }
+      >
+        <form id="edit-product-form" onSubmit={handleEdit} className="space-y-4">
+          <FormError>{editError}</FormError>
+          <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-xs text-amber-700">
+            ملاحظة: لا يمكن تعديل المخزون مباشرة — استخدم فاتورة مشتريات أو مبيعات لذلك.
           </div>
-        </div>
-      )}
+          <ProductFormFields f={editForm} setF={setEditForm} />
+        </form>
+      </Modal>
 
       {/* Delete Confirm */}
       {deleteId && (

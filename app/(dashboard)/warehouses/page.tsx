@@ -7,6 +7,7 @@ import { queryKeys } from '@/lib/api/query-keys';
 import { Plus, X, Pencil, Trash2, CheckCircle, XCircle, Warehouse } from 'lucide-react';
 import { CardGridSkeleton, EmptyState, ErrorBanner, Toast, useToast } from '@/components/ui/patterns';
 import { InventoryLayout } from '@/components/inventory/InventoryLayout';
+import { Modal, Field, PrimaryButton, SecondaryButton, FormError } from '@/components/ui/modal';
 
 interface WarehouseItem {
   id: string;
@@ -20,16 +21,6 @@ interface WarehouseItem {
 }
 
 const emptyForm = { code: '', nameAr: '', nameEn: '', address: '', phone: '', manager: '' };
-
-function InputField({ label, required, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string; required?: boolean }) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-slate-700 mb-1">{label}{required && ' *'}</label>
-      <input {...props} required={required}
-        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-    </div>
-  );
-}
 
 export default function WarehousesPage() {
   const qc = useQueryClient();
@@ -124,18 +115,18 @@ export default function WarehousesPage() {
   const WarehouseFormFields = ({ f, setF }: { f: typeof emptyForm; setF: (fn: (prev: typeof emptyForm) => typeof emptyForm) => void }) => (
     <>
       <div className="grid grid-cols-2 gap-3">
-        <InputField label="الرمز" required value={f.code} placeholder="WH-001"
+        <Field label="الرمز" required value={f.code} placeholder="WH-001"
           onChange={e => setF(p => ({ ...p, code: e.target.value }))} />
-        <InputField label="الهاتف" value={f.phone} placeholder="0501234567"
+        <Field label="الهاتف" value={f.phone} placeholder="0501234567"
           onChange={e => setF(p => ({ ...p, phone: e.target.value }))} />
       </div>
-      <InputField label="الاسم بالعربية" required value={f.nameAr} placeholder="المستودع الرئيسي"
+      <Field label="الاسم بالعربية" required value={f.nameAr} placeholder="المستودع الرئيسي"
         onChange={e => setF(p => ({ ...p, nameAr: e.target.value }))} />
-      <InputField label="الاسم بالإنجليزية" value={f.nameEn} placeholder="Main Warehouse (اختياري)"
+      <Field label="الاسم بالإنجليزية" value={f.nameEn} placeholder="Main Warehouse (اختياري)"
         onChange={e => setF(p => ({ ...p, nameEn: e.target.value }))} />
-      <InputField label="العنوان" value={f.address} placeholder="القاهرة، مصر"
+      <Field label="العنوان" value={f.address} placeholder="القاهرة، مصر"
         onChange={e => setF(p => ({ ...p, address: e.target.value }))} />
-      <InputField label="المدير المسؤول" value={f.manager} placeholder="أحمد محمد"
+      <Field label="المدير المسؤول" value={f.manager} placeholder="أحمد محمد"
         onChange={e => setF(p => ({ ...p, manager: e.target.value }))} />
     </>
   );
@@ -204,56 +195,44 @@ export default function WarehousesPage() {
       )}
 
       {/* Add Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" dir="rtl">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-            <div className="flex items-center justify-between p-5 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-900">إضافة مستودع جديد</h2>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
-            </div>
-            <form onSubmit={handleSubmit} className="p-5 space-y-4">
-              {formError && <div className="text-red-600 text-sm bg-red-50 border border-red-200 p-3 rounded-lg">{formError}</div>}
-              <WarehouseFormFields f={form} setF={setForm} />
-              <div className="flex gap-3 pt-1">
-                <button type="submit" disabled={saving}
-                  className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                  {saving ? 'جاري الحفظ…' : 'حفظ'}
-                </button>
-                <button type="button" onClick={() => setShowModal(false)}
-                  className="flex-1 bg-slate-100 text-slate-700 rounded-lg py-2 text-sm font-medium hover:bg-slate-200 transition-colors">
-                  إلغاء
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title="إضافة مستودع جديد"
+        footer={
+          <>
+            <SecondaryButton onClick={() => setShowModal(false)}>إلغاء</SecondaryButton>
+            <PrimaryButton type="submit" form="add-warehouse-form" disabled={saving}>
+              {saving ? 'جاري الحفظ…' : 'حفظ'}
+            </PrimaryButton>
+          </>
+        }
+      >
+        <form id="add-warehouse-form" onSubmit={handleSubmit} className="space-y-4">
+          <FormError>{formError}</FormError>
+          <WarehouseFormFields f={form} setF={setForm} />
+        </form>
+      </Modal>
 
       {/* Edit Modal */}
-      {editItem && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" dir="rtl">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-            <div className="flex items-center justify-between p-5 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-900">تعديل بيانات المستودع</h2>
-              <button onClick={() => setEditItem(null)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
-            </div>
-            <form onSubmit={handleEdit} className="p-5 space-y-4">
-              {editError && <div className="text-red-600 text-sm bg-red-50 border border-red-200 p-3 rounded-lg">{editError}</div>}
-              <WarehouseFormFields f={editForm} setF={setEditForm} />
-              <div className="flex gap-3 pt-1">
-                <button type="submit" disabled={editSaving}
-                  className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                  {editSaving ? 'جاري الحفظ…' : 'حفظ التعديلات'}
-                </button>
-                <button type="button" onClick={() => setEditItem(null)}
-                  className="flex-1 bg-slate-100 text-slate-700 rounded-lg py-2 text-sm font-medium hover:bg-slate-200 transition-colors">
-                  إلغاء
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={!!editItem}
+        onClose={() => setEditItem(null)}
+        title="تعديل بيانات المستودع"
+        footer={
+          <>
+            <SecondaryButton onClick={() => setEditItem(null)}>إلغاء</SecondaryButton>
+            <PrimaryButton type="submit" form="edit-warehouse-form" disabled={editSaving}>
+              {editSaving ? 'جاري الحفظ…' : 'حفظ التعديلات'}
+            </PrimaryButton>
+          </>
+        }
+      >
+        <form id="edit-warehouse-form" onSubmit={handleEdit} className="space-y-4">
+          <FormError>{editError}</FormError>
+          <WarehouseFormFields f={editForm} setF={setEditForm} />
+        </form>
+      </Modal>
 
       {/* Delete Confirm */}
       {deleteId && (
