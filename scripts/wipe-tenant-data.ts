@@ -93,6 +93,20 @@ async function main() {
   `);
   console.log(`🗑️   Deleted ${orphanResult} orphan tenants (no users linked).`);
 
+  // 2c. Re-create SystemSettings with initialized=true so the login page
+  //     doesn't lock the system out after a wipe. Without this, every
+  //     request returns "System is not initialized" until manually fixed.
+  if (allTables.includes('SystemSettings')) {
+    await (prisma as any).systemSettings.create({
+      data: {
+        initialized:    true,
+        locked:         false,
+        productionMode: process.env.NODE_ENV === 'production',
+      },
+    });
+    console.log('🔧  Re-created SystemSettings (initialized=true).');
+  }
+
   // 3. Sanity counts on a few representative tables.
   const samples = [
     'SalesInvoice', 'PurchaseInvoice', 'Customer', 'Supplier',
