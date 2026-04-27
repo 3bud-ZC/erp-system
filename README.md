@@ -10,9 +10,12 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?style=flat-square&logo=postgresql)](https://www.postgresql.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-3.4-38B2AC?style=flat-square&logo=tailwind-css)](https://tailwindcss.com)
 [![Tests](https://img.shields.io/badge/Tests-135%20passing-success?style=flat-square)]()
+[![Release](https://img.shields.io/badge/Release-v1.0%20final-blue?style=flat-square)]()
 [![Production Ready](https://img.shields.io/badge/Status-Production%20Ready-success?style=flat-square)]()
 
 [Features](#-features) · [Quick Start](#-quick-start) · [API](#-api-reference) · [Deploy](#-deployment) · [Demo](#-live-demo)
+
+**Release status:** v1.0 final — production ready, ready for client handoff. Default branch: `final`.
 
 </div>
 
@@ -20,9 +23,9 @@
 
 ## 🎯 Overview
 
-A fully integrated ERP system covering inventory, sales, purchasing, manufacturing,
-and double-entry accounting — built with modern web technologies and production-grade
-safety guards. Bilingual UI (Arabic RTL + English).
+A fully integrated ERP platform covering inventory, sales, purchasing, manufacturing,
+and double-entry accounting — built with Next.js 14, TypeScript, Prisma, and PostgreSQL.
+Production-grade safety guards and a bilingual UI (Arabic RTL + English).
 
 ### Highlights
 
@@ -45,7 +48,7 @@ safety guards. Bilingual UI (Arabic RTL + English).
 ### Local setup (5 minutes)
 
 ```bash
-# 1. Clone & install
+# 1. Clone & install (default branch is `final`)
 git clone https://github.com/3bud-ZC/erp-system.git
 cd erp-system
 npm install
