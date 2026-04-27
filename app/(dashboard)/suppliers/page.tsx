@@ -8,7 +8,6 @@ import { Plus, X, Pencil, Trash2, FileText, AlertCircle, Search, Truck } from 'l
 import Link from 'next/link';
 import { TableSkeleton, EmptyState, ErrorBanner, Toast, useToast } from '@/components/ui/patterns';
 import { ServicesLayout } from '@/components/services/ServicesLayout';
-import { Modal, Field, PrimaryButton, SecondaryButton, FormError, Section, FieldGrid } from '@/components/ui/modal';
 
 interface Supplier {
   id: string;
@@ -26,8 +25,6 @@ function fmtEGP(v?: number | null) {
   return v.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م';
 }
 
-const emptyForm = { code: '', nameAr: '', nameEn: '', email: '', phone: '', creditLimit: '' };
-
 const TABLE_COLS = ['w-16', 'w-36', 'w-24', 'w-32', 'w-24', 'w-20'];
 
 export default function SuppliersPage() {
@@ -40,17 +37,7 @@ export default function SuppliersPage() {
   const suppliers = useMemo(() => suppliersQ.data ?? [], [suppliersQ.data]);
   const loading = suppliersQ.isLoading;
   const error = suppliersQ.error ? (suppliersQ.error as Error).message : null;
-  const [search, setSearch]       = useState('');
-
-  const [showModal, setShowModal] = useState(false);
-  const [saving, setSaving]       = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [form, setForm]           = useState(emptyForm);
-
-  const [editItem, setEditItem]   = useState<Supplier | null>(null);
-  const [editForm, setEditForm]   = useState(emptyForm);
-  const [editSaving, setEditSaving] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
   const [deleteId, setDeleteId]   = useState<string | null>(null);
   const [deleting, setDeleting]   = useState(false);
@@ -72,54 +59,6 @@ export default function SuppliersPage() {
       (s.email || '').toLowerCase().includes(search.toLowerCase())
     ), [suppliers, search]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true); setFormError(null);
-    try {
-      const res = await fetch('/api/suppliers', {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: form.code, nameAr: form.nameAr,
-          ...(form.nameEn && { nameEn: form.nameEn }),
-          ...(form.email && { email: form.email }),
-          ...(form.phone && { phone: form.phone }),
-          ...(form.creditLimit && { creditLimit: Number(form.creditLimit) }),
-        }),
-      });
-      const j = await res.json();
-      if (j.success) { setShowModal(false); setForm(emptyForm); load(); showToast('تم إضافة المورد بنجاح'); }
-      else setFormError(j.message || j.error || 'فشل الحفظ');
-    } catch { setFormError('تعذر الاتصال بالخادم'); }
-    finally { setSaving(false); }
-  }
-
-  function openEdit(s: Supplier) {
-    setEditItem(s);
-    setEditForm({ code: s.code, nameAr: s.nameAr, nameEn: s.nameEn || '', email: s.email || '', phone: s.phone || '',
-      creditLimit: s.creditLimit != null ? String(s.creditLimit) : '' });
-    setEditError(null);
-  }
-
-  async function handleEdit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!editItem) return;
-    setEditSaving(true); setEditError(null);
-    try {
-      const res = await fetch('/api/suppliers', {
-        method: 'PUT', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editItem.id, code: editForm.code, nameAr: editForm.nameAr,
-          nameEn: editForm.nameEn || null, email: editForm.email || null, phone: editForm.phone || null,
-          creditLimit: editForm.creditLimit ? Number(editForm.creditLimit) : null }),
-      });
-      const j = await res.json();
-      if (j.success) { setEditItem(null); load(); showToast('تم تحديث بيانات المورد'); }
-      else setEditError(j.message || j.error || 'فشل الحفظ');
-    } catch { setEditError('تعذر الاتصال بالخادم'); }
-    finally { setEditSaving(false); }
-  }
-
   async function handleDelete() {
     if (!deleteId) return;
     setDeleting(true);
@@ -137,10 +76,10 @@ export default function SuppliersPage() {
       title="الموردون"
       subtitle={loading ? 'جاري التحميل…' : `${suppliers.length} مورد`}
       toolbar={
-        <button onClick={() => setShowModal(true)}
+        <Link href="/suppliers/new"
           className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all text-sm font-medium">
           <Plus className="w-4 h-4" /> إضافة مورد
-        </button>
+        </Link>
       }
     >
       <Toast toast={toast} />
@@ -200,10 +139,10 @@ export default function SuppliersPage() {
                         className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="فواتير المورد">
                         <FileText className="w-4 h-4" />
                       </Link>
-                      <button onClick={() => openEdit(s)}
+                      <Link href={`/suppliers/${s.id}/edit`}
                         className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="تعديل">
                         <Pencil className="w-4 h-4" />
-                      </button>
+                      </Link>
                       <button onClick={() => { setDeleteId(s.id); setDeleteError(null); }}
                         className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="حذف">
                         <Trash2 className="w-4 h-4" />
@@ -216,98 +155,6 @@ export default function SuppliersPage() {
           </table>
         </div>
       )}
-
-      {/* Add Modal */}
-      <Modal
-        open={showModal}
-        onClose={() => setShowModal(false)}
-        title="إضافة مورد جديد"
-        subtitle="أدخل بيانات المورد في الأقسام المختلفة"
-        size="xl"
-        icon={<Truck className="w-5 h-5" />}
-        footer={
-          <>
-            <SecondaryButton onClick={() => setShowModal(false)}>إلغاء</SecondaryButton>
-            <PrimaryButton type="submit" form="add-supplier-form" disabled={saving}>
-              {saving ? 'جاري الحفظ…' : 'حفظ المورد'}
-            </PrimaryButton>
-          </>
-        }
-      >
-        <form id="add-supplier-form" onSubmit={handleSubmit} className="space-y-5">
-          <FormError>{formError}</FormError>
-
-          <Section title="البيانات الأساسية">
-            <FieldGrid>
-              <Field label="الرمز" required value={form.code} placeholder="SUP-001"
-                onChange={e => setForm(f => ({ ...f, code: e.target.value }))} />
-              <Field label="حد الائتمان (ج.م)" type="number" min="0" value={form.creditLimit} placeholder="0"
-                onChange={e => setForm(f => ({ ...f, creditLimit: e.target.value }))} />
-              <Field label="الاسم بالعربية" required value={form.nameAr} placeholder="شركة التوريد"
-                className="sm:col-span-2"
-                onChange={e => setForm(f => ({ ...f, nameAr: e.target.value }))} />
-              <Field label="الاسم بالإنجليزية" value={form.nameEn} placeholder="Supply Company (اختياري)"
-                className="sm:col-span-2"
-                onChange={e => setForm(f => ({ ...f, nameEn: e.target.value }))} />
-            </FieldGrid>
-          </Section>
-
-          <Section title="بيانات التواصل">
-            <FieldGrid>
-              <Field label="الهاتف" value={form.phone} placeholder="0501234567"
-                onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
-              <Field label="البريد الإلكتروني" type="email" value={form.email} placeholder="info@supplier.com"
-                onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
-            </FieldGrid>
-          </Section>
-        </form>
-      </Modal>
-
-      {/* Edit Modal */}
-      <Modal
-        open={!!editItem}
-        onClose={() => setEditItem(null)}
-        title="تعديل بيانات المورد"
-        subtitle={editItem?.nameAr}
-        size="xl"
-        icon={<Truck className="w-5 h-5" />}
-        footer={
-          <>
-            <SecondaryButton onClick={() => setEditItem(null)}>إلغاء</SecondaryButton>
-            <PrimaryButton type="submit" form="edit-supplier-form" disabled={editSaving}>
-              {editSaving ? 'جاري الحفظ…' : 'حفظ التعديلات'}
-            </PrimaryButton>
-          </>
-        }
-      >
-        <form id="edit-supplier-form" onSubmit={handleEdit} className="space-y-5">
-          <FormError>{editError}</FormError>
-
-          <Section title="البيانات الأساسية">
-            <FieldGrid>
-              <Field label="الرمز" required value={editForm.code}
-                onChange={e => setEditForm(f => ({ ...f, code: e.target.value }))} />
-              <Field label="حد الائتمان (ج.م)" type="number" min="0" value={editForm.creditLimit}
-                onChange={e => setEditForm(f => ({ ...f, creditLimit: e.target.value }))} />
-              <Field label="الاسم بالعربية" required value={editForm.nameAr}
-                className="sm:col-span-2"
-                onChange={e => setEditForm(f => ({ ...f, nameAr: e.target.value }))} />
-              <Field label="الاسم بالإنجليزية" value={editForm.nameEn}
-                className="sm:col-span-2"
-                onChange={e => setEditForm(f => ({ ...f, nameEn: e.target.value }))} />
-            </FieldGrid>
-          </Section>
-
-          <Section title="بيانات التواصل">
-            <FieldGrid>
-              <Field label="الهاتف" value={editForm.phone}
-                onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} />
-              <Field label="البريد الإلكتروني" type="email" value={editForm.email}
-                onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} />
-            </FieldGrid>
-          </Section>
-        </form>
-      </Modal>
 
       {/* Delete Confirm */}
       {deleteId && (

@@ -334,13 +334,40 @@ export async function PUT(request: Request) {
 
     /* ── Sanitize items: drop empty / invalid rows instead of failing ── */
     const items: any[] = Array.isArray(rawItems)
-      ? rawItems.filter((it: any) =>
-          it && it.productId && Number(it.quantity) > 0 && Number(it.price) >= 0,
-        )
+      ? rawItems
+          .filter((it: any) =>
+            it && it.productId && Number(it.quantity) > 0 && Number(it.price) >= 0,
+          )
+          .map((it: any) => {
+            const qty   = Number(it.quantity) || 0;
+            const price = Number(it.price)    || 0;
+            return {
+              productId:   it.productId,
+              description: it.description ?? null,
+              quantity:    qty,
+              price:       price,
+              total:       qty * price,
+            };
+          })
       : [];
     if (items.length === 0) {
       return apiError('يجب أن تحتوي الفاتورة على صنف واحد على الأقل بكمية وسعر صالحين', 400);
     }
+
+    /* ── Header-level discount: prefer `discount` (money) over % ── */
+    const subtotal = items.reduce(
+      (s: number, it: any) => s + Number(it.quantity) * Number(it.price), 0,
+    );
+    const explicitDisc = Number(invoiceData.discount ?? 0);
+    const discPct      = Number(invoiceData.discountPercent ?? 0);
+    const headerDisc   = explicitDisc > 0
+      ? explicitDisc
+      : (subtotal * Math.max(0, Math.min(100, discPct))) / 100;
+    invoiceData.discount   = headerDisc;
+    invoiceData.total      = subtotal;
+    invoiceData.grandTotal = Math.max(0, subtotal - headerDisc);
+    // `discountPercent` isn't a column on SalesInvoice — drop it before update.
+    delete invoiceData.discountPercent;
 
     const warnings: string[] = [];
 

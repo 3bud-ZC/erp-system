@@ -103,21 +103,29 @@ export function Modal({ open, onClose, title, subtitle, size = 'lg', icon, child
 /* ───────── Card-style Section (same look as the invoice form) ── */
 
 interface SectionProps {
-  title?:    string;
-  action?:   React.ReactNode;
-  children:  React.ReactNode;
+  title?:     string;
+  subtitle?:  string;
+  action?:    React.ReactNode;
+  children:   React.ReactNode;
   className?: string;
 }
 
-export function Section({ title, action, children, className }: SectionProps) {
+export function Section({ title, subtitle, action, children, className }: SectionProps) {
   return (
     <section className={cn(
       'bg-white rounded-xl shadow-sm border border-slate-200 p-5',
       className,
     )}>
       {(title || action) && (
-        <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2">
-          {title && <h3 className="text-sm font-semibold text-slate-700">{title}</h3>}
+        <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2 gap-3">
+          {title && (
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-slate-700">{title}</h3>
+              {subtitle && (
+                <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>
+              )}
+            </div>
+          )}
           {action}
         </div>
       )}

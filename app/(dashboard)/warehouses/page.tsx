@@ -4,10 +4,10 @@ import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet } from '@/lib/api/fetcher';
 import { queryKeys } from '@/lib/api/query-keys';
-import { Plus, X, Pencil, Trash2, CheckCircle, XCircle, Warehouse } from 'lucide-react';
+import { Plus, Pencil, Trash2, CheckCircle, XCircle, Warehouse } from 'lucide-react';
+import Link from 'next/link';
 import { CardGridSkeleton, EmptyState, ErrorBanner, Toast, useToast } from '@/components/ui/patterns';
 import { InventoryLayout } from '@/components/inventory/InventoryLayout';
-import { Modal, Field, PrimaryButton, SecondaryButton, FormError, Section, FieldGrid } from '@/components/ui/modal';
 
 interface WarehouseItem {
   id: string;
@@ -20,8 +20,6 @@ interface WarehouseItem {
   isActive?: boolean;
 }
 
-const emptyForm = { code: '', nameAr: '', nameEn: '', address: '', phone: '', manager: '' };
-
 export default function WarehousesPage() {
   const qc = useQueryClient();
 
@@ -33,16 +31,6 @@ export default function WarehousesPage() {
   const loading    = warehousesQ.isLoading;
   const error      = warehousesQ.error ? (warehousesQ.error as Error).message : null;
 
-  const [showModal, setShowModal]   = useState(false);
-  const [saving, setSaving]         = useState(false);
-  const [formError, setFormError]   = useState<string | null>(null);
-  const [form, setForm]             = useState(emptyForm);
-
-  const [editItem, setEditItem]     = useState<WarehouseItem | null>(null);
-  const [editForm, setEditForm]     = useState(emptyForm);
-  const [editSaving, setEditSaving] = useState(false);
-  const [editError, setEditError]   = useState<string | null>(null);
-
   const [deleteId, setDeleteId]     = useState<string | null>(null);
   const [deleting, setDeleting]     = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -52,53 +40,6 @@ export default function WarehousesPage() {
   const reload = useCallback(() => {
     qc.invalidateQueries({ queryKey: queryKeys.warehouses });
   }, [qc]);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true); setFormError(null);
-    try {
-      const res = await fetch('/api/warehouses', {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: form.code, nameAr: form.nameAr,
-          ...(form.nameEn && { nameEn: form.nameEn }),
-          ...(form.address && { address: form.address }),
-          ...(form.phone && { phone: form.phone }),
-          ...(form.manager && { manager: form.manager }),
-        }),
-      });
-      const j = await res.json();
-      if (j.success) { setShowModal(false); setForm(emptyForm); reload(); showToast('تم إضافة المستودع بنجاح'); }
-      else setFormError(j.message || j.error || 'فشل الحفظ');
-    } catch { setFormError('تعذر الاتصال بالخادم'); }
-    finally { setSaving(false); }
-  }
-
-  function openEdit(w: WarehouseItem) {
-    setEditItem(w);
-    setEditForm({ code: w.code, nameAr: w.nameAr, nameEn: w.nameEn || '', address: w.address || '', phone: w.phone || '', manager: w.manager || '' });
-    setEditError(null);
-  }
-
-  async function handleEdit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!editItem) return;
-    setEditSaving(true); setEditError(null);
-    try {
-      const res = await fetch('/api/warehouses', {
-        method: 'PUT', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editItem.id, code: editForm.code, nameAr: editForm.nameAr,
-          nameEn: editForm.nameEn || null, address: editForm.address || null, phone: editForm.phone || null,
-          manager: editForm.manager || null }),
-      });
-      const j = await res.json();
-      if (j.success) { setEditItem(null); reload(); showToast('تم تحديث بيانات المستودع'); }
-      else setEditError(j.message || j.error || 'فشل الحفظ');
-    } catch { setEditError('تعذر الاتصال بالخادم'); }
-    finally { setEditSaving(false); }
-  }
 
   async function handleDelete() {
     if (!deleteId) return;
@@ -112,45 +53,15 @@ export default function WarehousesPage() {
     finally { setDeleting(false); }
   }
 
-  const WarehouseFormFields = ({ f, setF }: { f: typeof emptyForm; setF: (fn: (prev: typeof emptyForm) => typeof emptyForm) => void }) => (
-    <>
-      <Section title="البيانات الأساسية">
-        <FieldGrid>
-          <Field label="الرمز" required value={f.code} placeholder="WH-001"
-            onChange={e => setF(p => ({ ...p, code: e.target.value }))} />
-          <Field label="الهاتف" value={f.phone} placeholder="0501234567"
-            onChange={e => setF(p => ({ ...p, phone: e.target.value }))} />
-          <Field label="الاسم بالعربية" required value={f.nameAr} placeholder="المستودع الرئيسي"
-            className="sm:col-span-2"
-            onChange={e => setF(p => ({ ...p, nameAr: e.target.value }))} />
-          <Field label="الاسم بالإنجليزية" value={f.nameEn} placeholder="Main Warehouse (اختياري)"
-            className="sm:col-span-2"
-            onChange={e => setF(p => ({ ...p, nameEn: e.target.value }))} />
-        </FieldGrid>
-      </Section>
-
-      <Section title="العنوان والإدارة">
-        <FieldGrid>
-          <Field label="العنوان" value={f.address} placeholder="القاهرة، مصر"
-            className="sm:col-span-2"
-            onChange={e => setF(p => ({ ...p, address: e.target.value }))} />
-          <Field label="المدير المسؤول" value={f.manager} placeholder="أحمد محمد"
-            className="sm:col-span-2"
-            onChange={e => setF(p => ({ ...p, manager: e.target.value }))} />
-        </FieldGrid>
-      </Section>
-    </>
-  );
-
   return (
     <InventoryLayout
       title="المستودعات"
       subtitle={loading ? 'جاري التحميل…' : `${warehouses.length} مستودع`}
       toolbar={
-        <button onClick={() => setShowModal(true)}
+        <Link href="/warehouses/new"
           className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all text-sm font-medium">
           <Plus className="w-4 h-4" /> إضافة مستودع
-        </button>
+        </Link>
       }
     >
       <Toast toast={toast} />
@@ -184,10 +95,10 @@ export default function WarehousesPage() {
                       <XCircle className="w-3 h-3" /> غير نشط
                     </span>
                   )}
-                  <button onClick={() => openEdit(w)}
+                  <Link href={`/warehouses/${w.id}/edit`}
                     className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="تعديل">
                     <Pencil className="w-4 h-4" />
-                  </button>
+                  </Link>
                   <button onClick={() => { setDeleteId(w.id); setDeleteError(null); }}
                     className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="حذف">
                     <Trash2 className="w-4 h-4" />
@@ -204,52 +115,6 @@ export default function WarehousesPage() {
           ))}
         </div>
       )}
-
-      {/* Add Modal */}
-      <Modal
-        open={showModal}
-        onClose={() => setShowModal(false)}
-        title="إضافة مستودع جديد"
-        subtitle="أدخل بيانات المستودع في الأقسام المختلفة"
-        size="xl"
-        icon={<Warehouse className="w-5 h-5" />}
-        footer={
-          <>
-            <SecondaryButton onClick={() => setShowModal(false)}>إلغاء</SecondaryButton>
-            <PrimaryButton type="submit" form="add-warehouse-form" disabled={saving}>
-              {saving ? 'جاري الحفظ…' : 'حفظ المستودع'}
-            </PrimaryButton>
-          </>
-        }
-      >
-        <form id="add-warehouse-form" onSubmit={handleSubmit} className="space-y-5">
-          <FormError>{formError}</FormError>
-          <WarehouseFormFields f={form} setF={setForm} />
-        </form>
-      </Modal>
-
-      {/* Edit Modal */}
-      <Modal
-        open={!!editItem}
-        onClose={() => setEditItem(null)}
-        title="تعديل بيانات المستودع"
-        subtitle={editItem?.nameAr}
-        size="xl"
-        icon={<Warehouse className="w-5 h-5" />}
-        footer={
-          <>
-            <SecondaryButton onClick={() => setEditItem(null)}>إلغاء</SecondaryButton>
-            <PrimaryButton type="submit" form="edit-warehouse-form" disabled={editSaving}>
-              {editSaving ? 'جاري الحفظ…' : 'حفظ التعديلات'}
-            </PrimaryButton>
-          </>
-        }
-      >
-        <form id="edit-warehouse-form" onSubmit={handleEdit} className="space-y-5">
-          <FormError>{editError}</FormError>
-          <WarehouseFormFields f={editForm} setF={setEditForm} />
-        </form>
-      </Modal>
 
       {/* Delete Confirm */}
       {deleteId && (

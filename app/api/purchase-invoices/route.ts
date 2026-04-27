@@ -107,17 +107,20 @@ export async function POST(request: Request) {
       }
 
       // Calculate totals server-side (ignore client-sent values).
-      // Per-line net = qty * price * (1 - disc%/100). The header total is
-      // the sum of the net line totals so it matches the JE booked below.
-      const lineNet = (item: any) => {
-        const qty   = Number(item.quantity) || 0;
-        const price = Number(item.price)    || 0;
-        const disc  = Number(item.discountPercent) || 0;
-        return qty * price * (1 - disc / 100);
-      };
-      const subtotal      = items.reduce((s: number, it: any) => s + Number(it.quantity) * Number(it.price), 0);
-      const discountTotal = subtotal - items.reduce((s: number, it: any) => s + lineNet(it), 0);
-      const total         = subtotal - discountTotal;
+      // Header-level discount: client sends either `discount` (money amount)
+      // or `discountPercent` (% of subtotal). The first wins if both arrive.
+      const subtotal       = items.reduce(
+        (s: number, it: any) => s + Number(it.quantity) * Number(it.price), 0,
+      );
+      const explicitDisc   = Number(invoiceData.discount ?? 0);
+      const discPct        = Number(invoiceData.discountPercent ?? 0);
+      const discountAmount = explicitDisc > 0
+        ? explicitDisc
+        : (subtotal * Math.max(0, Math.min(100, discPct))) / 100;
+      const total          = Math.max(0, subtotal - discountAmount);
+      // Strip the percentage so it doesn't end up in `data: { ...invoiceData }`
+      // (the schema doesn't have a `discountPercent` column on the header).
+      delete invoiceData.discountPercent;
 
       // Auto-generate invoiceNumber if missing/empty so the form's "(اختياري)"
       // hint matches reality. If the user typed one, we use it as-is.
@@ -134,16 +137,19 @@ export async function POST(request: Request) {
             invoiceNumber,
             tenantId: user.tenantId,   // always from server — never trust client
             total,
-            discount: discountTotal,
+            discount: discountAmount,
             items: {
-              create: items.map((item: any) => ({
-                productId:       item.productId,
-                description:     item.description ?? null,
-                quantity:        Number(item.quantity) || 0,
-                price:           Number(item.price) || 0,
-                discountPercent: Number(item.discountPercent) || 0,
-                total:           lineNet(item),
-              })),
+              create: items.map((item: any) => {
+                const qty   = Number(item.quantity) || 0;
+                const price = Number(item.price)    || 0;
+                return {
+                  productId:   item.productId,
+                  description: item.description ?? null,
+                  quantity:    qty,
+                  price:       price,
+                  total:       qty * price,
+                };
+              }),
             },
           },
           include: {
@@ -221,13 +227,39 @@ export async function PUT(request: Request) {
 
     /* ── Sanitize items ── */
     const items: any[] = Array.isArray(rawItems)
-      ? rawItems.filter((it: any) =>
-          it && it.productId && Number(it.quantity) > 0 && Number(it.price) >= 0,
-        )
+      ? rawItems
+          .filter((it: any) =>
+            it && it.productId && Number(it.quantity) > 0 && Number(it.price) >= 0,
+          )
+          .map((it: any) => {
+            const qty   = Number(it.quantity) || 0;
+            const price = Number(it.price)    || 0;
+            return {
+              productId:   it.productId,
+              description: it.description ?? null,
+              quantity:    qty,
+              price:       price,
+              total:       qty * price,
+            };
+          })
       : [];
     if (items.length === 0) {
       return apiError('يجب أن تحتوي الفاتورة على صنف واحد على الأقل بكمية وسعر صالحين', 400);
     }
+
+    /* ── Header-level discount: prefer `discount` (money) over % ── */
+    const subtotal = items.reduce(
+      (s: number, it: any) => s + Number(it.quantity) * Number(it.price), 0,
+    );
+    const explicitDisc = Number(invoiceData.discount ?? 0);
+    const discPct      = Number(invoiceData.discountPercent ?? 0);
+    const headerDisc   = explicitDisc > 0
+      ? explicitDisc
+      : (subtotal * Math.max(0, Math.min(100, discPct))) / 100;
+    invoiceData.discount   = headerDisc;
+    invoiceData.total      = subtotal;
+    invoiceData.grandTotal = Math.max(0, subtotal - headerDisc);
+    delete invoiceData.discountPercent;
 
     const warnings: string[] = [];
 

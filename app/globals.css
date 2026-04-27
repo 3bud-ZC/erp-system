@@ -352,3 +352,28 @@ body::before {
     animation: shimmer 2s infinite;
   }
 }
+
+/* ── Print rules ─────────────────────────────────────────────────────
+ *  Anything inside `.no-print` is hidden when printing. The body
+ *  background gradient is dropped to keep ink usage sane, and tabular
+ *  numbers honour their colours via `-webkit-print-color-adjust: exact`.
+ *  Used by all `/reports/*` pages and invoice print views.
+ */
+@media print {
+  body {
+    background: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  body::before { display: none !important; }
+  .no-print { display: none !important; }
+  .print-area { padding: 0 !important; margin: 0 !important; }
+  /* Hide the global sidebar + top header so the report fills the page. */
+  aside, nav[role="navigation"], header[role="banner"], .sidebar, .app-header {
+    display: none !important;
+  }
+  /* Make sure the main content takes full width during print. */
+  main { padding: 0 !important; margin: 0 !important; max-width: 100% !important; }
+  /* Force standard page margins. */
+  @page { margin: 1.2cm; }
+}

@@ -73,6 +73,13 @@ const navItems: NavItem[] = [
     title: 'التصنيع',
     href: '/manufacturing',
     icon: <Factory className="w-5 h-5" />,
+    children: [
+      { title: 'نظرة عامة',     href: '/manufacturing' },
+      { title: 'أوامر الإنتاج',  href: '/manufacturing/production-orders' },
+      { title: 'قوائم المواد',   href: '/manufacturing/bom' },
+      { title: 'خطوط الإنتاج',   href: '/manufacturing/production-lines' },
+      { title: 'الفاقد',          href: '/manufacturing/waste' },
+    ],
   },
   {
     title: 'المحاسبة',
@@ -89,6 +96,19 @@ const navItems: NavItem[] = [
     title: 'التقارير',
     href: '/reports',
     icon: <PieChart className="w-5 h-5" />,
+    children: [
+      { title: 'نظرة عامة',         href: '/reports' },
+      { title: 'تقرير المبيعات',   href: '/reports/sales' },
+      { title: 'تقرير المشتريات',  href: '/reports/purchases' },
+      { title: 'تقرير المخازن',     href: '/reports/inventory' },
+      { title: 'تقرير المصروفات',   href: '/reports/expenses' },
+      { title: 'كشف حساب عميل',    href: '/reports/customer-statement' },
+      { title: 'كشف حساب مورد',    href: '/reports/supplier-statement' },
+      { title: 'تقرير الأعمار',     href: '/reports/aging' },
+      { title: 'قائمة الدخل',         href: '/reports/profit-loss' },
+      { title: 'الميزانية العمومية', href: '/reports/balance-sheet' },
+      { title: 'تقرير التصنيع',    href: '/reports/manufacturing' },
+    ],
   },
 ];
 
@@ -102,10 +122,12 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { user } = useAuthStore();
   // افتح المجموعات ذات الصلة تلقائياً حسب المسار الحالي.
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => ({
-    '/services':   pathname?.startsWith('/services')   || pathname?.startsWith('/customers')  || pathname?.startsWith('/suppliers')  || false,
-    '/inventory':  pathname?.startsWith('/inventory')  || pathname?.startsWith('/warehouses') || false,
-    '/invoices':   pathname?.startsWith('/invoices')   ?? false,
-    '/accounting': pathname?.startsWith('/accounting') ?? false,
+    '/services':      pathname?.startsWith('/services')      || pathname?.startsWith('/customers')  || pathname?.startsWith('/suppliers')  || false,
+    '/inventory':     pathname?.startsWith('/inventory')     || pathname?.startsWith('/warehouses') || false,
+    '/invoices':      pathname?.startsWith('/invoices')      ?? false,
+    '/manufacturing': pathname?.startsWith('/manufacturing') ?? false,
+    '/accounting':    pathname?.startsWith('/accounting')    ?? false,
+    '/reports':       pathname?.startsWith('/reports')       ?? false,
   }));
   const toggleGroup = (href: string) =>
     setOpenGroups(prev => ({ ...prev, [href]: !prev[href] }));

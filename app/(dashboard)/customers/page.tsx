@@ -8,7 +8,6 @@ import { Plus, X, Pencil, Trash2, FileText, AlertCircle, Search, Users } from 'l
 import Link from 'next/link';
 import { TableSkeleton, EmptyState, ErrorBanner, Toast, useToast } from '@/components/ui/patterns';
 import { ServicesLayout } from '@/components/services/ServicesLayout';
-import { Modal, Field, PrimaryButton, SecondaryButton, FormError, Section, FieldGrid } from '@/components/ui/modal';
 
 interface Customer {
   id: string;
@@ -26,8 +25,6 @@ function fmtEGP(v?: number | null) {
   return v.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م';
 }
 
-const emptyForm = { code: '', nameAr: '', nameEn: '', email: '', phone: '', creditLimit: '' };
-
 const TABLE_COLS = ['w-16', 'w-36', 'w-24', 'w-32', 'w-24', 'w-24', 'w-20'];
 
 /* ─── Page ────────────────────────────────────────────────── */
@@ -41,19 +38,7 @@ export default function CustomersPage() {
   const customers = useMemo(() => customersQ.data ?? [], [customersQ.data]);
   const loading = customersQ.isLoading;
   const error = customersQ.error ? (customersQ.error as Error).message : null;
-  const [search, setSearch]       = useState('');
-
-  // Add modal
-  const [showModal, setShowModal] = useState(false);
-  const [saving, setSaving]       = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [form, setForm]           = useState(emptyForm);
-
-  // Edit modal
-  const [editItem, setEditItem]   = useState<Customer | null>(null);
-  const [editForm, setEditForm]   = useState(emptyForm);
-  const [editSaving, setEditSaving] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
   // Delete confirm
   const [deleteId, setDeleteId]   = useState<string | null>(null);
@@ -76,54 +61,6 @@ export default function CustomersPage() {
       (c.email || '').toLowerCase().includes(search.toLowerCase())
     ), [customers, search]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true); setFormError(null);
-    try {
-      const res = await fetch('/api/customers', {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: form.code, nameAr: form.nameAr,
-          ...(form.nameEn && { nameEn: form.nameEn }),
-          ...(form.email && { email: form.email }),
-          ...(form.phone && { phone: form.phone }),
-          ...(form.creditLimit && { creditLimit: Number(form.creditLimit) }),
-        }),
-      });
-      const j = await res.json();
-      if (j.success) { setShowModal(false); setForm(emptyForm); load(); showToast('تم إضافة العميل بنجاح'); }
-      else setFormError(j.message || j.error || 'فشل الحفظ');
-    } catch { setFormError('تعذر الاتصال بالخادم'); }
-    finally { setSaving(false); }
-  }
-
-  function openEdit(c: Customer) {
-    setEditItem(c);
-    setEditForm({ code: c.code, nameAr: c.nameAr, nameEn: c.nameEn || '', email: c.email || '', phone: c.phone || '',
-      creditLimit: c.creditLimit != null ? String(c.creditLimit) : '' });
-    setEditError(null);
-  }
-
-  async function handleEdit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!editItem) return;
-    setEditSaving(true); setEditError(null);
-    try {
-      const res = await fetch('/api/customers', {
-        method: 'PUT', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editItem.id, code: editForm.code, nameAr: editForm.nameAr,
-          nameEn: editForm.nameEn || null, email: editForm.email || null, phone: editForm.phone || null,
-          creditLimit: editForm.creditLimit ? Number(editForm.creditLimit) : null }),
-      });
-      const j = await res.json();
-      if (j.success) { setEditItem(null); load(); showToast('تم تحديث بيانات العميل'); }
-      else setEditError(j.message || j.error || 'فشل الحفظ');
-    } catch { setEditError('تعذر الاتصال بالخادم'); }
-    finally { setEditSaving(false); }
-  }
-
   async function handleDelete() {
     if (!deleteId) return;
     setDeleting(true);
@@ -141,10 +78,10 @@ export default function CustomersPage() {
       title="العملاء"
       subtitle={loading ? 'جاري التحميل…' : `${customers.length} عميل`}
       toolbar={
-        <button onClick={() => setShowModal(true)}
+        <Link href="/customers/new"
           className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all text-sm font-medium">
           <Plus className="w-4 h-4" /> إضافة عميل
-        </button>
+        </Link>
       }
     >
       <Toast toast={toast} />
@@ -215,10 +152,10 @@ export default function CustomersPage() {
                         className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="فواتير العميل">
                         <FileText className="w-4 h-4" />
                       </Link>
-                      <button onClick={() => openEdit(c)}
+                      <Link href={`/customers/${c.id}/edit`}
                         className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="تعديل">
                         <Pencil className="w-4 h-4" />
-                      </button>
+                      </Link>
                       <button onClick={() => { setDeleteId(c.id); setDeleteError(null); }}
                         className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="حذف">
                         <Trash2 className="w-4 h-4" />
@@ -231,98 +168,6 @@ export default function CustomersPage() {
           </table>
         </div>
       )}
-
-      {/* Add Modal */}
-      <Modal
-        open={showModal}
-        onClose={() => setShowModal(false)}
-        title="إضافة عميل جديد"
-        subtitle="أدخل بيانات العميل في الأقسام المختلفة"
-        size="xl"
-        icon={<Users className="w-5 h-5" />}
-        footer={
-          <>
-            <SecondaryButton onClick={() => setShowModal(false)}>إلغاء</SecondaryButton>
-            <PrimaryButton type="submit" form="add-customer-form" disabled={saving}>
-              {saving ? 'جاري الحفظ…' : 'حفظ العميل'}
-            </PrimaryButton>
-          </>
-        }
-      >
-        <form id="add-customer-form" onSubmit={handleSubmit} className="space-y-5">
-          <FormError>{formError}</FormError>
-
-          <Section title="البيانات الأساسية">
-            <FieldGrid>
-              <Field label="الرمز" required value={form.code} placeholder="CUS-001"
-                onChange={e => setForm(f => ({ ...f, code: e.target.value }))} />
-              <Field label="حد الائتمان (ج.م)" type="number" min="0" value={form.creditLimit} placeholder="0"
-                onChange={e => setForm(f => ({ ...f, creditLimit: e.target.value }))} />
-              <Field label="الاسم بالعربية" required value={form.nameAr} placeholder="شركة الأمل"
-                className="sm:col-span-2"
-                onChange={e => setForm(f => ({ ...f, nameAr: e.target.value }))} />
-              <Field label="الاسم بالإنجليزية" value={form.nameEn} placeholder="Al Amal Company (اختياري)"
-                className="sm:col-span-2"
-                onChange={e => setForm(f => ({ ...f, nameEn: e.target.value }))} />
-            </FieldGrid>
-          </Section>
-
-          <Section title="بيانات التواصل">
-            <FieldGrid>
-              <Field label="الهاتف" value={form.phone} placeholder="0501234567"
-                onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
-              <Field label="البريد الإلكتروني" type="email" value={form.email} placeholder="info@co.com"
-                onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
-            </FieldGrid>
-          </Section>
-        </form>
-      </Modal>
-
-      {/* Edit Modal */}
-      <Modal
-        open={!!editItem}
-        onClose={() => setEditItem(null)}
-        title="تعديل بيانات العميل"
-        subtitle={editItem?.nameAr}
-        size="xl"
-        icon={<Users className="w-5 h-5" />}
-        footer={
-          <>
-            <SecondaryButton onClick={() => setEditItem(null)}>إلغاء</SecondaryButton>
-            <PrimaryButton type="submit" form="edit-customer-form" disabled={editSaving}>
-              {editSaving ? 'جاري الحفظ…' : 'حفظ التعديلات'}
-            </PrimaryButton>
-          </>
-        }
-      >
-        <form id="edit-customer-form" onSubmit={handleEdit} className="space-y-5">
-          <FormError>{editError}</FormError>
-
-          <Section title="البيانات الأساسية">
-            <FieldGrid>
-              <Field label="الرمز" required value={editForm.code}
-                onChange={e => setEditForm(f => ({ ...f, code: e.target.value }))} />
-              <Field label="حد الائتمان (ج.م)" type="number" min="0" value={editForm.creditLimit}
-                onChange={e => setEditForm(f => ({ ...f, creditLimit: e.target.value }))} />
-              <Field label="الاسم بالعربية" required value={editForm.nameAr}
-                className="sm:col-span-2"
-                onChange={e => setEditForm(f => ({ ...f, nameAr: e.target.value }))} />
-              <Field label="الاسم بالإنجليزية" value={editForm.nameEn}
-                className="sm:col-span-2"
-                onChange={e => setEditForm(f => ({ ...f, nameEn: e.target.value }))} />
-            </FieldGrid>
-          </Section>
-
-          <Section title="بيانات التواصل">
-            <FieldGrid>
-              <Field label="الهاتف" value={editForm.phone}
-                onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} />
-              <Field label="البريد الإلكتروني" type="email" value={editForm.email}
-                onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} />
-            </FieldGrid>
-          </Section>
-        </form>
-      </Modal>
 
       {/* Delete Confirm */}
       {deleteId && (

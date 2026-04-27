@@ -20,13 +20,10 @@ interface ProductOption {
 interface UserOption   { id: string; name?: string | null; email: string; }
 
 interface InvoiceLine {
-  productId:        string;
-  description:      string;
-  quantity:         string;
-  price:            string;
-  /** Per-line discount as a percentage (0–100). Stored as a string so the
-   *  field can be empty while typing. */
-  discountPercent:  string;
+  productId:    string;
+  description:  string;
+  quantity:     string;
+  price:        string;
 }
 
 interface ExistingInvoice {
@@ -44,6 +41,7 @@ interface ExistingInvoice {
   paymentTermsDays?: number | null;
   currency?: string | null;
   template?: string | null;
+  /** Header-level discount amount in money. */
   discount?: number;
   total?: number;
   items?: Array<{
@@ -51,23 +49,20 @@ interface ExistingInvoice {
     description?: string | null;
     quantity: number;
     price: number;
-    discountPercent?: number;
   }>;
 }
 
 const emptyLine = (): InvoiceLine => ({
-  productId: '', description: '', quantity: '1', price: '', discountPercent: '0',
+  productId: '', description: '', quantity: '1', price: '',
 });
 
-/** Resolves the post-discount line total — used in both the form table
- *  and the totals card. Keeps a single, well-tested formula in one place. */
+/** Resolves the line total — used in both the form table and the totals
+ *  card. Lines no longer carry a discount; the discount is on the header. */
 function computeLineNet(l: InvoiceLine) {
-  const qty   = parseFloat(l.quantity)        || 0;
-  const price = parseFloat(l.price)           || 0;
-  const disc  = parseFloat(l.discountPercent) || 0;
+  const qty   = parseFloat(l.quantity) || 0;
+  const price = parseFloat(l.price)    || 0;
   const gross = qty * price;
-  const discountAmount = gross * (disc / 100);
-  return { gross, discountAmount, net: gross - discountAmount };
+  return { gross, net: gross };
 }
 
 /* ─── Main form ──────────────────────────────────────────────────── */
@@ -110,14 +105,23 @@ export function InvoiceForm({
   const [lines, setLines] = useState<InvoiceLine[]>(
     existing?.items?.length
       ? existing.items.map(it => ({
-          productId: it.productId,
+          productId:   it.productId,
           description: it.description ?? '',
-          quantity: String(it.quantity),
-          price: String(it.price),
-          discountPercent: String(it.discountPercent ?? 0),
+          quantity:    String(it.quantity),
+          price:       String(it.price),
         }))
       : [emptyLine()],
   );
+
+  /* Header-level discount as a percentage of the subtotal. We back-derive
+   * the percent from the saved discount + total when editing so the user
+   * sees the same value they originally entered. */
+  const initialDiscountPercent = (() => {
+    if (!existing?.discount || !existing.total || existing.total <= 0) return '0';
+    const pct = (existing.discount / existing.total) * 100;
+    return Number.isFinite(pct) ? String(Math.round(pct * 100) / 100) : '0';
+  })();
+  const [discountPercent, setDiscountPercent] = useState<string>(initialDiscountPercent);
 
   /* ── UI state ── */
   const [saving, setSaving] = useState(false);
@@ -139,15 +143,13 @@ export function InvoiceForm({
   }, [config.partyApi]);
 
   /* ── Calculations ── */
-  const { subtotal, totalDiscount, grandTotal } = useMemo(() => {
-    let gross = 0, disc = 0;
-    for (const l of lines) {
-      const r = computeLineNet(l);
-      gross += r.gross;
-      disc  += r.discountAmount;
-    }
-    return { subtotal: gross, totalDiscount: disc, grandTotal: gross - disc };
-  }, [lines]);
+  const { subtotal, discountAmount, grandTotal } = useMemo(() => {
+    let gross = 0;
+    for (const l of lines) gross += computeLineNet(l).gross;
+    const pct = Math.max(0, Math.min(100, parseFloat(discountPercent) || 0));
+    const disc = (gross * pct) / 100;
+    return { subtotal: gross, discountAmount: disc, grandTotal: gross - disc };
+  }, [lines, discountPercent]);
 
   /* ── Line helpers ── */
   const setLine = useCallback((i: number, field: keyof InvoiceLine, val: string) => {
@@ -219,24 +221,25 @@ export function InvoiceForm({
       template: template || 'default',
       ...(invoiceNumber.trim() && { invoiceNumber: invoiceNumber.trim() }),
       notes: notes.trim() || undefined,
-      total: subtotal,
+      total:      subtotal,
       grandTotal,
       // Include id in body for edit mode — the API also reads it from the URL
       // query string, but sending it both ways makes the request resilient to
       // any URL-rewriting middleware between the client and the server.
       ...(mode === 'edit' && existing ? { id: existing.id } : {}),
-      // Header-level discount is the sum of every line's discount amount,
-      // so the database stays in sync with the on-screen invoice summary.
-      discount: totalDiscount,
+      // Header-level discount stored as a money amount, while the entered
+      // percentage is round-tripped via `discountPercent`.
+      discount:        discountAmount,
+      discountPercent: parseFloat(discountPercent) || 0,
       items: validLines.map(l => {
-        const r = computeLineNet(l);
+        const qty   = parseFloat(l.quantity) || 1;
+        const price = parseFloat(l.price)    || 0;
         return {
-          productId:       l.productId,
-          description:     (l.description || '').trim() || undefined,
-          quantity:        parseFloat(l.quantity) || 1,
-          price:           parseFloat(l.price) || 0,
-          discountPercent: parseFloat(l.discountPercent) || 0,
-          total:           r.net,
+          productId:   l.productId,
+          description: (l.description || '').trim() || undefined,
+          quantity:    qty,
+          price:       price,
+          total:       qty * price,
         };
       }),
     };
@@ -265,7 +268,7 @@ export function InvoiceForm({
           setLines([emptyLine()]); setStatus('pending'); setPaymentStatus('cash');
           setInvoiceDate(new Date().toISOString().slice(0, 10));
           setIssueDate(new Date().toISOString().slice(0, 10));
-          setRepId(''); setPaymentTermsDays('0');
+          setRepId(''); setPaymentTermsDays('0'); setDiscountPercent('0');
         } else if (submitMode === 'print') {
           showToast('تم الحفظ، جاري فتح الطباعة…', 'success');
           if (newId) window.open(`/invoices/${config.routeBase}/${newId}/print`, '_blank');
@@ -288,7 +291,8 @@ export function InvoiceForm({
   }, [
     saveMode, partyId, invoiceDate, issueDate, status, paymentStatus, repId,
     paymentTermsDays, currency, template, invoiceNumber, notes, subtotal,
-    grandTotal, lines, config, mode, existing, router, showToast, products,
+    grandTotal, discountAmount, discountPercent, lines, config, mode, existing,
+    router, showToast, products,
   ]);
 
   /* ── Render ── */
@@ -433,11 +437,10 @@ export function InvoiceForm({
             <table className="w-full text-sm min-w-[820px]">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 w-[28%]">المنتج</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 w-[18%]">البيان</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 w-[10%]">الكمية</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 w-[32%]">المنتج</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 w-[22%]">البيان</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 w-[12%]">الكمية</th>
                   <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 w-[14%]">السعر</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 w-[10%]">خصم %</th>
                   <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 w-[15%]">الإجمالي</th>
                   <th className="w-[5%]"></th>
                 </tr>
@@ -475,12 +478,6 @@ export function InvoiceForm({
                           onChange={e => setLine(i, 'price', e.target.value)}
                           className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500" />
                       </td>
-                      <td className="px-2 py-1.5">
-                        <input type="number" min="0" max="100" step="0.01" value={line.discountPercent}
-                          onChange={e => setLine(i, 'discountPercent', e.target.value)}
-                          placeholder="0"
-                          className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                      </td>
                       <td className="px-2 py-1.5 text-center font-semibold text-slate-700 tabular-nums">
                         {fmtMoney(net)}
                       </td>
@@ -513,9 +510,29 @@ export function InvoiceForm({
             </h3>
             <div className="space-y-2 text-sm">
               <Row label="المجموع الفرعي" value={fmtMoney(subtotal)} />
-              {totalDiscount > 0 && (
-                <Row label="الخصم" value={`- ${fmtMoney(totalDiscount)}`} />
-              )}
+
+              {/* Header-level discount input — the user enters a percentage,
+                  the amount is computed against the subtotal. */}
+              <div className="flex justify-between items-center text-slate-600">
+                <label className="flex items-center gap-2">
+                  <span>خصم</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={discountPercent}
+                    onChange={e => setDiscountPercent(e.target.value)}
+                    placeholder="0"
+                    className="w-20 border border-slate-300 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:ring-2 focus:ring-blue-500 tabular-nums"
+                  />
+                  <span className="text-xs text-slate-400">%</span>
+                </label>
+                <span className="tabular-nums">
+                  {discountAmount > 0 ? `- ${fmtMoney(discountAmount)}` : fmtMoney(0)}
+                </span>
+              </div>
+
               <Row label="الإجمالي" value={fmtMoney(grandTotal)} bold />
             </div>
           </div>

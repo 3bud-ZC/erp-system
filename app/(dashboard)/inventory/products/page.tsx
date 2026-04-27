@@ -5,9 +5,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet } from '@/lib/api/fetcher';
 import { queryKeys } from '@/lib/api/query-keys';
 import { Plus, AlertTriangle, X, Pencil, Trash2, Search, Package, CheckCircle } from 'lucide-react';
+import Link from 'next/link';
 import { TableSkeleton, EmptyState, ErrorBanner, Toast, useToast } from '@/components/ui/patterns';
 import { InventoryLayout } from '@/components/inventory/InventoryLayout';
-import { Modal, Field, SelectField, PrimaryButton, SecondaryButton, FormError, Section, FieldGrid } from '@/components/ui/modal';
 
 interface Product {
   id: string;
@@ -46,8 +46,6 @@ const typeTabs = [
   { key: 'packaging',        label: 'تغليف' },
 ];
 
-const emptyForm = { code: '', nameAr: '', nameEn: '', type: 'finished_product', unit: 'قطعة', price: '', cost: '', stock: '0', minStock: '' };
-
 const TABLE_COLS = ['w-16', 'w-32', 'w-20', 'w-16', 'w-16', 'w-24', 'w-24', 'w-16', 'w-20'];
 
 export default function ProductsPage() {
@@ -66,23 +64,12 @@ export default function ProductsPage() {
   const loading  = productsQ.isLoading;
   const error    = productsQ.error ? (productsQ.error as Error).message : null;
 
-  const [showModal, setShowModal] = useState(false);
-  const [saving, setSaving]       = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [form, setForm]           = useState(emptyForm);
-
-  const [editItem, setEditItem]   = useState<Product | null>(null);
-  const [editForm, setEditForm]   = useState(emptyForm);
-  const [editSaving, setEditSaving] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
-
   const [deleteId, setDeleteId]   = useState<string | null>(null);
   const [deleting, setDeleting]   = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [toast, showToast] = useToast();
 
-  // After mutations, invalidate ALL products variants (any activeType filter).
   const reload = useCallback(() => {
     qc.invalidateQueries({ queryKey: ['products'] });
   }, [qc]);
@@ -97,57 +84,6 @@ export default function ProductsPage() {
 
   const lowStockCount = useMemo(() => products.filter(p => p.stock <= (p.minStock ?? 0)).length, [products]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true); setFormError(null);
-    try {
-      const res = await fetch('/api/products', {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: form.code, nameAr: form.nameAr,
-          ...(form.nameEn && { nameEn: form.nameEn }),
-          type: form.type, unit: form.unit || 'قطعة',
-          price: Number(form.price) || 0, cost: Number(form.cost) || 0,
-          stock: Number(form.stock) || 0,
-          ...(form.minStock && { minStock: Number(form.minStock) }),
-        }),
-      });
-      const j = await res.json();
-      if (j.success) { setShowModal(false); setForm(emptyForm); reload(); showToast('تم إضافة المنتج بنجاح'); }
-      else setFormError(j.message || j.error || 'فشل الحفظ');
-    } catch { setFormError('تعذر الاتصال بالخادم'); }
-    finally { setSaving(false); }
-  }
-
-  function openEdit(p: Product) {
-    setEditItem(p);
-    setEditForm({ code: p.code, nameAr: p.nameAr, nameEn: p.nameEn || '', type: p.type || 'finished_product',
-      unit: p.unit || 'قطعة', price: p.price != null ? String(p.price) : '',
-      cost: p.cost != null ? String(p.cost) : '', stock: '', minStock: p.minStock != null ? String(p.minStock) : '' });
-    setEditError(null);
-  }
-
-  async function handleEdit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!editItem) return;
-    setEditSaving(true); setEditError(null);
-    try {
-      const res = await fetch('/api/products', {
-        method: 'PUT', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editItem.id, code: editForm.code, nameAr: editForm.nameAr,
-          nameEn: editForm.nameEn || null, type: editForm.type, unit: editForm.unit || 'قطعة',
-          price: Number(editForm.price) || 0, cost: Number(editForm.cost) || 0,
-          minStock: editForm.minStock ? Number(editForm.minStock) : null }),
-      });
-      const j = await res.json();
-      if (j.success) { setEditItem(null); reload(); showToast('تم تحديث بيانات المنتج'); }
-      else setEditError(j.message || j.error || 'فشل الحفظ');
-    } catch { setEditError('تعذر الاتصال بالخادم'); }
-    finally { setEditSaving(false); }
-  }
-
   async function handleDelete() {
     if (!deleteId) return;
     setDeleting(true); setDeleteError(null);
@@ -159,46 +95,6 @@ export default function ProductsPage() {
     } catch { setDeleteError('تعذر الاتصال بالخادم'); }
     finally { setDeleting(false); }
   }
-
-  const ProductFormFields = ({ f, setF }: { f: typeof emptyForm; setF: (fn: (p: typeof emptyForm) => typeof emptyForm) => void }) => (
-    <>
-      <Section title="البيانات الأساسية">
-        <FieldGrid>
-          <Field label="الرمز" required value={f.code} placeholder="PRD-001"
-            onChange={e => setF(p => ({ ...p, code: e.target.value }))} />
-          <SelectField label="النوع" value={f.type} onChange={e => setF(p => ({ ...p, type: e.target.value }))}>
-            <option value="finished_product">منتج نهائي</option>
-            <option value="raw_material">مواد خام</option>
-            <option value="packaging">تغليف</option>
-          </SelectField>
-          <Field label="الاسم بالعربية" required value={f.nameAr} placeholder="اسم المنتج"
-            className="sm:col-span-2"
-            onChange={e => setF(p => ({ ...p, nameAr: e.target.value }))} />
-          <Field label="الاسم بالإنجليزية" value={f.nameEn} placeholder="Product Name (اختياري)"
-            className="sm:col-span-2"
-            onChange={e => setF(p => ({ ...p, nameEn: e.target.value }))} />
-        </FieldGrid>
-      </Section>
-
-      <Section title="التسعير ووحدة القياس">
-        <FieldGrid cols={3}>
-          <Field label="سعر البيع (ج.م)" required type="number" min="0" step="0.01" value={f.price} placeholder="0"
-            onChange={e => setF(p => ({ ...p, price: e.target.value }))} />
-          <Field label="التكلفة (ج.م)" type="number" min="0" step="0.01" value={f.cost} placeholder="0"
-            onChange={e => setF(p => ({ ...p, cost: e.target.value }))} />
-          <Field label="وحدة القياس" value={f.unit} placeholder="قطعة"
-            onChange={e => setF(p => ({ ...p, unit: e.target.value }))} />
-        </FieldGrid>
-      </Section>
-
-      <Section title="إعدادات المخزون">
-        <FieldGrid>
-          <Field label="الحد الأدنى للمخزون" type="number" min="0" value={f.minStock} placeholder="0"
-            onChange={e => setF(p => ({ ...p, minStock: e.target.value }))} />
-        </FieldGrid>
-      </Section>
-    </>
-  );
 
   return (
     <InventoryLayout
@@ -214,10 +110,10 @@ export default function ProductsPage() {
         </span>
       }
       toolbar={
-        <button onClick={() => setShowModal(true)}
+        <Link href="/inventory/products/new"
           className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:scale-95 transition-all text-sm font-medium">
           <Plus className="w-4 h-4" /> إضافة منتج
-        </button>
+        </Link>
       }
     >
       <Toast toast={toast} />
@@ -306,10 +202,10 @@ export default function ProductsPage() {
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center justify-center gap-1.5">
-                        <button onClick={() => openEdit(p)}
+                        <Link href={`/inventory/products/${p.id}/edit`}
                           className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="تعديل">
                           <Pencil className="w-4 h-4" />
-                        </button>
+                        </Link>
                         <button onClick={() => setDeleteId(p.id)}
                           className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="حذف">
                           <Trash2 className="w-4 h-4" />
@@ -323,63 +219,6 @@ export default function ProductsPage() {
           </table>
         </div>
       )}
-
-      {/* Add Modal */}
-      <Modal
-        open={showModal}
-        onClose={() => setShowModal(false)}
-        title="إضافة منتج جديد"
-        subtitle="أدخل بيانات المنتج في الأقسام المختلفة"
-        size="2xl"
-        icon={<Package className="w-5 h-5" />}
-        footer={
-          <>
-            <SecondaryButton onClick={() => setShowModal(false)}>إلغاء</SecondaryButton>
-            <PrimaryButton type="submit" form="add-product-form" disabled={saving}>
-              {saving ? 'جاري الحفظ…' : 'حفظ المنتج'}
-            </PrimaryButton>
-          </>
-        }
-      >
-        <form id="add-product-form" onSubmit={handleSubmit} className="space-y-5">
-          <FormError>{formError}</FormError>
-          <ProductFormFields f={form} setF={setForm} />
-          <Section title="رصيد الافتتاح">
-            <FieldGrid>
-              <Field label="المخزون الابتدائي" type="number" min="0" value={form.stock} placeholder="0"
-                className="sm:col-span-2"
-                onChange={e => setForm(f => ({ ...f, stock: e.target.value }))} />
-            </FieldGrid>
-          </Section>
-        </form>
-      </Modal>
-
-      {/* Edit Modal */}
-      <Modal
-        open={!!editItem}
-        onClose={() => setEditItem(null)}
-        title="تعديل بيانات المنتج"
-        subtitle={editItem?.nameAr}
-        size="2xl"
-        icon={<Package className="w-5 h-5" />}
-        footer={
-          <>
-            <SecondaryButton onClick={() => setEditItem(null)}>إلغاء</SecondaryButton>
-            <PrimaryButton type="submit" form="edit-product-form" disabled={editSaving}>
-              {editSaving ? 'جاري الحفظ…' : 'حفظ التعديلات'}
-            </PrimaryButton>
-          </>
-        }
-      >
-        <form id="edit-product-form" onSubmit={handleEdit} className="space-y-5">
-          <FormError>{editError}</FormError>
-          <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-xs text-amber-700 flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-            ملاحظة: لا يمكن تعديل المخزون مباشرة — استخدم فاتورة مشتريات/مبيعات أو تسوية مخزون.
-          </div>
-          <ProductFormFields f={editForm} setF={setEditForm} />
-        </form>
-      </Modal>
 
       {/* Delete Confirm */}
       {deleteId && (

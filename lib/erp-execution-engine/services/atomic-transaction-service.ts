@@ -34,8 +34,6 @@ interface InvoiceItem {
   total?: number;
   /** Free-form per-line description override. */
   description?: string;
-  /** Per-line discount as a percentage (0–100). */
-  discountPercent?: number;
 }
 
 /**
@@ -60,12 +58,16 @@ interface JournalLine {
  */
 export async function createSalesInvoiceAtomic(params: {
   invoiceData: {
-    invoiceNumber: string;
-    date: Date;
-    customerId: string;
-    dueDate?: Date;
-    notes?: string;
-    status?: string;
+    invoiceNumber:    string;
+    date:             Date;
+    customerId:       string;
+    dueDate?:         Date;
+    notes?:           string;
+    status?:          string;
+    /** Header-level discount as a money amount. Wins over `discountPercent`. */
+    discount?:        number;
+    /** Header-level discount as a percentage of subtotal. */
+    discountPercent?: number;
   };
   items: InvoiceItem[];
   tenantId: string;
@@ -78,20 +80,18 @@ export async function createSalesInvoiceAtomic(params: {
     throw new TransactionError('VALIDATION_FAILED', 'Invoice must have at least one item');
   }
 
-  // Calculate totals — each line's net is qty * price * (1 - disc%/100).
-  // We expose three figures so the journal entry + UI stay consistent:
-  //   subtotal       → gross before discount
-  //   discountTotal  → sum of per-line discount amounts
-  //   netSubtotal    → subtotal - discountTotal (what we book to revenue)
+  // Header-level discount only — lines are stored at full price.
+  //   subtotal      → Σ qty * price
+  //   discountAmt   → explicit `discount` if provided, else subtotal * pct%
+  //   netSubtotal   → subtotal - discountAmt (what we book to revenue)
   const subtotal = items.reduce((s, it) => s + it.quantity * it.price, 0);
-  const discountTotal = items.reduce((s, it) => {
-    const disc = Number(it.discountPercent ?? 0);
-    return s + (it.quantity * it.price * disc / 100);
-  }, 0);
-  const netSubtotal = subtotal - discountTotal;
-  const taxRate     = 0; // VAT handled per-line if needed; keep header tax-free.
-  const taxAmount   = netSubtotal * taxRate;
-  const grandTotal  = netSubtotal + taxAmount;
+  const explicitDisc = Number(invoiceData.discount ?? 0);
+  const pct          = Number(invoiceData.discountPercent ?? 0);
+  const discountAmt  = explicitDisc > 0 ? explicitDisc : (subtotal * pct) / 100;
+  const netSubtotal  = Math.max(0, subtotal - discountAmt);
+  const taxRate      = 0; // VAT handled per-line if needed; keep header tax-free.
+  const taxAmount    = netSubtotal * taxRate;
+  const grandTotal   = netSubtotal + taxAmount;
 
   return await prisma.$transaction(async (tx) => {
     // ========================================================================
@@ -100,32 +100,27 @@ export async function createSalesInvoiceAtomic(params: {
     const invoice = await tx.salesInvoice.create({
       data: {
         invoiceNumber: invoiceData.invoiceNumber,
-        date: invoiceData.date,
-        customerId: invoiceData.customerId,
-        notes: invoiceData.notes,
-        status: invoiceData.status || 'posted',
-        total: subtotal,
-        discount: discountTotal,
-        tax: taxAmount,
+        date:          invoiceData.date,
+        customerId:    invoiceData.customerId,
+        notes:         invoiceData.notes,
+        status:        invoiceData.status || 'posted',
+        total:         subtotal,
+        discount:      discountAmt,
+        tax:           taxAmount,
         grandTotal,
         tenantId,
         items: {
-          create: items.map(item => {
-            const disc = Number(item.discountPercent ?? 0);
-            const net  = item.quantity * item.price * (1 - disc / 100);
-            return {
-              productId:       item.productId,
-              quantity:        item.quantity,
-              price:           item.price,
-              total:           net,
-              description:     item.description ?? null,
-              discountPercent: disc,
-            };
-          }),
+          create: items.map(item => ({
+            productId:   item.productId,
+            quantity:    item.quantity,
+            price:       item.price,
+            total:       item.quantity * item.price,
+            description: item.description ?? null,
+          })),
         },
       },
       include: {
-        items: true,
+        items:    true,
         customer: true,
       },
     });
@@ -261,12 +256,16 @@ export async function createSalesInvoiceAtomic(params: {
  */
 export async function createPurchaseInvoiceAtomic(params: {
   invoiceData: {
-    invoiceNumber: string;
-    date: Date;
-    supplierId: string;
-    dueDate?: Date;
-    notes?: string;
-    status?: string;
+    invoiceNumber:    string;
+    date:             Date;
+    supplierId:       string;
+    dueDate?:         Date;
+    notes?:           string;
+    status?:          string;
+    /** Header-level discount as a money amount. Wins over `discountPercent`. */
+    discount?:        number;
+    /** Header-level discount as a percentage of subtotal. */
+    discountPercent?: number;
   };
   items: InvoiceItem[];
   tenantId: string;
@@ -278,18 +277,16 @@ export async function createPurchaseInvoiceAtomic(params: {
     throw new TransactionError('VALIDATION_FAILED', 'Invoice must have at least one item');
   }
 
-  // Per-line gross uses unitCost when present (purchase cost) and falls back
-  // to price. Discount applies on the gross line.
+  // Header-level discount only. `unitCost` (when present) is the purchase cost
+  // used for line gross; falls back to `price` for compatibility.
   const subtotal = items.reduce((s, it) => s + it.quantity * (it.unitCost || it.price), 0);
-  const discountTotal = items.reduce((s, it) => {
-    const disc  = Number(it.discountPercent ?? 0);
-    const gross = it.quantity * (it.unitCost || it.price);
-    return s + (gross * disc / 100);
-  }, 0);
-  const netSubtotal = subtotal - discountTotal;
-  const taxRate     = 0; // Tax handled per-line if needed.
-  const taxAmount   = netSubtotal * taxRate;
-  const grandTotal  = netSubtotal + taxAmount;
+  const explicitDisc = Number(invoiceData.discount ?? 0);
+  const pct          = Number(invoiceData.discountPercent ?? 0);
+  const discountAmt  = explicitDisc > 0 ? explicitDisc : (subtotal * pct) / 100;
+  const netSubtotal  = Math.max(0, subtotal - discountAmt);
+  const taxRate      = 0; // Tax handled per-line if needed.
+  const taxAmount    = netSubtotal * taxRate;
+  const grandTotal   = netSubtotal + taxAmount;
 
   return await prisma.$transaction(async (tx) => {
     // ========================================================================
@@ -298,33 +295,30 @@ export async function createPurchaseInvoiceAtomic(params: {
     const invoice = await tx.purchaseInvoice.create({
       data: {
         invoiceNumber: invoiceData.invoiceNumber,
-        date: invoiceData.date,
-        supplierId: invoiceData.supplierId,
-        notes: invoiceData.notes,
-        status: invoiceData.status || 'posted',
-        total: subtotal,
-        discount: discountTotal,
-        tax: taxAmount,
+        date:          invoiceData.date,
+        supplierId:    invoiceData.supplierId,
+        notes:         invoiceData.notes,
+        status:        invoiceData.status || 'posted',
+        total:         subtotal,
+        discount:      discountAmt,
+        tax:           taxAmount,
         grandTotal,
         tenantId,
         items: {
           create: items.map(item => {
             const unit = item.unitCost || item.price;
-            const disc = Number(item.discountPercent ?? 0);
-            const net  = item.quantity * unit * (1 - disc / 100);
             return {
-              productId:       item.productId,
-              quantity:        item.quantity,
-              price:           unit,
-              total:           net,
-              description:     item.description ?? null,
-              discountPercent: disc,
+              productId:   item.productId,
+              quantity:    item.quantity,
+              price:       unit,
+              total:       item.quantity * unit,
+              description: item.description ?? null,
             };
           }),
         },
       },
       include: {
-        items: true,
+        items:    true,
         supplier: true,
       },
     });

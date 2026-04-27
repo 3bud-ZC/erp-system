@@ -1,22 +1,20 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiGet, apiPost } from '@/lib/api/fetcher';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiGet } from '@/lib/api/fetcher';
 import { queryKeys } from '@/lib/api/query-keys';
+import Link from 'next/link';
 import {
   Plus,
-  X,
   DollarSign,
   TrendingDown,
   Wallet,
   AlertCircle,
   Pencil,
   Trash2,
-  Receipt,
 } from 'lucide-react';
 import { AccountingLayout, KpiCard } from '@/components/accounting/AccountingLayout';
-import { Modal, Field, SelectField, TextAreaField, PrimaryButton, SecondaryButton, FormError, Section, FieldGrid } from '@/components/ui/modal';
 
 interface Expense {
   id: string;
@@ -34,8 +32,6 @@ interface Expense {
  */
 export default function AccountingFinancePage() {
   const qc = useQueryClient();
-  const [showForm, setShowForm] = useState(false);
-  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Expense | null>(null);
   const [deleteRunning, setDeleteRunning] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -52,9 +48,6 @@ export default function AccountingFinancePage() {
   const loading = expensesQ.isLoading;
   const loadError = expensesQ.error ? (expensesQ.error as Error).message : null;
   const loadExpenses = () => expensesQ.refetch();
-
-  function openCreate() { setEditingExpense(null); setShowForm(true); }
-  function openEdit(expense: Expense) { setEditingExpense(expense); setShowForm(true); }
 
   async function runDelete() {
     if (!confirmDelete) return;
@@ -99,13 +92,13 @@ export default function AccountingFinancePage() {
       title="المالية والمصروفات"
       subtitle="إدارة المصروفات والإيرادات والتصنيفات"
       toolbar={
-        <button
-          onClick={openCreate}
+        <Link
+          href="/accounting/finance/new"
           className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm font-medium"
         >
           <Plus className="w-4 h-4" />
           مصروف جديد
-        </button>
+        </Link>
       }
     >
       {loadError && (
@@ -150,7 +143,6 @@ export default function AccountingFinancePage() {
             <ExpensesTab
               expenses={expenses}
               loading={loading}
-              onEdit={openEdit}
               onDelete={(e) => { setConfirmDelete(e); setDeleteError(null); }}
             />
           )}
@@ -158,15 +150,6 @@ export default function AccountingFinancePage() {
           {activeTab === 'settings' && <SettingsTab />}
         </div>
       </div>
-
-      {/* Add / Edit Expense Modal */}
-      {showForm && (
-        <ExpenseForm
-          expense={editingExpense}
-          onClose={() => { setShowForm(false); setEditingExpense(null); }}
-          onSaved={loadExpenses}
-        />
-      )}
 
       {/* Confirm delete modal */}
       {confirmDelete && (
@@ -213,12 +196,10 @@ function SubTab({ active, onClick, label }: { active: boolean; onClick: () => vo
 function ExpensesTab({
   expenses,
   loading,
-  onEdit,
   onDelete,
 }: {
   expenses: Expense[];
   loading: boolean;
-  onEdit: (e: Expense) => void;
   onDelete: (e: Expense) => void;
 }) {
   if (loading) return <div className="text-center py-8 text-slate-400">جاري التحميل...</div>;
@@ -244,10 +225,10 @@ function ExpensesTab({
           <div className="flex items-center gap-3">
             <p className="text-lg font-bold text-red-600">{(expense.amount ?? 0).toLocaleString('ar-EG')} ج.م</p>
             <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-              <button onClick={() => onEdit(expense)} title="تعديل"
+              <Link href={`/accounting/finance/${expense.id}/edit`} title="تعديل"
                 className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors">
                 <Pencil className="w-4 h-4" />
-              </button>
+              </Link>
               <button onClick={() => onDelete(expense)} title="حذف"
                 className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors">
                 <Trash2 className="w-4 h-4" />
@@ -316,116 +297,3 @@ function SettingsTab() {
   );
 }
 
-function ExpenseForm({
-  expense,
-  onClose,
-  onSaved,
-}: {
-  expense?: Expense | null;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const qc = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
-  const isEdit = !!expense;
-  const [formData, setFormData] = useState({
-    date: (expense?.date ?? new Date().toISOString()).slice(0, 10),
-    category: expense?.category ?? '',
-    amount: expense ? String(expense.amount ?? '') : '',
-    description: expense?.description ?? '',
-    paymentMethod: expense?.paymentMethod ?? 'نقدي',
-  });
-
-  type ExpensePayload = Omit<typeof formData, 'amount'> & { amount: number; total: number };
-  const saveExpense = useMutation({
-    mutationFn: async (payload: ExpensePayload) => {
-      if (isEdit && expense) {
-        const res = await fetch('/api/expenses', {
-          method: 'PUT',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: expense.id, ...payload }),
-        });
-        const j = await res.json();
-        if (!j.success) throw new Error(j.message || j.error || 'فشل التعديل');
-        return j.data;
-      }
-      return apiPost('/api/expenses', payload);
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.expenses });
-      qc.invalidateQueries({ queryKey: queryKeys.dashboard });
-      onSaved();
-      onClose();
-    },
-    onError: (err: Error) => {
-      setError(err.message || 'تعذر الاتصال بالخادم');
-    },
-  });
-  const saving = saveExpense.isPending;
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    const amt = Number(formData.amount) || 0;
-    saveExpense.mutate({ ...formData, amount: amt, total: amt });
-  }
-
-  return (
-    <Modal
-      open={true}
-      onClose={onClose}
-      title={isEdit ? 'تعديل مصروف' : 'مصروف جديد'}
-      subtitle="أدخل بيانات المصروف في الأقسام المختلفة"
-      size="xl"
-      icon={<Receipt className="w-5 h-5" />}
-      footer={
-        <>
-          <SecondaryButton onClick={onClose}>إلغاء</SecondaryButton>
-          <PrimaryButton type="submit" form="expense-form" disabled={saving}>
-            {saving ? 'جاري الحفظ...' : 'حفظ المصروف'}
-          </PrimaryButton>
-        </>
-      }
-    >
-      <form id="expense-form" onSubmit={handleSubmit} className="space-y-5">
-        <FormError>{error}</FormError>
-
-        <Section title="بيانات المصروف">
-          <FieldGrid>
-            <Field label="التاريخ" type="date" required value={formData.date}
-              onChange={(e) => setFormData({ ...formData, date: e.target.value })} />
-            <SelectField label="التصنيف" required value={formData.category}
-              onChange={(e) => setFormData({ ...formData, category: e.target.value })}>
-              <option value="">اختر التصنيف</option>
-              <option value="رواتب">رواتب</option>
-              <option value="إيجار">إيجار</option>
-              <option value="كهرباء ومياه">كهرباء ومياه</option>
-              <option value="صيانة">صيانة</option>
-              <option value="مصروفات إدارية">مصروفات إدارية</option>
-            </SelectField>
-            <Field label="المبلغ" type="number" step="0.01" required value={formData.amount} placeholder="0.00"
-              className="sm:col-span-2"
-              onChange={(e) => setFormData({ ...formData, amount: e.target.value })} />
-            <TextAreaField label="الوصف" required rows={3} value={formData.description} placeholder="تفاصيل المصروف..."
-              className="sm:col-span-2"
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
-          </FieldGrid>
-        </Section>
-
-        <Section title="طريقة الدفع">
-          <FieldGrid>
-            <SelectField label="طريقة الدفع" value={formData.paymentMethod}
-              className="sm:col-span-2"
-              onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}>
-              <option value="نقدي">نقدي</option>
-              <option value="بنك">بنك</option>
-              <option value="شيك">شيك</option>
-              <option value="تحويل بنكي">تحويل بنكي</option>
-            </SelectField>
-          </FieldGrid>
-        </Section>
-      </form>
-    </Modal>
-  );
-}

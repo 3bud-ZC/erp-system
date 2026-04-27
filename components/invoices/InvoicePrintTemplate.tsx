@@ -162,14 +162,13 @@ export function InvoicePrintTemplate({ data }: { data: InvoicePrintData }) {
             <th className="border border-slate-300 px-2 py-2 text-right font-semibold">البند</th>
             <th className="border border-slate-300 px-2 py-2 text-center font-semibold w-20">كمية</th>
             <th className="border border-slate-300 px-2 py-2 text-center font-semibold w-28">سعر</th>
-            <th className="border border-slate-300 px-2 py-2 text-center font-semibold w-24">التخفيض</th>
             <th className="border border-slate-300 px-2 py-2 text-center font-semibold w-32">المجموع</th>
           </tr>
         </thead>
         <tbody>
           {data.lines.length === 0 ? (
             <tr>
-              <td colSpan={5} className="border border-slate-300 py-4 text-center text-slate-400">
+              <td colSpan={4} className="border border-slate-300 py-4 text-center text-slate-400">
                 لا توجد بنود
               </td>
             </tr>
@@ -178,7 +177,6 @@ export function InvoicePrintTemplate({ data }: { data: InvoicePrintData }) {
               <td className="border border-slate-300 px-2 py-1.5">{line.description}</td>
               <td className="border border-slate-300 px-2 py-1.5 text-center tabular-nums">{line.quantity}</td>
               <td className="border border-slate-300 px-2 py-1.5 text-center tabular-nums">{fmtMoney(line.price, c)}</td>
-              <td className="border border-slate-300 px-2 py-1.5 text-center tabular-nums">{fmtMoney(line.discountAmount ?? 0, c)}</td>
               <td className="border border-slate-300 px-2 py-1.5 text-center font-semibold tabular-nums">{fmtMoney(line.total, c)}</td>
             </tr>
           ))}
