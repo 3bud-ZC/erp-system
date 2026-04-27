@@ -7,7 +7,7 @@ import { queryKeys } from '@/lib/api/query-keys';
 import { Plus, AlertTriangle, X, Pencil, Trash2, Search, Package, CheckCircle } from 'lucide-react';
 import { TableSkeleton, EmptyState, ErrorBanner, Toast, useToast } from '@/components/ui/patterns';
 import { InventoryLayout } from '@/components/inventory/InventoryLayout';
-import { Modal, Field, SelectField, PrimaryButton, SecondaryButton, FormError } from '@/components/ui/modal';
+import { Modal, Field, SelectField, PrimaryButton, SecondaryButton, FormError, Section, FieldGrid } from '@/components/ui/modal';
 
 interface Product {
   id: string;
@@ -162,29 +162,41 @@ export default function ProductsPage() {
 
   const ProductFormFields = ({ f, setF }: { f: typeof emptyForm; setF: (fn: (p: typeof emptyForm) => typeof emptyForm) => void }) => (
     <>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="الرمز" required value={f.code} placeholder="PRD-001"
-          onChange={e => setF(p => ({ ...p, code: e.target.value }))} />
-        <SelectField label="النوع" value={f.type} onChange={e => setF(p => ({ ...p, type: e.target.value }))}>
-          <option value="finished_product">منتج نهائي</option>
-          <option value="raw_material">مواد خام</option>
-          <option value="packaging">تغليف</option>
-        </SelectField>
-      </div>
-      <Field label="الاسم بالعربية" required value={f.nameAr} placeholder="اسم المنتج"
-        onChange={e => setF(p => ({ ...p, nameAr: e.target.value }))} />
-      <Field label="الاسم بالإنجليزية" value={f.nameEn} placeholder="Product Name (اختياري)"
-        onChange={e => setF(p => ({ ...p, nameEn: e.target.value }))} />
-      <div className="grid grid-cols-3 gap-3">
-        <Field label="سعر البيع (ج.م)" required type="number" min="0" step="0.01" value={f.price} placeholder="0"
-          onChange={e => setF(p => ({ ...p, price: e.target.value }))} />
-        <Field label="التكلفة (ج.م)" type="number" min="0" step="0.01" value={f.cost} placeholder="0"
-          onChange={e => setF(p => ({ ...p, cost: e.target.value }))} />
-        <Field label="وحدة القياس" value={f.unit} placeholder="قطعة"
-          onChange={e => setF(p => ({ ...p, unit: e.target.value }))} />
-      </div>
-      <Field label="الحد الأدنى للمخزون" type="number" min="0" value={f.minStock} placeholder="0"
-        onChange={e => setF(p => ({ ...p, minStock: e.target.value }))} />
+      <Section title="البيانات الأساسية">
+        <FieldGrid>
+          <Field label="الرمز" required value={f.code} placeholder="PRD-001"
+            onChange={e => setF(p => ({ ...p, code: e.target.value }))} />
+          <SelectField label="النوع" value={f.type} onChange={e => setF(p => ({ ...p, type: e.target.value }))}>
+            <option value="finished_product">منتج نهائي</option>
+            <option value="raw_material">مواد خام</option>
+            <option value="packaging">تغليف</option>
+          </SelectField>
+          <Field label="الاسم بالعربية" required value={f.nameAr} placeholder="اسم المنتج"
+            className="sm:col-span-2"
+            onChange={e => setF(p => ({ ...p, nameAr: e.target.value }))} />
+          <Field label="الاسم بالإنجليزية" value={f.nameEn} placeholder="Product Name (اختياري)"
+            className="sm:col-span-2"
+            onChange={e => setF(p => ({ ...p, nameEn: e.target.value }))} />
+        </FieldGrid>
+      </Section>
+
+      <Section title="التسعير ووحدة القياس">
+        <FieldGrid cols={3}>
+          <Field label="سعر البيع (ج.م)" required type="number" min="0" step="0.01" value={f.price} placeholder="0"
+            onChange={e => setF(p => ({ ...p, price: e.target.value }))} />
+          <Field label="التكلفة (ج.م)" type="number" min="0" step="0.01" value={f.cost} placeholder="0"
+            onChange={e => setF(p => ({ ...p, cost: e.target.value }))} />
+          <Field label="وحدة القياس" value={f.unit} placeholder="قطعة"
+            onChange={e => setF(p => ({ ...p, unit: e.target.value }))} />
+        </FieldGrid>
+      </Section>
+
+      <Section title="إعدادات المخزون">
+        <FieldGrid>
+          <Field label="الحد الأدنى للمخزون" type="number" min="0" value={f.minStock} placeholder="0"
+            onChange={e => setF(p => ({ ...p, minStock: e.target.value }))} />
+        </FieldGrid>
+      </Section>
     </>
   );
 
@@ -317,21 +329,28 @@ export default function ProductsPage() {
         open={showModal}
         onClose={() => setShowModal(false)}
         title="إضافة منتج جديد"
-        size="lg"
+        subtitle="أدخل بيانات المنتج في الأقسام المختلفة"
+        size="2xl"
+        icon={<Package className="w-5 h-5" />}
         footer={
           <>
             <SecondaryButton onClick={() => setShowModal(false)}>إلغاء</SecondaryButton>
             <PrimaryButton type="submit" form="add-product-form" disabled={saving}>
-              {saving ? 'جاري الحفظ…' : 'حفظ'}
+              {saving ? 'جاري الحفظ…' : 'حفظ المنتج'}
             </PrimaryButton>
           </>
         }
       >
-        <form id="add-product-form" onSubmit={handleSubmit} className="space-y-4">
+        <form id="add-product-form" onSubmit={handleSubmit} className="space-y-5">
           <FormError>{formError}</FormError>
           <ProductFormFields f={form} setF={setForm} />
-          <Field label="المخزون الابتدائي" type="number" min="0" value={form.stock} placeholder="0"
-            onChange={e => setForm(f => ({ ...f, stock: e.target.value }))} />
+          <Section title="رصيد الافتتاح">
+            <FieldGrid>
+              <Field label="المخزون الابتدائي" type="number" min="0" value={form.stock} placeholder="0"
+                className="sm:col-span-2"
+                onChange={e => setForm(f => ({ ...f, stock: e.target.value }))} />
+            </FieldGrid>
+          </Section>
         </form>
       </Modal>
 
@@ -340,7 +359,9 @@ export default function ProductsPage() {
         open={!!editItem}
         onClose={() => setEditItem(null)}
         title="تعديل بيانات المنتج"
-        size="lg"
+        subtitle={editItem?.nameAr}
+        size="2xl"
+        icon={<Package className="w-5 h-5" />}
         footer={
           <>
             <SecondaryButton onClick={() => setEditItem(null)}>إلغاء</SecondaryButton>
@@ -350,10 +371,11 @@ export default function ProductsPage() {
           </>
         }
       >
-        <form id="edit-product-form" onSubmit={handleEdit} className="space-y-4">
+        <form id="edit-product-form" onSubmit={handleEdit} className="space-y-5">
           <FormError>{editError}</FormError>
-          <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-xs text-amber-700">
-            ملاحظة: لا يمكن تعديل المخزون مباشرة — استخدم فاتورة مشتريات أو مبيعات لذلك.
+          <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-xs text-amber-700 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            ملاحظة: لا يمكن تعديل المخزون مباشرة — استخدم فاتورة مشتريات/مبيعات أو تسوية مخزون.
           </div>
           <ProductFormFields f={editForm} setF={setEditForm} />
         </form>

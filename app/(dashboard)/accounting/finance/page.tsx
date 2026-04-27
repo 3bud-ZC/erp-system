@@ -13,9 +13,10 @@ import {
   AlertCircle,
   Pencil,
   Trash2,
+  Receipt,
 } from 'lucide-react';
 import { AccountingLayout, KpiCard } from '@/components/accounting/AccountingLayout';
-import { Modal, Field, SelectField, TextAreaField, PrimaryButton, SecondaryButton, FormError } from '@/components/ui/modal';
+import { Modal, Field, SelectField, TextAreaField, PrimaryButton, SecondaryButton, FormError, Section, FieldGrid } from '@/components/ui/modal';
 
 interface Expense {
   id: string;
@@ -375,39 +376,55 @@ function ExpenseForm({
       open={true}
       onClose={onClose}
       title={isEdit ? 'تعديل مصروف' : 'مصروف جديد'}
+      subtitle="أدخل بيانات المصروف في الأقسام المختلفة"
+      size="xl"
+      icon={<Receipt className="w-5 h-5" />}
       footer={
         <>
           <SecondaryButton onClick={onClose}>إلغاء</SecondaryButton>
           <PrimaryButton type="submit" form="expense-form" disabled={saving}>
-            {saving ? 'جاري الحفظ...' : 'حفظ'}
+            {saving ? 'جاري الحفظ...' : 'حفظ المصروف'}
           </PrimaryButton>
         </>
       }
     >
-      <form id="expense-form" onSubmit={handleSubmit} className="space-y-4">
+      <form id="expense-form" onSubmit={handleSubmit} className="space-y-5">
         <FormError>{error}</FormError>
-        <Field label="التاريخ" type="date" required value={formData.date}
-          onChange={(e) => setFormData({ ...formData, date: e.target.value })} />
-        <SelectField label="التصنيف" required value={formData.category}
-          onChange={(e) => setFormData({ ...formData, category: e.target.value })}>
-          <option value="">اختر التصنيف</option>
-          <option value="رواتب">رواتب</option>
-          <option value="إيجار">إيجار</option>
-          <option value="كهرباء ومياه">كهرباء ومياه</option>
-          <option value="صيانة">صيانة</option>
-          <option value="مصروفات إدارية">مصروفات إدارية</option>
-        </SelectField>
-        <Field label="المبلغ" type="number" step="0.01" required value={formData.amount} placeholder="0.00"
-          onChange={(e) => setFormData({ ...formData, amount: e.target.value })} />
-        <TextAreaField label="الوصف" required rows={3} value={formData.description} placeholder="تفاصيل المصروف..."
-          onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
-        <SelectField label="طريقة الدفع" value={formData.paymentMethod}
-          onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}>
-          <option value="نقدي">نقدي</option>
-          <option value="بنك">بنك</option>
-          <option value="شيك">شيك</option>
-          <option value="تحويل بنكي">تحويل بنكي</option>
-        </SelectField>
+
+        <Section title="بيانات المصروف">
+          <FieldGrid>
+            <Field label="التاريخ" type="date" required value={formData.date}
+              onChange={(e) => setFormData({ ...formData, date: e.target.value })} />
+            <SelectField label="التصنيف" required value={formData.category}
+              onChange={(e) => setFormData({ ...formData, category: e.target.value })}>
+              <option value="">اختر التصنيف</option>
+              <option value="رواتب">رواتب</option>
+              <option value="إيجار">إيجار</option>
+              <option value="كهرباء ومياه">كهرباء ومياه</option>
+              <option value="صيانة">صيانة</option>
+              <option value="مصروفات إدارية">مصروفات إدارية</option>
+            </SelectField>
+            <Field label="المبلغ" type="number" step="0.01" required value={formData.amount} placeholder="0.00"
+              className="sm:col-span-2"
+              onChange={(e) => setFormData({ ...formData, amount: e.target.value })} />
+            <TextAreaField label="الوصف" required rows={3} value={formData.description} placeholder="تفاصيل المصروف..."
+              className="sm:col-span-2"
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
+          </FieldGrid>
+        </Section>
+
+        <Section title="طريقة الدفع">
+          <FieldGrid>
+            <SelectField label="طريقة الدفع" value={formData.paymentMethod}
+              className="sm:col-span-2"
+              onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}>
+              <option value="نقدي">نقدي</option>
+              <option value="بنك">بنك</option>
+              <option value="شيك">شيك</option>
+              <option value="تحويل بنكي">تحويل بنكي</option>
+            </SelectField>
+          </FieldGrid>
+        </Section>
       </form>
     </Modal>
   );

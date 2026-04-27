@@ -106,8 +106,18 @@ export async function POST(request: Request) {
         if (Number(item.price) < 0) return apiError('السعر يجب أن يكون صحيحاً', 400);
       }
 
-      // Calculate total server-side (ignore client-sent total)
-      const total = items.reduce((sum: number, item: any) => sum + (item.quantity * item.price), 0);
+      // Calculate totals server-side (ignore client-sent values).
+      // Per-line net = qty * price * (1 - disc%/100). The header total is
+      // the sum of the net line totals so it matches the JE booked below.
+      const lineNet = (item: any) => {
+        const qty   = Number(item.quantity) || 0;
+        const price = Number(item.price)    || 0;
+        const disc  = Number(item.discountPercent) || 0;
+        return qty * price * (1 - disc / 100);
+      };
+      const subtotal      = items.reduce((s: number, it: any) => s + Number(it.quantity) * Number(it.price), 0);
+      const discountTotal = subtotal - items.reduce((s: number, it: any) => s + lineNet(it), 0);
+      const total         = subtotal - discountTotal;
 
       // Auto-generate invoiceNumber if missing/empty so the form's "(اختياري)"
       // hint matches reality. If the user typed one, we use it as-is.
@@ -124,10 +134,15 @@ export async function POST(request: Request) {
             invoiceNumber,
             tenantId: user.tenantId,   // always from server — never trust client
             total,
+            discount: discountTotal,
             items: {
               create: items.map((item: any) => ({
-                ...item,
-                total: item.quantity * item.price,
+                productId:       item.productId,
+                description:     item.description ?? null,
+                quantity:        Number(item.quantity) || 0,
+                price:           Number(item.price) || 0,
+                discountPercent: Number(item.discountPercent) || 0,
+                total:           lineNet(item),
               })),
             },
           },

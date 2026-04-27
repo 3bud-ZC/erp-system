@@ -6,18 +6,15 @@ import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/lib/store/auth';
 import {
   LayoutDashboard,
-  Scale,
   Package,
-  ShoppingCart,
-  Truck,
   Users,
   FileText,
   ChevronRight,
   ChevronLeft,
   ChevronDown,
-  BarChart3,
-  TrendingUp,
   BookOpen,
+  Factory,
+  PieChart,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -42,16 +39,6 @@ const navItems: NavItem[] = [
     icon: <LayoutDashboard className="w-5 h-5" />,
   },
   {
-    title: 'الفواتير',
-    href: '/invoices',
-    icon: <FileText className="w-5 h-5" />,
-    children: [
-      { title: 'نظرة عامة',         href: '/invoices' },
-      { title: 'فواتير المبيعات',  href: '/invoices/sales' },
-      { title: 'فواتير المشتريات', href: '/invoices/purchases' },
-    ],
-  },
-  {
     title: 'الخدمات',
     href: '/services',
     icon: <Users className="w-5 h-5" />,
@@ -66,10 +53,26 @@ const navItems: NavItem[] = [
     href: '/inventory',
     icon: <Package className="w-5 h-5" />,
     children: [
-      { title: 'نظرة عامة', href: '/inventory' },
-      { title: 'المنتجات',  href: '/inventory/products' },
-      { title: 'المستودعات', href: '/warehouses' },
+      { title: 'نظرة عامة',    href: '/inventory' },
+      { title: 'المنتجات',     href: '/inventory/products' },
+      { title: 'المستودعات',   href: '/warehouses' },
+      { title: 'تسوية المخزون', href: '/inventory/stock-adjustments' },
     ],
+  },
+  {
+    title: 'الفواتير',
+    href: '/invoices',
+    icon: <FileText className="w-5 h-5" />,
+    children: [
+      { title: 'نظرة عامة',         href: '/invoices' },
+      { title: 'فواتير المبيعات',  href: '/invoices/sales' },
+      { title: 'فواتير المشتريات', href: '/invoices/purchases' },
+    ],
+  },
+  {
+    title: 'التصنيع',
+    href: '/manufacturing',
+    icon: <Factory className="w-5 h-5" />,
   },
   {
     title: 'المحاسبة',
@@ -81,6 +84,11 @@ const navItems: NavItem[] = [
       { title: 'المالية',          href: '/accounting/finance' },
       { title: 'ميزان المراجعة',   href: '/accounting/trial-balance' },
     ],
+  },
+  {
+    title: 'التقارير',
+    href: '/reports',
+    icon: <PieChart className="w-5 h-5" />,
   },
 ];
 
@@ -94,9 +102,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { user } = useAuthStore();
   // افتح المجموعات ذات الصلة تلقائياً حسب المسار الحالي.
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => ({
-    '/invoices':   pathname?.startsWith('/invoices')   ?? false,
-    '/services':   pathname?.startsWith('/services')   || pathname?.startsWith('/customers') || pathname?.startsWith('/suppliers') || false,
+    '/services':   pathname?.startsWith('/services')   || pathname?.startsWith('/customers')  || pathname?.startsWith('/suppliers')  || false,
     '/inventory':  pathname?.startsWith('/inventory')  || pathname?.startsWith('/warehouses') || false,
+    '/invoices':   pathname?.startsWith('/invoices')   ?? false,
     '/accounting': pathname?.startsWith('/accounting') ?? false,
   }));
   const toggleGroup = (href: string) =>

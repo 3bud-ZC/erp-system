@@ -7,7 +7,7 @@ import { queryKeys } from '@/lib/api/query-keys';
 import { Plus, X, CheckCircle, Clock, Trash2, BookOpen, RefreshCw, Pencil, RotateCcw, Send } from 'lucide-react';
 import { TableSkeleton, EmptyState, ErrorBanner } from '@/components/ui/patterns';
 import { AccountingLayout } from '@/components/accounting/AccountingLayout';
-import { Modal, Field, PrimaryButton, SecondaryButton, FormError } from '@/components/ui/modal';
+import { Modal, Field, PrimaryButton, SecondaryButton, FormError, Section, FieldGrid } from '@/components/ui/modal';
 
 interface JournalEntry {
   id: string;
@@ -260,7 +260,9 @@ export default function JournalEntriesPage() {
         open={showModal}
         onClose={() => { setShowModal(false); resetForm(); }}
         title={editingId ? 'تعديل قيد محاسبي (مسودة)' : 'قيد محاسبي جديد'}
-        size="xl"
+        subtitle="أدخل بيانات القيد وبنوده في الأقسام المختلفة"
+        size="2xl"
+        icon={<BookOpen className="w-5 h-5" />}
         footer={
           <>
             <SecondaryButton onClick={() => { setShowModal(false); resetForm(); }}>إلغاء</SecondaryButton>
@@ -270,79 +272,87 @@ export default function JournalEntriesPage() {
           </>
         }
       >
-        <form id="journal-entry-form" onSubmit={handleSubmit} className="space-y-4">
+        <form id="journal-entry-form" onSubmit={handleSubmit} className="space-y-5">
           <FormError>{formError}</FormError>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="تاريخ القيد" required type="date" value={entryDate} onChange={e => setEntryDate(e.target.value)} />
-            <Field label="البيان" required value={description} placeholder="وصف القيد" onChange={e => setDescription(e.target.value)} />
-          </div>
 
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-medium text-slate-700">بنود القيد</label>
-                  <button type="button" onClick={addLine} className="text-xs text-blue-600 hover:text-blue-700 font-medium">+ إضافة سطر</button>
-                </div>
-                <div className="border border-slate-200 rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50 border-b border-slate-200">
-                      <tr>
-                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500">رمز الحساب</th>
-                        <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500">البيان</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500">مدين</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500">دائن</th>
-                        <th className="px-2 py-2" />
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {lines.map((line, i) => (
-                        <tr key={i}>
-                          <td className="px-2 py-1.5">
-                            <input value={line.accountCode} onChange={e => updateLine(i, 'accountCode', e.target.value)}
-                              className="w-full border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="1001" />
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <input value={line.description} onChange={e => updateLine(i, 'description', e.target.value)}
-                              className="w-full border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="وصف" />
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <input type="number" min="0" value={line.debit} onChange={e => updateLine(i, 'debit', e.target.value)}
-                              className="w-24 border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="0" />
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <input type="number" min="0" value={line.credit} onChange={e => updateLine(i, 'credit', e.target.value)}
-                              className="w-24 border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="0" />
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <button type="button" onClick={() => removeLine(i)} className="text-slate-300 hover:text-red-500">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="border-t border-slate-200 bg-slate-50">
-                      <tr>
-                        <td colSpan={2} className="px-3 py-2 text-xs font-semibold text-slate-600">الإجمالي</td>
-                        <td className="px-3 py-2 text-xs font-semibold text-slate-700 tabular-nums">
-                          {totalDebit.toLocaleString('ar-EG', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-3 py-2 text-xs font-semibold text-slate-700 tabular-nums">
-                          {totalCredit.toLocaleString('ar-EG', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td />
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
+          <Section title="بيانات القيد">
+            <FieldGrid>
+              <Field label="تاريخ القيد" required type="date" value={entryDate} onChange={e => setEntryDate(e.target.value)} />
+              <Field label="البيان" required value={description} placeholder="وصف القيد" onChange={e => setDescription(e.target.value)} />
+            </FieldGrid>
+          </Section>
+
+          <Section
+            title="بنود القيد"
+            action={
+              <button type="button" onClick={addLine}
+                className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium border border-blue-200 rounded-lg px-2.5 py-1 hover:bg-blue-50">
+                <Plus className="w-3.5 h-3.5" /> إضافة سطر
+              </button>
+            }
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[560px]">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 w-[20%]">رمز الحساب</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 w-[35%]">البيان</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 w-[18%]">مدين</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 w-[18%]">دائن</th>
+                    <th className="w-[5%]" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {lines.map((line, i) => (
+                    <tr key={i}>
+                      <td className="px-2 py-1.5">
+                        <input value={line.accountCode} onChange={e => updateLine(i, 'accountCode', e.target.value)}
+                          className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="1001" />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <input value={line.description} onChange={e => updateLine(i, 'description', e.target.value)}
+                          className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="وصف" />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <input type="number" min="0" value={line.debit} onChange={e => updateLine(i, 'debit', e.target.value)}
+                          className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="0" />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <input type="number" min="0" value={line.credit} onChange={e => updateLine(i, 'credit', e.target.value)}
+                          className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="0" />
+                      </td>
+                      <td className="px-1 py-1.5 text-center">
+                        <button type="button" onClick={() => removeLine(i)}
+                          className="p-1 text-slate-400 hover:text-red-600">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="border-t border-slate-200 bg-slate-50">
+                  <tr>
+                    <td colSpan={2} className="px-3 py-2 text-xs font-semibold text-slate-600">الإجمالي</td>
+                    <td className="px-3 py-2 text-xs font-semibold text-slate-700 tabular-nums text-center">
+                      {totalDebit.toLocaleString('ar-EG', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-3 py-2 text-xs font-semibold text-slate-700 tabular-nums text-center">
+                      {totalCredit.toLocaleString('ar-EG', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
             {!balanced && totalDebit > 0 && (
-              <p className="text-red-500 text-xs mt-1.5">
+              <p className="text-red-500 text-xs mt-3">
                 ⚠ الفرق: {Math.abs(totalDebit - totalCredit).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م — المدين يجب أن يساوي الدائن
               </p>
             )}
             {balanced && totalDebit > 0 && (
-              <p className="text-green-600 text-xs mt-1.5">✓ القيد متوازن</p>
+              <p className="text-green-600 text-xs mt-3">✓ القيد متوازن</p>
             )}
-          </div>
+          </Section>
         </form>
       </Modal>
 

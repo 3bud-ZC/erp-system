@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   CheckCircle,
   DollarSign,
+  ClipboardList,
 } from 'lucide-react';
 import { InventoryLayout } from '@/components/inventory/InventoryLayout';
 import { KpiCard } from '@/components/accounting/AccountingLayout';
@@ -116,7 +117,7 @@ export default function InventoryHubPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <NavCard
           href="/inventory/products"
           title="المنتجات"
@@ -132,6 +133,14 @@ export default function InventoryHubPage() {
           icon={Warehouse}
           stat={`${stats.warehousesCount} مستودع · ${stats.activeWarehouses} نشط`}
           accentClass="bg-purple-50 text-purple-600"
+        />
+        <NavCard
+          href="/inventory/stock-adjustments"
+          title="تسوية المخزون"
+          description="تعديل أرصدة المخزون دي بسبب تالف، فاقد، أو فارق جرد"
+          icon={ClipboardList}
+          stat="تسجيل تسوية جديدة"
+          accentClass="bg-amber-50 text-amber-600"
         />
       </div>
 

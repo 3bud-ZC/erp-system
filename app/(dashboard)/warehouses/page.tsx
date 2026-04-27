@@ -7,7 +7,7 @@ import { queryKeys } from '@/lib/api/query-keys';
 import { Plus, X, Pencil, Trash2, CheckCircle, XCircle, Warehouse } from 'lucide-react';
 import { CardGridSkeleton, EmptyState, ErrorBanner, Toast, useToast } from '@/components/ui/patterns';
 import { InventoryLayout } from '@/components/inventory/InventoryLayout';
-import { Modal, Field, PrimaryButton, SecondaryButton, FormError } from '@/components/ui/modal';
+import { Modal, Field, PrimaryButton, SecondaryButton, FormError, Section, FieldGrid } from '@/components/ui/modal';
 
 interface WarehouseItem {
   id: string;
@@ -114,20 +114,31 @@ export default function WarehousesPage() {
 
   const WarehouseFormFields = ({ f, setF }: { f: typeof emptyForm; setF: (fn: (prev: typeof emptyForm) => typeof emptyForm) => void }) => (
     <>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="الرمز" required value={f.code} placeholder="WH-001"
-          onChange={e => setF(p => ({ ...p, code: e.target.value }))} />
-        <Field label="الهاتف" value={f.phone} placeholder="0501234567"
-          onChange={e => setF(p => ({ ...p, phone: e.target.value }))} />
-      </div>
-      <Field label="الاسم بالعربية" required value={f.nameAr} placeholder="المستودع الرئيسي"
-        onChange={e => setF(p => ({ ...p, nameAr: e.target.value }))} />
-      <Field label="الاسم بالإنجليزية" value={f.nameEn} placeholder="Main Warehouse (اختياري)"
-        onChange={e => setF(p => ({ ...p, nameEn: e.target.value }))} />
-      <Field label="العنوان" value={f.address} placeholder="القاهرة، مصر"
-        onChange={e => setF(p => ({ ...p, address: e.target.value }))} />
-      <Field label="المدير المسؤول" value={f.manager} placeholder="أحمد محمد"
-        onChange={e => setF(p => ({ ...p, manager: e.target.value }))} />
+      <Section title="البيانات الأساسية">
+        <FieldGrid>
+          <Field label="الرمز" required value={f.code} placeholder="WH-001"
+            onChange={e => setF(p => ({ ...p, code: e.target.value }))} />
+          <Field label="الهاتف" value={f.phone} placeholder="0501234567"
+            onChange={e => setF(p => ({ ...p, phone: e.target.value }))} />
+          <Field label="الاسم بالعربية" required value={f.nameAr} placeholder="المستودع الرئيسي"
+            className="sm:col-span-2"
+            onChange={e => setF(p => ({ ...p, nameAr: e.target.value }))} />
+          <Field label="الاسم بالإنجليزية" value={f.nameEn} placeholder="Main Warehouse (اختياري)"
+            className="sm:col-span-2"
+            onChange={e => setF(p => ({ ...p, nameEn: e.target.value }))} />
+        </FieldGrid>
+      </Section>
+
+      <Section title="العنوان والإدارة">
+        <FieldGrid>
+          <Field label="العنوان" value={f.address} placeholder="القاهرة، مصر"
+            className="sm:col-span-2"
+            onChange={e => setF(p => ({ ...p, address: e.target.value }))} />
+          <Field label="المدير المسؤول" value={f.manager} placeholder="أحمد محمد"
+            className="sm:col-span-2"
+            onChange={e => setF(p => ({ ...p, manager: e.target.value }))} />
+        </FieldGrid>
+      </Section>
     </>
   );
 
@@ -199,16 +210,19 @@ export default function WarehousesPage() {
         open={showModal}
         onClose={() => setShowModal(false)}
         title="إضافة مستودع جديد"
+        subtitle="أدخل بيانات المستودع في الأقسام المختلفة"
+        size="xl"
+        icon={<Warehouse className="w-5 h-5" />}
         footer={
           <>
             <SecondaryButton onClick={() => setShowModal(false)}>إلغاء</SecondaryButton>
             <PrimaryButton type="submit" form="add-warehouse-form" disabled={saving}>
-              {saving ? 'جاري الحفظ…' : 'حفظ'}
+              {saving ? 'جاري الحفظ…' : 'حفظ المستودع'}
             </PrimaryButton>
           </>
         }
       >
-        <form id="add-warehouse-form" onSubmit={handleSubmit} className="space-y-4">
+        <form id="add-warehouse-form" onSubmit={handleSubmit} className="space-y-5">
           <FormError>{formError}</FormError>
           <WarehouseFormFields f={form} setF={setForm} />
         </form>
@@ -219,6 +233,9 @@ export default function WarehousesPage() {
         open={!!editItem}
         onClose={() => setEditItem(null)}
         title="تعديل بيانات المستودع"
+        subtitle={editItem?.nameAr}
+        size="xl"
+        icon={<Warehouse className="w-5 h-5" />}
         footer={
           <>
             <SecondaryButton onClick={() => setEditItem(null)}>إلغاء</SecondaryButton>
@@ -228,7 +245,7 @@ export default function WarehousesPage() {
           </>
         }
       >
-        <form id="edit-warehouse-form" onSubmit={handleEdit} className="space-y-4">
+        <form id="edit-warehouse-form" onSubmit={handleEdit} className="space-y-5">
           <FormError>{editError}</FormError>
           <WarehouseFormFields f={editForm} setF={setEditForm} />
         </form>

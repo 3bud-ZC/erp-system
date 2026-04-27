@@ -32,6 +32,10 @@ interface InvoiceItem {
   price: number;
   unitCost?: number;
   total?: number;
+  /** Free-form per-line description override. */
+  description?: string;
+  /** Per-line discount as a percentage (0–100). */
+  discountPercent?: number;
 }
 
 /**
@@ -74,11 +78,20 @@ export async function createSalesInvoiceAtomic(params: {
     throw new TransactionError('VALIDATION_FAILED', 'Invoice must have at least one item');
   }
 
-  // Calculate totals
-  const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
-  const taxRate = 0.15; // 15% VAT
-  const taxAmount = subtotal * taxRate;
-  const grandTotal = subtotal + taxAmount;
+  // Calculate totals — each line's net is qty * price * (1 - disc%/100).
+  // We expose three figures so the journal entry + UI stay consistent:
+  //   subtotal       → gross before discount
+  //   discountTotal  → sum of per-line discount amounts
+  //   netSubtotal    → subtotal - discountTotal (what we book to revenue)
+  const subtotal = items.reduce((s, it) => s + it.quantity * it.price, 0);
+  const discountTotal = items.reduce((s, it) => {
+    const disc = Number(it.discountPercent ?? 0);
+    return s + (it.quantity * it.price * disc / 100);
+  }, 0);
+  const netSubtotal = subtotal - discountTotal;
+  const taxRate     = 0; // VAT handled per-line if needed; keep header tax-free.
+  const taxAmount   = netSubtotal * taxRate;
+  const grandTotal  = netSubtotal + taxAmount;
 
   return await prisma.$transaction(async (tx) => {
     // ========================================================================
@@ -92,16 +105,23 @@ export async function createSalesInvoiceAtomic(params: {
         notes: invoiceData.notes,
         status: invoiceData.status || 'posted',
         total: subtotal,
+        discount: discountTotal,
         tax: taxAmount,
         grandTotal,
         tenantId,
         items: {
-          create: items.map(item => ({
-            productId: item.productId,
-            quantity: item.quantity,
-            price: item.price,
-            total: item.quantity * item.price,
-          })),
+          create: items.map(item => {
+            const disc = Number(item.discountPercent ?? 0);
+            const net  = item.quantity * item.price * (1 - disc / 100);
+            return {
+              productId:       item.productId,
+              quantity:        item.quantity,
+              price:           item.price,
+              total:           net,
+              description:     item.description ?? null,
+              discountPercent: disc,
+            };
+          }),
         },
       },
       include: {
@@ -193,17 +213,17 @@ export async function createSalesInvoiceAtomic(params: {
             {
               accountCode: '4010', // Sales Revenue
               debit: 0,
-              credit: subtotal,
+              credit: netSubtotal,
               description: `Revenue from Invoice ${invoiceData.invoiceNumber}`,
               tenantId,
             },
-            {
+            ...(taxAmount > 0 ? [{
               accountCode: '2030', // Sales Tax Payable
               debit: 0,
               credit: taxAmount,
               description: `Tax on Invoice ${invoiceData.invoiceNumber}`,
               tenantId,
-            },
+            }] : []),
           ],
         },
       },
@@ -258,10 +278,18 @@ export async function createPurchaseInvoiceAtomic(params: {
     throw new TransactionError('VALIDATION_FAILED', 'Invoice must have at least one item');
   }
 
-  const subtotal = items.reduce((sum, item) => sum + (item.quantity * (item.unitCost || item.price)), 0);
-  const taxRate = 0.15;
-  const taxAmount = subtotal * taxRate;
-  const grandTotal = subtotal + taxAmount;
+  // Per-line gross uses unitCost when present (purchase cost) and falls back
+  // to price. Discount applies on the gross line.
+  const subtotal = items.reduce((s, it) => s + it.quantity * (it.unitCost || it.price), 0);
+  const discountTotal = items.reduce((s, it) => {
+    const disc  = Number(it.discountPercent ?? 0);
+    const gross = it.quantity * (it.unitCost || it.price);
+    return s + (gross * disc / 100);
+  }, 0);
+  const netSubtotal = subtotal - discountTotal;
+  const taxRate     = 0; // Tax handled per-line if needed.
+  const taxAmount   = netSubtotal * taxRate;
+  const grandTotal  = netSubtotal + taxAmount;
 
   return await prisma.$transaction(async (tx) => {
     // ========================================================================
@@ -274,15 +302,25 @@ export async function createPurchaseInvoiceAtomic(params: {
         supplierId: invoiceData.supplierId,
         notes: invoiceData.notes,
         status: invoiceData.status || 'posted',
-        total: grandTotal,
+        total: subtotal,
+        discount: discountTotal,
+        tax: taxAmount,
+        grandTotal,
         tenantId,
         items: {
-          create: items.map(item => ({
-            productId: item.productId,
-            quantity: item.quantity,
-            price: item.unitCost || item.price,
-            total: item.quantity * (item.unitCost || item.price),
-          })),
+          create: items.map(item => {
+            const unit = item.unitCost || item.price;
+            const disc = Number(item.discountPercent ?? 0);
+            const net  = item.quantity * unit * (1 - disc / 100);
+            return {
+              productId:       item.productId,
+              quantity:        item.quantity,
+              price:           unit,
+              total:           net,
+              description:     item.description ?? null,
+              discountPercent: disc,
+            };
+          }),
         },
       },
       include: {
@@ -358,18 +396,18 @@ export async function createPurchaseInvoiceAtomic(params: {
           create: [
             {
               accountCode: '1030', // Inventory
-              debit: subtotal,
+              debit: netSubtotal,
               credit: 0,
               description: `Inventory from Invoice ${invoiceData.invoiceNumber}`,
               tenantId,
             },
-            {
-              accountCode: '2030', // Tax (assuming input tax tracking)
+            ...(taxAmount > 0 ? [{
+              accountCode: '2030', // Input tax
               debit: taxAmount,
               credit: 0,
               description: `Input Tax on Invoice ${invoiceData.invoiceNumber}`,
               tenantId,
-            },
+            }] : []),
             {
               accountCode: '2010', // Accounts Payable
               debit: 0,

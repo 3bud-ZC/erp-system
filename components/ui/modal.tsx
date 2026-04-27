@@ -18,62 +18,123 @@ interface ModalProps {
   open:        boolean;
   onClose:     () => void;
   title:       string;
-  size?:       'sm' | 'md' | 'lg' | 'xl';
+  subtitle?:   string;
+  size?:       'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl';
+  icon?:       React.ReactNode;
   children:    React.ReactNode;
   footer?:     React.ReactNode;
 }
 
 const SIZE = {
-  sm: 'max-w-sm',
-  md: 'max-w-md',
-  lg: 'max-w-lg',
-  xl: 'max-w-2xl',
+  sm:   'max-w-sm',
+  md:   'max-w-md',
+  lg:   'max-w-lg',
+  xl:   'max-w-2xl',
+  '2xl':'max-w-3xl',
+  '3xl':'max-w-5xl',
 };
 
-export function Modal({ open, onClose, title, size = 'md', children, footer }: ModalProps) {
+export function Modal({ open, onClose, title, subtitle, size = 'lg', icon, children, footer }: ModalProps) {
   React.useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
   }, [open, onClose]);
 
   if (!open) return null;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-6 bg-slate-900/50 backdrop-blur-sm"
       dir="rtl"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
         className={cn(
-          'bg-white rounded-2xl shadow-2xl shadow-slate-900/20 ring-1 ring-slate-200/60 w-full overflow-hidden',
+          'bg-slate-50 rounded-2xl shadow-2xl shadow-slate-900/25 ring-1 ring-slate-200/70',
+          'w-full my-auto overflow-hidden flex flex-col max-h-[calc(100vh-3rem)]',
           SIZE[size],
         )}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="-mx-1 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-            aria-label="إغلاق"
-          >
-            <X className="w-5 h-5" />
-          </button>
+        {/* Header — gradient bar + title + close */}
+        <div className="relative bg-gradient-to-l from-indigo-600 via-blue-600 to-blue-500 px-6 py-4 text-white">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              {icon && (
+                <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center text-white shadow-inner ring-1 ring-white/20 flex-shrink-0">
+                  {icon}
+                </div>
+              )}
+              <div className="min-w-0">
+                <h2 className="text-base font-bold truncate">{title}</h2>
+                {subtitle && (
+                  <p className="text-xs text-blue-100 mt-0.5 truncate">{subtitle}</p>
+                )}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0"
+              aria-label="إغلاق"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        <div className="px-6 py-5">{children}</div>
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">{children}</div>
 
         {footer && (
-          <div className="px-6 py-4 bg-slate-50/60 border-t border-slate-100 flex gap-3 justify-end">
+          <div className="px-6 py-3.5 bg-white border-t border-slate-200 flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 sm:justify-end">
             {footer}
           </div>
         )}
       </div>
     </div>
   );
+}
+
+/* ───────── Card-style Section (same look as the invoice form) ── */
+
+interface SectionProps {
+  title?:    string;
+  action?:   React.ReactNode;
+  children:  React.ReactNode;
+  className?: string;
+}
+
+export function Section({ title, action, children, className }: SectionProps) {
+  return (
+    <section className={cn(
+      'bg-white rounded-xl shadow-sm border border-slate-200 p-5',
+      className,
+    )}>
+      {(title || action) && (
+        <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2">
+          {title && <h3 className="text-sm font-semibold text-slate-700">{title}</h3>}
+          {action}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
+
+/* ───────── Responsive 2-col grid for fields ──────────────── */
+
+export function FieldGrid({ children, cols = 2, className }: {
+  children:  React.ReactNode;
+  cols?:     1 | 2 | 3;
+  className?: string;
+}) {
+  const map = { 1: 'sm:grid-cols-1', 2: 'sm:grid-cols-2', 3: 'sm:grid-cols-2 lg:grid-cols-3' };
+  return <div className={cn('grid grid-cols-1 gap-4', map[cols], className)}>{children}</div>;
 }
 
 /* ───────── Form Field ────────────────────────────────────── */

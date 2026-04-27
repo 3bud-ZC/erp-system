@@ -8,7 +8,7 @@ import { Plus, X, Pencil, Trash2, FileText, AlertCircle, Search, Truck } from 'l
 import Link from 'next/link';
 import { TableSkeleton, EmptyState, ErrorBanner, Toast, useToast } from '@/components/ui/patterns';
 import { ServicesLayout } from '@/components/services/ServicesLayout';
-import { Modal, Field, PrimaryButton, SecondaryButton, FormError } from '@/components/ui/modal';
+import { Modal, Field, PrimaryButton, SecondaryButton, FormError, Section, FieldGrid } from '@/components/ui/modal';
 
 interface Supplier {
   id: string;
@@ -222,33 +222,44 @@ export default function SuppliersPage() {
         open={showModal}
         onClose={() => setShowModal(false)}
         title="إضافة مورد جديد"
+        subtitle="أدخل بيانات المورد في الأقسام المختلفة"
+        size="xl"
+        icon={<Truck className="w-5 h-5" />}
         footer={
           <>
             <SecondaryButton onClick={() => setShowModal(false)}>إلغاء</SecondaryButton>
             <PrimaryButton type="submit" form="add-supplier-form" disabled={saving}>
-              {saving ? 'جاري الحفظ…' : 'حفظ'}
+              {saving ? 'جاري الحفظ…' : 'حفظ المورد'}
             </PrimaryButton>
           </>
         }
       >
-        <form id="add-supplier-form" onSubmit={handleSubmit} className="space-y-4">
+        <form id="add-supplier-form" onSubmit={handleSubmit} className="space-y-5">
           <FormError>{formError}</FormError>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="الرمز" required value={form.code} placeholder="SUP-001"
-              onChange={e => setForm(f => ({ ...f, code: e.target.value }))} />
-            <Field label="حد الائتمان (ج.م)" type="number" min="0" value={form.creditLimit} placeholder="0"
-              onChange={e => setForm(f => ({ ...f, creditLimit: e.target.value }))} />
-          </div>
-          <Field label="الاسم بالعربية" required value={form.nameAr} placeholder="شركة التوريد"
-            onChange={e => setForm(f => ({ ...f, nameAr: e.target.value }))} />
-          <Field label="الاسم بالإنجليزية" value={form.nameEn} placeholder="Supply Company (اختياري)"
-            onChange={e => setForm(f => ({ ...f, nameEn: e.target.value }))} />
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="الهاتف" value={form.phone} placeholder="0501234567"
-              onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
-            <Field label="البريد الإلكتروني" type="email" value={form.email} placeholder="info@supplier.com"
-              onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
-          </div>
+
+          <Section title="البيانات الأساسية">
+            <FieldGrid>
+              <Field label="الرمز" required value={form.code} placeholder="SUP-001"
+                onChange={e => setForm(f => ({ ...f, code: e.target.value }))} />
+              <Field label="حد الائتمان (ج.م)" type="number" min="0" value={form.creditLimit} placeholder="0"
+                onChange={e => setForm(f => ({ ...f, creditLimit: e.target.value }))} />
+              <Field label="الاسم بالعربية" required value={form.nameAr} placeholder="شركة التوريد"
+                className="sm:col-span-2"
+                onChange={e => setForm(f => ({ ...f, nameAr: e.target.value }))} />
+              <Field label="الاسم بالإنجليزية" value={form.nameEn} placeholder="Supply Company (اختياري)"
+                className="sm:col-span-2"
+                onChange={e => setForm(f => ({ ...f, nameEn: e.target.value }))} />
+            </FieldGrid>
+          </Section>
+
+          <Section title="بيانات التواصل">
+            <FieldGrid>
+              <Field label="الهاتف" value={form.phone} placeholder="0501234567"
+                onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
+              <Field label="البريد الإلكتروني" type="email" value={form.email} placeholder="info@supplier.com"
+                onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+            </FieldGrid>
+          </Section>
         </form>
       </Modal>
 
@@ -257,6 +268,9 @@ export default function SuppliersPage() {
         open={!!editItem}
         onClose={() => setEditItem(null)}
         title="تعديل بيانات المورد"
+        subtitle={editItem?.nameAr}
+        size="xl"
+        icon={<Truck className="w-5 h-5" />}
         footer={
           <>
             <SecondaryButton onClick={() => setEditItem(null)}>إلغاء</SecondaryButton>
@@ -266,24 +280,32 @@ export default function SuppliersPage() {
           </>
         }
       >
-        <form id="edit-supplier-form" onSubmit={handleEdit} className="space-y-4">
+        <form id="edit-supplier-form" onSubmit={handleEdit} className="space-y-5">
           <FormError>{editError}</FormError>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="الرمز" required value={editForm.code}
-              onChange={e => setEditForm(f => ({ ...f, code: e.target.value }))} />
-            <Field label="حد الائتمان (ج.م)" type="number" min="0" value={editForm.creditLimit}
-              onChange={e => setEditForm(f => ({ ...f, creditLimit: e.target.value }))} />
-          </div>
-          <Field label="الاسم بالعربية" required value={editForm.nameAr}
-            onChange={e => setEditForm(f => ({ ...f, nameAr: e.target.value }))} />
-          <Field label="الاسم بالإنجليزية" value={editForm.nameEn}
-            onChange={e => setEditForm(f => ({ ...f, nameEn: e.target.value }))} />
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="الهاتف" value={editForm.phone}
-              onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} />
-            <Field label="البريد الإلكتروني" type="email" value={editForm.email}
-              onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} />
-          </div>
+
+          <Section title="البيانات الأساسية">
+            <FieldGrid>
+              <Field label="الرمز" required value={editForm.code}
+                onChange={e => setEditForm(f => ({ ...f, code: e.target.value }))} />
+              <Field label="حد الائتمان (ج.م)" type="number" min="0" value={editForm.creditLimit}
+                onChange={e => setEditForm(f => ({ ...f, creditLimit: e.target.value }))} />
+              <Field label="الاسم بالعربية" required value={editForm.nameAr}
+                className="sm:col-span-2"
+                onChange={e => setEditForm(f => ({ ...f, nameAr: e.target.value }))} />
+              <Field label="الاسم بالإنجليزية" value={editForm.nameEn}
+                className="sm:col-span-2"
+                onChange={e => setEditForm(f => ({ ...f, nameEn: e.target.value }))} />
+            </FieldGrid>
+          </Section>
+
+          <Section title="بيانات التواصل">
+            <FieldGrid>
+              <Field label="الهاتف" value={editForm.phone}
+                onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} />
+              <Field label="البريد الإلكتروني" type="email" value={editForm.email}
+                onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} />
+            </FieldGrid>
+          </Section>
         </form>
       </Modal>
 
